@@ -7,8 +7,10 @@ every read goes through ``lib.ci.ci_step_paths.local_reader``). No model and no 
 
 ``StepFollower(read_local, files)`` and ``follow_step(text, read_local, files)`` take one CI line
 (``run: make verify``, ``hack/verify-x.sh``, ``uses: ./.github/workflows/check.yml``) and return
-one ``Followed`` per part it can follow (``lib.ci.ci_build_follower.Followed``: ``kind``, the
-``paths`` read, ``commands``, ``plugins``, ``tasks`` and ``unknown``):
+one ``Followed`` per part it can follow. ``files``, the tracked files, is optional: with none, a
+Gradle build file is found through ``read_local``. A ``Followed``
+(``lib.ci.ci_build_follower.Followed``) carries ``kind``, the ``paths`` read, ``commands``,
+``plugins``, ``tasks`` and ``unknown``:
 
 - **script**: a committed script (``lib.ci.ci_step_paths.script_path``) resolves to its command
   lines (comments, blank lines and the shebang dropped, ``\\`` continuations joined). One level:
@@ -18,7 +20,9 @@ one ``Followed`` per part it can follow (``lib.ci.ci_build_follower.Followed``: 
   once on a path). A node or docker action is not followed.
 - **workflow**: ``uses: ./.github/workflows/check.yml`` (a job's or a step's) resolves to the
   ``run:`` commands of every job's steps, local actions and reusable workflows it calls followed
-  the same way.
+  the same way. A reusable workflow in another repository (``org/repo/.github/workflows/x.yml@v1``,
+  a job's ``uses:`` or the line itself) is not read and lands in ``unknown``; a step's remote
+  action (``actions/checkout@v4``) is not followed and is not unknown.
 - **make**, **gradle**, **maven**: ``lib.ci.ci_build_follower``; Gradle tasks and Maven goals
   resolve to the plugins and tasks the build files bind to them.
 
@@ -66,6 +70,12 @@ _SEGMENT = re.compile(r"&&|\|\||[;|]")
 _USES = re.compile(r"""^\s*(?:-\s+)?uses:\s*(\S+)""")
 
 
+def _remote_workflow(uses: str) -> bool:
+    """A ``uses:`` value naming a reusable workflow in another repository
+    (``org/repo/.github/workflows/ci.yml@v1``): not read, so unknown."""
+    return not uses.startswith("./") and "/.github/workflows/" in uses
+
+
 def follow_workflow(text: str, read_local: ReadLocal) -> Settled:
     """Composites, matrix and expressions read for one GitHub workflow (module docstring)."""
     expanded = expand_matrix(*inline_composites(join_continued(text), read_local))
@@ -101,7 +111,10 @@ class StepFollower:
         """One ``Followed`` per part of a CI line that can be followed."""
         uses = _USES.match(text)
         if uses:
-            found = self.uses(uses.group(1).strip("\"'"))
+            value = uses.group(1).strip("\"'")
+            if _remote_workflow(value):
+                return [Followed("workflow", (), unknown=(value,))]
+            found = self.uses(value)
             return [found] if found is not None else []
         out: list[Followed] = []
         cwd: str | None = ""
@@ -127,7 +140,7 @@ class StepFollower:
         """A script, make, Gradle or Maven command, or None."""
         found = (follow_make(words, self.read_local, cwd)
                  or follow_gradle(words, self.read_local, self.files, cwd)
-                 or follow_maven(words, self.read_local, self.files, cwd))
+                 or follow_maven(words, self.read_local, cwd))
         if found is not None:
             return found
         path = script_path(" ".join(words))
@@ -160,12 +173,15 @@ class StepFollower:
         for item in self._steps(tree, kind):
             for k in item:
                 key = tree.lines[k].key
-                if key == "run":
+                value = tree.lines[k].value.strip("\"'")
+                if key == "uses" and _remote_workflow(value):
+                    unknown.append(value)
+                elif key == "run":
                     commands += _run_commands(tree, lines, k)
-                elif key == "uses" and tree.lines[k].value.strip("\"'").startswith("./"):
-                    inner = self.uses(tree.lines[k].value.strip("\"'"), (*path, rel))
+                elif key == "uses" and value.startswith("./"):
+                    inner = self.uses(value, (*path, rel))
                     if inner is None:
-                        unknown.append(tree.lines[k].value.strip("\"'"))
+                        unknown.append(value)
                         continue
                     commands += inner.commands
                     read += [p for p in inner.paths if p not in read]
