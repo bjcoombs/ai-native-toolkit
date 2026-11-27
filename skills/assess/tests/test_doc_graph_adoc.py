@@ -171,3 +171,10 @@ def test_an_unparsed_doc_format_is_named_in_the_block(tmp_path: Path, monkeypatc
     assert d["doc_count"] == 0
     assert d["unparsed_doc_formats"] == ["org"]
     assert d["reason"] == "docs present but not parsed for links: org"
+
+
+def test_plus_signs_in_prose_do_not_hide_links() -> None:
+    for line in ("Use a + b, see xref:a.adoc[A] and c + d",
+                 "Prefer C++ and xref:b.adoc[B], not C++"):
+        assert "xref:" in blank_verbatim(line)[0][0]
+    assert blank_verbatim("Write `+xref:p.adoc[]+` and ++xref:q.adoc[]++.")[0][0].count("xref") == 0

@@ -54,7 +54,9 @@ BROKEN_KIND = "asciidoc"
 _FAMILY_DIRS = {"page": "pages", "partial": "partials", "example": "examples"}
 _DELIMITER = re.compile(r"^(-{4,}|\.{4,}|\+{4,}|/{4,})\s*$")
 _COMMENT_LINE = re.compile(r"^//(?!/)")
-_INLINE_PASS = re.compile(r"\+\+.*?\+\+|\+[^+\n]+?\+|pass:[a-z,]*\[.*?\]")
+_INLINE_PASS = re.compile(  # constrained `+x+` / `++x++` need word boundaries, as AsciiDoc's do
+    r"(?<![\w+])\+\+(?=\S).*?(?<=\S)\+\+(?![\w+])"
+    r"|(?<![\w+])\+(?=\S)[^+\n]*?(?<=\S)\+(?![\w+])|pass:[a-z,]*\[.*?\]")
 _XREF = re.compile(r"(?<![\w\\])xref:([^\s\[\]]+)\[")
 _SHORTHAND = re.compile(r"(?<!\\)<<([^<>,\s]+?\.(?:adoc|asciidoc)(?:#[^<>,]*)?)(?:,[^<>]*)?>>")
 _LINK = re.compile(r"(?<![\w\\])link:([^\s\[\]]+)\[")
