@@ -274,3 +274,39 @@ def test_fan_in_counts_folders_below_the_measured_root(tmp_path: Path) -> None:
     scoped = _ok(scan_concurrency(r, scope, None))
     assert at_top["max_fan_in"] == 1  # every other file is under pkg/
     assert below["max_fan_in"] == scoped["max_fan_in"] == 12
+
+
+def test_a_path_with_a_quote_is_read_as_written(tmp_path: Path) -> None:
+    """git C-quotes such a name in --name-only output even with core.quotepath=false; -z
+    keeps it as written, so its linguist-generated attribute matches. The file goes in
+    through the index only, since Windows cannot hold a '"' in a file name."""
+    r = _init(tmp_path)
+    (r / ".gitattributes").write_text('"gen/we\\"ird.json" linguist-generated\n', encoding="utf-8")
+    name = 'gen/we"ird.json'
+    for i in range(MIN_MERGES):
+        blob = subprocess.run(["git", "-C", str(r), "hash-object", "-w", "--stdin"], input=f"{i}\n",
+                              check=True, capture_output=True, encoding="utf-8",
+                              errors="replace").stdout.strip()
+        _git(r, "update-index", "--add", "--cacheinfo", f"100644,{blob},{name}")
+        if i == 0:
+            _git(r, "add", ".gitattributes")
+        # a plain commit, never add -A, which would stage the index-only file's removal
+        _git(r, "commit", "-q", "-m", f"regenerate {i}", at=T0 + i * DAY)
+    block = _ok(scan_concurrency(r, None, None))
+    hot = {h["path"]: h for h in block["hot_files"]}
+    assert name in hot, sorted(hot)
+    assert hot[name]["generated"] is True and hot[name]["touch_share"] == 1.0
+
+
+def test_a_configured_diff_merges_format_does_not_change_the_numbers(tmp_path: Path) -> None:
+    r = _init(tmp_path)
+    for i in range(MIN_MERGES):
+        _commit(r, {f"base{i}.txt": "x\n"}, T0 + i * DAY)
+    _git(r, "checkout", "-q", "-b", "topic")
+    _commit(r, {"topic/a.txt": "a\n"}, T0 + 20 * DAY)
+    _git(r, "checkout", "-q", "main")
+    _git(r, "merge", "-q", "--no-ff", "-m", "merge topic", "topic", at=T0 + 22 * DAY)
+    plain = _ok(scan_concurrency(r, None, None))
+    _git(r, "config", "log.diffMerges", "combined")
+    assert _ok(scan_concurrency(r, None, None)) == plain
+    assert plain["files_touched"] == MIN_MERGES + 1

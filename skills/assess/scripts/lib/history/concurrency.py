@@ -4,8 +4,8 @@ The other history scans ask whether one change is safe; this one asks whether ma
 land at once. A file that most merges touch is a serialisation point: two builders working
 in parallel both edit it, and the second to merge resolves a conflict. Over the newest
 ``MERGE_SAMPLE`` first-parent commits of the run window (on a squash-merge or merge-commit
-branch, one per merged change; ``git log --first-parent -m``, so a merge commit counts its
-diff against the first parent), the scan records:
+branch, one per merged change; ``git log --first-parent --diff-merges=first-parent``, so a
+merge commit counts its diff against the first parent), the scan records:
 
 - **touch share**: per file, the share of those merges that touched it, and the count of
   files at or above ``TOUCH_SHARE_THRESHOLD`` (0.25: one merge in four, so with four
@@ -137,15 +137,19 @@ def first_parent_merges(repo_root: Path, rev: str, since: str | None, scope: Sco
                         limit: int) -> list[frozenset[str]]:
     """The files each of the newest ``limit`` first-parent commits changed, newest first.
 
-    Paths are relative to the repository top. The pathspec is the scope's roots, or ``.``,
+    Paths are relative to the repository top, read NUL-separated (``-z``) so a name with
+    a quote, a backslash or a control character comes back as written.
+    ``--diff-merges=first-parent`` pins a merge's diff against its first parent, whatever
+    the user's ``log.diffMerges``. The pathspec is the scope's roots, or ``.``,
     so a ``repo_root`` below the top reads only the merges that touched it. ``-M`` pins
     rename detection, so a renamed file counts once, under its new name, whatever the
     user's ``diff.renames``."""
     bound = [f"--since={since}"] if since else []
     pathspec = [str(r) for r in scope.roots] if scope is not None else ["."]
-    out = _git(repo_root, "log", rev, "--first-parent", "-m", "-M", "--name-only",
-               "--format=%x1e", f"-n{limit}", *bound, "--", *pathspec)
-    return [frozenset(line for line in record.splitlines() if line.strip())
+    out = _git(repo_root, "log", rev, "--first-parent", "--diff-merges=first-parent", "-M",
+               "-z", "--name-only", "--format=%x1e", f"-n{limit}", *bound, "--", *pathspec)
+    # Each record: RS, NUL, a newline, then NUL-terminated paths, never C-quoted under -z.
+    return [frozenset(p for p in record.lstrip("\0").removeprefix("\n").split("\0") if p)
             for record in out.split("\x1e")[1:]]
 
 
