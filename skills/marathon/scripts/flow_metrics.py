@@ -37,7 +37,8 @@ Definitions (each metric is null, never 0, when its input is missing):
   waves and is null when any wave lacks either count.
 - combining hot files: files ranked by the combines they caused. Files a wave
   lists in `sequential_hot_files` (a version counter, a lockfile) cost merge
-  order, not combining, so they are ranked apart and never as combining files.
+  order, not combining, so they are ranked apart and never count as combining
+  files in that wave.
   With no `waves` recorded, every combining metric is null (see `combining`).
 
 Python 3.8 compatible and stdlib only, so it runs under any `python3`.
