@@ -229,6 +229,40 @@ def test_a_closed_part_beside_the_whole_item_is_not_reopened() -> None:
     assert _run(alone, _context(_condition("layer-4-docs.2", "unmet")))["proposals"][0]["kind"] == "reopen"
 
 
+def test_a_closed_whole_item_reopens_alone_not_its_closed_parts() -> None:
+    # #1530: the whole item and its parts are all closed and the condition lapsed.
+    tracker = [_marked(1, "layer-4-docs.2", "CLOSED"), _marked(2, "layer-4-docs.2", "CLOSED", part=2),
+               _marked(3, "layer-4-docs.2", "CLOSED", part=3)]
+    props = _run(tracker, _context(_condition("layer-4-docs.2", "unmet")))["proposals"]
+    assert [(p["kind"], p["number"]) for p in props] == [("reopen", 1)]
+
+
+def test_an_open_part_beside_a_closed_whole_item_is_not_superseded() -> None:
+    tracker = [_marked(1, "layer-4-docs.2", "CLOSED"), _marked(2, "layer-4-docs.2", "OPEN", part=2)]
+    props = _run(tracker, _context(_condition("layer-4-docs.2", "unmet")))["proposals"]
+    assert [(p["kind"], p["number"]) for p in props] == [("reopen", 1)]
+
+
+@pytest.mark.parametrize("order", [(0, 1, 2), (1, 0, 2)])
+def test_supersession_takes_an_open_whole_item_whatever_the_tracker_order(order: tuple[int, int, int]) -> None:
+    # Two whole items can share a key (two Top 3 actions naming one condition); the open one carries the action.
+    items = [_marked(5, "layer-4-docs.2", "CLOSED"), _marked(6, "layer-4-docs.2", "OPEN"),
+             _marked(7, "layer-4-docs.2", "OPEN", part=2)]
+    props = _run([items[i] for i in order], _context(_condition("layer-4-docs.2", "unmet")))["proposals"]
+    sup = [p for p in props if p["kind"] == "supersede"]
+    assert [(p["number"], p.get("superseded_by")) for p in sup] == [(7, 6)]
+
+def test_an_empty_label_skips_demotes_with_a_note() -> None:
+    # #1530: with --label "" the informational label cannot be written, so no demote is proposed.
+    items = [TRACKER[3], _marked(2, "layer-4-docs.2", "OPEN")]
+    result = _run(items, _context(_condition("layer-4-docs.2", "not_applicable")), label="")
+    assert result["proposals"] == []
+    assert any("2 demote proposal(s) skipped" in n for n in result["notes"])
+    assert "2 demote proposal(s) skipped" in result["summary"]
+    again = _run(items, _context(_condition("layer-4-docs.2", "not_applicable")), label="")
+    assert again["proposals"] == []  # never proposed, so never proposed again
+
+
 def test_a_close_wins_over_superseded() -> None:
     tracker = [_marked(1, "layer-5-ci.1", "OPEN"), _marked(2, "layer-5-ci.1", "OPEN", part=2)]
     kinds = {p["number"]: p["kind"] for p in _run(tracker, _context(*CONDITIONS))["proposals"]}
