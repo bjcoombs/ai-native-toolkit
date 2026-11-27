@@ -438,3 +438,22 @@ def test_refreshed_findings_markdown_points_at_the_runs_artifact_dir(slug: str |
         ctx["scope_slug"] = slug
     assert refresh_mutation_findings(ctx, _stats("src/hot.py"), set(), []) is True
     assert f"full list in {pointer} (`lying_map`) `paths`" in ctx["findings_markdown"]
+
+
+def test_the_recount_keeps_the_declined_badge_owner_and_reason(
+    git_repo: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#828: the headline the mutation recount rewrites keeps the DECLINED owner, date and reason."""
+    repo = _make_repo(git_repo)
+    (repo / ".assess").mkdir(exist_ok=True)
+    (repo / ".assess" / "agents-declined.json").write_text(json.dumps(
+        {"declined_by": "maintainer-a", "declined_at": "2026-11-20", "reason": "No agent contributions."}),
+        encoding="utf-8")
+    _seed_stats(repo, _stats("src/hot.py"))
+    ctx_path = _default_run(repo, _focus("src/hot.py"))
+    assert _load(ctx_path)["headline"]["lines"][0].startswith("DECLINED:")
+    _patch_scan(monkeypatch, _mutation_block([{"file": "src/hot.py", "survived": 6, "killed": 4, "total": 10}]))
+    assert assess_core.run_opt_in_mutation(repo) == 0
+    first = _load(ctx_path)["headline"]["lines"][0]
+    assert first.startswith("DECLINED:")
+    assert "maintainer-a on 2026-11-20: No agent contributions." in first

@@ -281,8 +281,10 @@ def run_opt_in_mutation(repo_root: Path, scope: RequestedScope = None,
     # The headline and the badge carry the tally, so they are rewritten with it (#747).
     if "level" in ctx:
         ctx["level"] = run_level(ctx, model)
+        # owner_exclusions carries the decline records: the DECLINED badge keeps its owner and reason (#828)
         ctx["headline"] = run_headline(ctx["level"], ctx.get("since_last_run"), model,
-                                       ctx.get("unit_rollup"), ctx.get("measured_commit"), assess_dir)
+                                       ctx.get("unit_rollup"), ctx.get("measured_commit"), assess_dir,
+                                       ctx.get("owner_exclusions"))
         write_headline_badge(
             assess_dir, as_headline(ctx["headline"]), run_id=ctx.get("run_id"),
             scope=ctx.get("scope"),
