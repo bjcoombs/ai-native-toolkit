@@ -13,8 +13,9 @@ reader (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout 
   read may come from an ``env:`` block of the workflow or the job: it reads the pull request body or the commit
   messages and trailers (``_READS``: ``pull_request.body``, ``gh pr view --json body``,
   ``git log`` with a body or trailer format, ``git interpret-trailers``, the pull request commits
-  API); it names an AI disclosure or attribution marker (``_AI_MARKERS``: a tool or model name,
-  ``AI`` as a capitalised word, an ``Assisted-by`` or ``Generated-by`` trailer); and it fails the
+  API); it names an AI disclosure or attribution marker inside a quoted literal or a ``/regex/``
+  (``_AI_MARKERS``: a tool or model name, ``AI`` as a capitalised word, an ``Assisted-by`` or
+  ``Generated-by`` trailer), so running an AI tool is not checking for one; and it fails the
   run or labels the pull request (``_ACTS``). ``enforcing_workflows`` lists them. Null with
   ``enforced_reason`` ``no_pr_workflows`` when no tracked workflow runs on pull requests: a bot or
   an app could still enforce, and this reader cannot see one.
@@ -27,7 +28,7 @@ reader (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout 
   Copilot review for the whole repository: ``.github/copilot-instructions.md``, or a
   ``.github/instructions/*.md`` whose front matter ``applyTo`` is ``**`` or ``**/*`` and whose
   ``excludeAgent`` does not name ``code-review``. A file declines when one sentence outside code
-  fences is a whole refusal (``_REFUSAL``): a negation, then review or comment on, then pull
+  fences, soft-wrapped lines joined (``_unwrap``), is a whole refusal (``_REFUSAL``): a negation, then review or comment on, then pull
   requests, the code or the repository and nothing else; a bare "Do not review." names nothing,
   so it is not one. "Do not review generated files" names a part of
   the repository, so it is not an opt-out. ``read_copilot_opt_out`` turns the files into a
@@ -85,7 +86,11 @@ _AI_WORD = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|chatgpt|claude|gemini|genera
 _DISCLOSURE = re.compile(r"\b(?:disclos\w*|assist\w*|generat\w*|written|authored|produced|with the help)\b", _I)
 _FENCE = re.compile(r"^\s*(```|~~~).*?^\s*\1[^\n]*$", re.MULTILINE | re.DOTALL)
 _FRONT = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
-_SENTENCE = re.compile(r"[^.!?\n]+")
+_SENTENCE = re.compile(r"[^.!?;]+")
+# A line that starts its own block in markdown: a list item, a heading, a quote or a table row.
+_BLOCK_START = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s|#|>|\|)")
+# A quoted literal or a /regex/: where a check names the marker it looks for.
+_QUOTED = re.compile(r"'[^'\n]*'|\"[^\"\n]*\"|`[^`\n]*`|(?<![\w.])/[^/\s][^/\n]*/")
 _REFUSAL = re.compile(
     r"^\s*(?:(?:github\s+)?copilot\s*[,:]?\s*)?(?:please\s+)?(?:you\s+)?(?:copilot\s+)?"
     r"(?:do\s+not|don'?t|never|must\s+not|should\s+not|shall\s+not|will\s+not|won'?t|may\s+not|refuse\s+to|decline\s+to)\s+"
@@ -110,11 +115,14 @@ class AiGovernanceBlock(TypedDict):
 def enforces_disclosure(text: str, env: str = "") -> bool:
     """True when one step's ``text`` reads a pull request body or commit trailers, names an AI
     marker and turns the run red or labels (module docstring). The read may come from ``env``, the
-    ``env:`` blocks around the step; the marker and the act must be in the step. Whole-line YAML
+    ``env:`` blocks around the step; the marker and the act must be in the step, and the marker
+    inside a quoted literal or a ``/regex/`` (``_QUOTED``): what the check looks for, so a step
+    that only runs an AI tool on the body (``claude --print ... || exit 1``) does not count. Whole-line YAML
     and shell comments are dropped first."""
     clean = _YAML_COMMENT.sub("", text)
+    named = any(_AI_MARKERS.search(q.group(0)) for q in _QUOTED.finditer(clean))
     return bool((_READS.search(clean) or _READS.search(_YAML_COMMENT.sub("", env)))
-                and _AI_MARKERS.search(clean) and _ACTS.search(clean))
+                and named and _ACTS.search(clean))
 
 
 def disclosure_checkboxes(text: str) -> int:
@@ -126,7 +134,19 @@ def declines_review(text: str) -> bool:
     """True when one sentence of ``text``, outside front matter and code fences, refuses review
     of the whole repository (``_REFUSAL``)."""
     body = _FENCE.sub("", _FRONT.sub("", text, count=1))
-    return any(_REFUSAL.match(s.strip(" \t*_`>-#")) for s in _SENTENCE.findall(body))
+    return any(_REFUSAL.match(s.strip(" \t*_`>-#")) for s in _SENTENCE.findall(_unwrap(body)))
+
+
+def _unwrap(body: str) -> str:
+    """Markdown with soft-wrapped lines joined, so a sentence that wraps is read whole; a blank line,
+    a list item, a heading, a quote or a table row still starts a new block (its own sentence)."""
+    out: list[str] = []
+    for line in body.splitlines():
+        if out and line.strip() and out[-1].strip() and not _BLOCK_START.match(line):
+            out[-1] += " " + line.strip()
+        else:
+            out.append(line)
+    return ".\n".join(out)
 
 
 def _front_value(text: str, key: str) -> str:

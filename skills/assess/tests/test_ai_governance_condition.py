@@ -146,6 +146,15 @@ def test_a_body_read_set_in_the_job_env_reaches_its_step(tmp_path: Path) -> None
     assert scan_ai_governance(_repo(tmp_path, {".github/workflows/disclosure.yml": text}))["enforced"] is True
 
 
+def test_running_an_ai_tool_on_the_body_is_not_checking_for_disclosure() -> None:
+    step = 'run: |\n  echo "${{ github.event.pull_request.body }}" > b.txt\n  claude --print summary || exit 1\n'
+    assert enforces_disclosure(step) is False
+
+
+def test_a_wrapped_whole_refusal_still_reads_as_one() -> None:
+    assert declines_review("Copilot should not review\npull requests in this repository.\n- Use type hints.\n") is True
+
+
 def test_a_pagination_cursor_is_not_an_ai_marker() -> None:
     assert enforces_disclosure("gh api graphql -f cursor=$cursor --jq .body pull_request.body\nexit 1\n") is False
 
@@ -237,6 +246,7 @@ def test_another_agents_met_condition_stays_met_and_counted(tmp_path: Path) -> N
     "Review pull requests for clarity.\n",
     "```\nDo not review pull requests.\n```\n",  # inside a code fence
     "Do not review.\n",  # names nothing
+    "Do not review changes\nto generated files under vendor/.\n",  # a scoped refusal wrapped onto two lines
     "Never comment on.\n",
 ])
 def test_a_scoped_or_quoted_refusal_is_not_an_opt_out(text: str) -> None:
