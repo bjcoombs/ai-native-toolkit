@@ -38,8 +38,8 @@ lost (``lib/fleet/fleet_cleanup.py``). Every run also writes the run stamp
 
 It also draws the fleet diagrams (``lib/fleet/fleet_diagrams.py``): ``<out>/report.md``
 opening with the front screen (``lib/fleet/fleet_front.py``, #1255) and
-embedding ``shared-tooling.svg``, ``trend.svg`` (group trend lines
-over the run history, ``lib/fleet/fleet_trends.py``), and ``slope.svg`` (from the ``--compare``
+embedding ``shared-tooling.svg``, ``trend.svg`` (each group's lowest Step
+over the run history, ``lib/fleet/fleet_trends.py``), and ``slope.svg`` (each group's lowest Step before and after the ``--compare``
 result; and the Step diagrams of #941), or the reason each was skipped, and ``fleet-view.html`` (#946);
 ``--no-diagrams`` turns them off. ``report.md`` opens with the coverage line: with
 ``--discovered FILE`` (ghsync's ``--porcelain`` or ``--porcelain-json`` listing) how many of
@@ -207,7 +207,7 @@ from lib.report.measured_appendix import measured_section
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data
 from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config
-from lib.fleet.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups
+from lib.fleet.fleet_groups import SettingsError, load_settings, roll_up, write_groups
 from lib.fleet.fleet_hashed import public_freshness, public_groups, public_ids, public_rows
 from lib.fleet.fleet_repo_facts import RepoFacts, collect_facts
 from lib.fleet.fleet_units import (
@@ -237,6 +237,7 @@ from lib.fleet.fleet_platform import (
     run_platform,
 )
 from lib.fleet.fleet_scanner_diff import row_signals, scanner_diff
+from lib.fleet.fleet_maturity import data_steps
 from lib.fleet.fleet_trends import TrendRun, history_runs, series_runs, trend_run
 from lib.fleet.fleet_view import FleetViewError
 from lib.fleet.fleet_method import rules_sha256
@@ -399,16 +400,17 @@ def _condition_effect(out_dir: Path, maturity_model: MaturityModel | None, stamp
 
 
 def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
-                   groups: list[GroupRow], rows: list[FleetRow],
-                   maturity_model: MaturityModel | None = None) -> list[TrendRun] | None:
-    """The trend's runs: earlier comparable history entries, then this run from memory; None
-    when the run is not kept in the history or had no maturity model. Never raises."""
-    current = trend_run(stamp, groups)
+                   rows: list[FleetRow], data: FleetData | None) -> list[TrendRun] | None:
+    """The trend's runs: earlier comparable history entries, then this run from memory (its
+    repository rows and the Steps ``fleet-data.json`` gives them); None when the run is not kept
+    in the history or had no maturity model. Never raises."""
+    members = [(row["group"], row["repo"]) for row in rows]
+    current = trend_run(stamp, members, data_steps(data))
     if org_dir is None or entry is None or current is None:
         return None
     try:
         repos = frozenset(row["repo"] for row in rows)
-        return series_runs(history_runs(org_dir, stamp, repos, maturity_model), current)
+        return series_runs(history_runs(org_dir, stamp, repos), current)
     except Exception as e:  # noqa: BLE001 - the history never fails a completed run
         print(f"fleet: diagrams: run history not read ({type(e).__name__})", file=sys.stderr)
         return None
@@ -766,7 +768,7 @@ def main(argv: list[str] | None = None) -> int:
     credit, achieved = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
                            ids, step_targets,
                            privacy_for(args.full, hash_salt).key, args.first_achievements)
-    history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, public, maturity_model)
+    history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, public, data)
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
               opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier, achieved=achieved,

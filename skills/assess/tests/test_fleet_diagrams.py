@@ -20,7 +20,8 @@ import lib.fleet.fleet_tooling_map as ftm
 from lib.fleet.runner import FleetRow
 from lib.fleet.fleet_view import read_repos
 from lib.scoring.levels import MaturityModel, load_levels
-from fleet_diagrams_fixture import FIXTURES, ROWS, WINDOW, build, comparison, goldens
+from fleet_diagrams_fixture import (FIXTURES, ROWS, WINDOW, build, comparison, earlier_run, goldens, steps_of,
+                                    stepped)
 from svg_cascade import overridden_text_attributes
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
@@ -172,7 +173,10 @@ def test_a_raising_renderer_is_a_skip_line_naming_the_error(monkeypatch):
     def bug(*_args: object) -> str:
         raise ValueError("render bug")
     monkeypatch.setattr(ftm, "render_tooling_map", bug)
-    diagrams = fd.build_diagrams(_levels(), _repos(), WINDOW, comparison=comparison(_levels(), _repos()))
+    levels = stepped(_levels())
+    data = {"repos": [{"key": r, "step": s} for r, s in steps_of(levels, _repos()).items()]}
+    diagrams = fd.build_diagrams(levels, _repos(), WINDOW, comparison=comparison(levels, _repos()),
+                                 earlier=earlier_run(levels), data=data)
     assert _tooling(diagrams)["skipped"] == "skipped: the renderer raised ValueError."
     assert _slope(diagrams)["svg"] is not None  # the others still draw
     assert "Not drawn: skipped: the renderer raised ValueError." in fd.report_markdown(diagrams)
@@ -236,9 +240,9 @@ def test_skipped_diagrams_say_why_in_the_report():
     no_levels = fd.build_diagrams(None, _repos(), WINDOW)
     trend = next(d for d in no_levels if d["file"] == "trend.svg")
     assert trend["svg"] is None and "no maturity model" in (trend["skipped"] or "")
-    org_only: MaturityModel = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
-    with_org = fd.build_diagrams(org_only, _repos(), WINDOW, comparison=comparison(_levels(), _repos()))
-    assert "no team practices" in (_slope(with_org)["skipped"] or "")
+    no_steps = fd.build_diagrams(_levels(), _repos(), WINDOW, comparison=comparison(_levels(), _repos()),
+                                 earlier=earlier_run(_levels()), data={"repos": []})
+    assert _slope(no_steps)["skipped"] == fd.NO_STEPS  # #806: the slope plots Steps
     empty = fd.build_diagrams(_levels(), [], WINDOW)
     by_file = {d["file"]: d["skipped"] for d in empty}
     assert by_file["shared-tooling.svg"] == "skipped: no repositories in the run."

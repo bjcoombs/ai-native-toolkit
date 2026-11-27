@@ -208,7 +208,8 @@ def test_the_trend_breaks_at_a_rules_change_both_runs_recorded() -> None:
     import lib.fleet.fleet_trends as ft
 
     def run(label: str, rules: str | None) -> ft.TrendRun:
-        point: ft.TrendRun = {"label": label, "levels_version": "v1", "means": {"g": 1.0}, "scaled": True}
+        point: ft.TrendRun = {"label": label, "levels_version": "v1", "stepped": True,
+                             "points": {"g": {"step": 1, "measured": 1, "repos": 1}}}
         if rules is not None:
             point["rules_sha256"] = rules
         return point

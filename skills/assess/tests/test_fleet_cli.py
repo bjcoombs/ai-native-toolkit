@@ -168,6 +168,17 @@ aggregation = "min"
   level = 1
   criteria = [{ signal = "nested_instructions.budget.claude_code.words", op = "gt", value = 0 }]
 """
+# TEAM_LEVELS with two Steps: the slope and trend plot each group's lowest Step (#806).
+STEP_TEAM_LEVELS = TEAM_LEVELS + """
+[[steps]]
+step = 1
+name = "Assisted"
+
+[[steps]]
+step = 2
+name = "Supervised"
+gates = [{ id = "instructions", row = "instructions", level = 1 }]
+"""
 
 
 def _ci(ref: str) -> str:
@@ -243,7 +254,7 @@ def test_the_slope_chart_is_drawn_only_with_compare(tmp_path, monkeypatch, capsy
     make_repo(root, "grpa/svc1", files={"CLAUDE.md": "rules\n"})
     make_repo(root, "grpb/lib1")
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    (tmp_path / "levels.toml").write_text(STEP_TEAM_LEVELS, encoding="utf-8")
     base = [str(root), "--levels", "levels.toml", "--history-dir", "hist"]
     assert fleet_cli.main([*base, "--out", "first"]) == 0
     assert "slope.svg skipped: no earlier run compared" in capsys.readouterr().err
@@ -253,7 +264,7 @@ def test_the_slope_chart_is_drawn_only_with_compare(tmp_path, monkeypatch, capsy
     assert not (tmp_path / "first" / "slope.svg").exists()
     assert fleet_cli.main([*base, "--out", "second", "--compare"]) == 0
     slope = (tmp_path / "second" / "slope.svg").read_text(encoding="utf-8")
-    assert "grpa 1.00" in slope and "grpb 0.00" in slope
+    assert "grpa Step 2<title>" in slope and "grpb Step 1<title>" in slope and "1 of 1 measured" in slope
     report = (tmp_path / "second" / "report.md").read_text(encoding="utf-8")
     assert "[![Before and after](./slope.svg)](./slope.svg)" in report
 
@@ -297,7 +308,7 @@ def test_trend_lines_need_three_dated_runs_in_the_history(tmp_path, monkeypatch,
     make_repo(root, "grpa/svc1", files={"CLAUDE.md": "rules\n"})
     make_repo(root, "grpb/lib1")
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    (tmp_path / "levels.toml").write_text(STEP_TEAM_LEVELS, encoding="utf-8")
     args = [str(root), "--levels", "levels.toml", "--history-dir", "hist"]
     assert fleet_cli.main([*args, "--out", "o1"]) == 0
     report = (tmp_path / "o1" / "report.md").read_text(encoding="utf-8")
@@ -310,6 +321,7 @@ def test_trend_lines_need_three_dated_runs_in_the_history(tmp_path, monkeypatch,
     trend = (tmp_path / "o2" / "trend.svg").read_bytes()
     assert trend == (tmp_path / "o3" / "trend.svg").read_bytes()
     assert b"3 dated runs, 2000-01-01 to " in trend
+    assert b'data-group="grpa" data-step="2" data-measured="1" data-repos="1"' in trend
     assert "[![Group trends](./trend.svg)](./trend.svg)" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
     assert fleet_cli.main([*args, "--out", "o2", "--no-history"]) == 0
     assert not (tmp_path / "o2" / "trend.svg").exists()
@@ -317,14 +329,14 @@ def test_trend_lines_need_three_dated_runs_in_the_history(tmp_path, monkeypatch,
 
 
 def test_an_unreadable_history_is_no_trend_never_a_failure(tmp_path, monkeypatch, capsys):
-    from fleet_trends_fixture import CURRENT_GROUPS, CURRENT_STAMP
+    from fleet_trends_fixture import CURRENT_STAMP
 
     def boom(*_args: object) -> None:
         raise PermissionError("denied")
     monkeypatch.setattr(fleet_cli, "history_runs", boom)
-    assert fleet_cli._trend_history(tmp_path, tmp_path, CURRENT_STAMP, CURRENT_GROUPS, []) is None
+    assert fleet_cli._trend_history(tmp_path, tmp_path, CURRENT_STAMP, [], {"repos": []}) is None
     assert "fleet: diagrams: run history not read (PermissionError)" in capsys.readouterr().err
-    assert fleet_cli._trend_history(None, None, CURRENT_STAMP, CURRENT_GROUPS, []) is None
+    assert fleet_cli._trend_history(None, None, CURRENT_STAMP, [], None) is None
 
 
 def test_a_diagram_write_failure_keeps_exit_0(tmp_path, monkeypatch, capsys):

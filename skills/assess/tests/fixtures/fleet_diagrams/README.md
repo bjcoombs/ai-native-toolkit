@@ -10,9 +10,11 @@ A fixture fleet run for `tests/test_fleet_diagrams.py`:
   (`data/notebooks`), and CI pins that drift off the most common ref (`ci/python@v3`,
   `ci/node@v4`).
 - An earlier run (`EARLIER_ROWS` in `tests/fleet_diagrams_fixture.py`, built in memory and
-  compared with the real `roll_up` and `compare`) for the slope chart: payments climbs, platform
-  slips, data stays flat, web's measured set moves (`*`), mobile is new; ties on both sides
-  exercise the end-label spacing.
+  compared with the real `roll_up` and `compare`) for the slope chart, which plots each group's
+  lowest Step (#806) under this model with three Steps added (`stepped`), the earlier Steps as
+  its `level.json` would store them: payments climbs, web slips while its measured set moves
+  (`*`), platform and data stay flat, mobile is new; ties on both sides exercise the end-label
+  spacing. The report golden draws no slope: this model has no Steps.
 - `expected-shared-tooling.svg`, `expected-slope.svg`,
   `expected-report.md`: the golden renders.
 - `expected-tag-profile.svg` and `expected-tag-heatmap.svg`: the fleet median tag profile strip

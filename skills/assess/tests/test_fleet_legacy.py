@@ -13,7 +13,6 @@ from lib.fleet.fleet_history import entry_conflict, entry_repos, latest_matching
 from lib.fleet.fleet_legacy import RENAMED_KEYS, upgrade
 from lib.fleet.fleet_stamp import FleetStamp
 from lib.fleet.fleet_view import load_groups
-from lib.scoring.levels import load_levels
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 from test_fleet_heatmap import cli as heatmap_cli
@@ -80,12 +79,13 @@ def test_history_matches_a_pre_rename_entry():
 def test_trend_history_counts_a_pre_rename_entry(plugin_version):
     """The trend matches on window, scans and output mode, not the plugin version, so a 2.x
     run keeps drawing 1.x history entries (unlike --compare, which refuses a major change)."""
-    runs = ft.history_runs(LEGACY_ORG, _stamp(plugin_version=plugin_version), REPOS, load_levels(LEVELS_FILE))
-    assert [(run["label"], run["levels_version"], run["scaled"]) for run in runs] == [
-        ("2026-11-20", "fixture-1", True)]
+    runs = ft.history_runs(LEGACY_ORG, _stamp(plugin_version=plugin_version), REPOS)
+    # a 1.x entry kept no level.json, so it is read and named, never drawn (#806)
+    assert [(run["label"], run["levels_version"], run["stepped"]) for run in runs] == [
+        ("2026-11-20", "fixture-1", False)]
     # Without the upgrade the entry would name no model version, and trend_run drops such a run.
     raw = json.loads((LEGACY / "run.json").read_text(encoding="utf-8"))
-    assert ft.trend_run(raw, load_groups(LEGACY)) is None
+    assert ft.trend_run(raw, [], None) is None
 
 
 PLUGIN_VERSION = json.loads((Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json")

@@ -1,0 +1,13 @@
+{"fleet_row_version": 2, "group": "data", "repo": "data/r0"}
+{"fleet_row_version": 2, "group": "data", "repo": "data/r1"}
+{"fleet_row_version": 2, "group": "mobile", "repo": "mobile/r0"}
+{"fleet_row_version": 2, "group": "mobile", "repo": "mobile/r1"}
+{"fleet_row_version": 2, "group": "payments", "repo": "payments/r0"}
+{"fleet_row_version": 2, "group": "payments", "repo": "payments/r1"}
+{"fleet_row_version": 2, "group": "payments", "repo": "payments/r2"}
+{"fleet_row_version": 2, "group": "platform", "repo": "platform/r0"}
+{"fleet_row_version": 2, "group": "platform", "repo": "platform/r1"}
+{"fleet_row_version": 2, "group": "platform/infrastructure-and-shared-services", "repo": "platform/infrastructure-and-shared-services/r0"}
+{"fleet_row_version": 2, "group": "platform/infrastructure-and-shared-services", "repo": "platform/infrastructure-and-shared-services/r1"}
+{"fleet_row_version": 2, "group": "web", "repo": "web/r0"}
+{"fleet_row_version": 2, "group": "web", "repo": "web/r1"}

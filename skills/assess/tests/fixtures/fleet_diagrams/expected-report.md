@@ -62,17 +62,17 @@ What does a shared template change reach, and which pins differ from the fleet's
 
 In place: 15 repositories in this run, scanned with no model call.
 
-Is each team improving?
+Is each team's lowest Step rising over time?
 
-Not drawn: skipped: the run is not kept in the run history (--no-history or --full), so no earlier runs.
+Not drawn: skipped: the maturity model defines no Steps.
 
 ## Before and after
 
-In place: 4 groups with a known level in both runs.
+In place: this run, the baseline a later comparison starts from.
 
-What moved since the earlier run, and which practice moved it?
+Which groups' lowest Step moved since the earlier run?
 
-[![Before and after](./slope.svg)](./slope.svg)
+Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run).
 
 ## Step movement since the earlier run
 
