@@ -5,8 +5,8 @@
 id = "core.agent_ops"
 kind = "collector"
 title = "Agent-operations guardrails"
-summary = "Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event."
-issues = [815, 847]
+summary = "Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job."
+issues = [815, 847, 849]
 callable = "lib.agents.agent_ops:scan_agent_ops"
 publishes = ["agent_ops"]
 reads = ["repo_root", "managed_settings"]
@@ -16,9 +16,11 @@ whys.agent_ops = "Committed allowlists, hooks, sandbox rules and routines make a
 shapes = [
   { path = "agent_ops", type = "lib.counts_only.block_shapes:AgentOpsBlock" },
 ]
-revision = 3
+revision = 4
 unknown_reasons = [
   { code = "agent_workflows_unread", block = "agent_ops", means = "No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent.", next_step = "Nothing to change: this reads as not measured until that workflow can be read." },
+  { code = "no_agent_jobs", block = "agent_ops", means = "With agent_job_count at 0, no committed workflow job runs an agent, so there is no agent job scope to read.", next_step = "Nothing to change." },
+  { code = "agent_job_scope_unread", block = "agent_ops", means = "An agent job's permissions could not be read: an expression, a value that is not read, write or none, or an agent sign outside every job. No other agent job settles the reading.", next_step = "Write the agent job's permissions as a plain map, such as contents: read, so the scan can read it."},
 ]
   [entries.privacy]
   "agent_ops.settings.default_mode" = "token"
@@ -32,6 +34,12 @@ unknown_reasons = [
   "agent_ops.agent_workflows.triggers" = "token"
   "agent_ops.agent_workflows.signs" = "token"
   "agent_ops.agent_workflows.via" = "path"
+  "agent_ops.agent_jobs.path" = "path"
+  "agent_ops.agent_jobs.job" = "drop"
+  "agent_ops.agent_jobs.scope" = "token"
+  "agent_ops.agent_jobs.write_scopes" = "token"
+  "agent_ops.summary.agent_jobs_least_privilege_reason" = "token"
+  "agent_ops.summary.agent_job_write_access_reason" = "token"
 
 [[entries]]
 id = "core:agent_ops.summary.permissions_encoded"
@@ -85,3 +93,41 @@ title = "Agent routines or event-triggered agents are committed"
 key = "layer-8-agent-ops.2:agent_ops.summary.agent_work_present"
 why = "Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code."
 fix = "Commit the agent work you run on a schedule or trigger. That can be a scheduled or issue workflow that runs an agent, or a file under .claude/routines/."
+
+[[entries]]
+id = "core:agent_ops.summary.agent_jobs_least_privilege"
+kind = "signal"
+title = "Every agent job runs with a read-only token"
+collector = "core.agent_ops"
+path = "agent_ops.summary.agent_jobs_least_privilege"
+type = "bool"
+evidence = "head_structure"
+null_means = "no_agent_jobs when no committed job runs an agent (agent_workflows_unread when only another repository's workflow may run one); agent_job_scope_unread when an agent job's permissions could not be read and no other agent job settles it"
+
+[[entries]]
+id = "core:agent_ops.summary.agent_job_write_access"
+kind = "signal"
+title = "Agent jobs with a write scope and no separate writer job"
+collector = "core.agent_ops"
+path = "agent_ops.summary.agent_job_write_access"
+type = "number"
+evidence = "head_structure"
+null_means = "no_agent_jobs or agent_workflows_unread as for agent_jobs_least_privilege; agent_job_scope_unread when none is found but an agent job's permissions could not be read"
+
+[[entries]]
+id = "core.cond.agent-least-privilege.1.agent_jobs_least_privilege"
+kind = "condition"
+title = "Agent jobs run with least privilege"
+key = "agent-least-privilege.1:agent_ops.summary.agent_jobs_least_privilege"
+why = "An agent acts on whatever text reaches its prompt, an issue body or a pull request included. A read-only token keeps a misled agent from pushing, merging or editing issues itself; a separate job that acts on its output does the writing, where a reviewer can see each write."
+why_source = "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions"
+fix = "Give each job that runs an agent `permissions:` with no write scope (`contents: read`, or `read-all`), and move writes into a separate job that `needs:` the agent job, or into gh-aw `safe-outputs:`. A job-level `permissions:` replaces the workflow's, so check the agent job's own block."
+
+[[entries]]
+id = "core.cond.agent-job-write-access.1.agent_job_write_access"
+kind = "condition"
+title = "An agent job holds write access"
+key = "agent-job-write-access.1:agent_ops.summary.agent_job_write_access"
+why = "An agent job with a write scope and no separate writer job can push, merge or edit issues on the strength of text an outsider wrote, with nothing between the prompt and the write."
+why_source = "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions"
+fix = "Drop the write scopes from the agent job's `permissions:` and do the writes in a job that `needs:` it, or in gh-aw `safe-outputs:`. A turn or budget cap limits cost, not what the token can do."

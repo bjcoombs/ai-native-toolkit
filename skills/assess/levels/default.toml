@@ -301,6 +301,18 @@
 #   is unknown (no_model_jobs); with none ungated but a trigger this reader cannot settle,
 #   or a job it cannot read, unknown (trigger_unresolved, ci_jobs_unread), never met. It
 #   gates no Step. Graded measured (head_structure), read from the committed CI files.
+# - Agent jobs run with least privilege reads agent_ops.summary.agent_jobs_least_privilege
+#   (lib/agents/agent_job_scope.py, #849): every committed workflow job that runs an agent
+#   (an agent action, claude -p, codex exec or a named model, followed through local actions
+#   and reusable workflows; a gh-aw source is one agent job) has an effective token scope with
+#   no write: its own permissions:, else the workflow's, so a job-level write override fails.
+#   id-token: write is not a write. An undeclared scope is unmet. A turn or budget cap is
+#   recorded, never counted. Its hazard, agent-job-write-access (polarity hazard, never
+#   counted), reads agent_ops.summary.agent_job_write_access: an agent job with a write scope
+#   and no split, where a split is gh-aw safe-outputs or another job that needs the agent
+#   job. With no agent job both are unknown (no_agent_jobs); a scope that cannot be read and
+#   settles nothing is unknown (agent_job_scope_unread), never met. They gate no Step.
+#   Graded measured (head_structure), read from the committed workflow files.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does
@@ -619,6 +631,29 @@ aggregation = "min"
   level = 1
   truth = ["governance"]
   criteria = [{ signal = "ci_model_jobs.ungated", op = "eq", value = 0 }]
+
+[[rows]]
+id = "agent-least-privilege"
+title = "Agent jobs run with least privilege"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["agent_runtime", "governance"]
+  criteria = [{ signal = "agent_ops.summary.agent_jobs_least_privilege", op = "eq", value = true }]
+
+[[rows]]
+id = "agent-job-write-access"
+title = "Agent job write access"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["agent_runtime", "governance"]
+  polarity = "hazard"
+  criteria = [{ signal = "agent_ops.summary.agent_job_write_access", op = "gt", value = 0 }]
 
 [[rows]]
 id = "contributor-files"

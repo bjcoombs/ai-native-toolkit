@@ -97,6 +97,12 @@ class AgentOpsSummary(TypedDict):
     permissions_source: NotRequired[str]  # "repository" or "managed", when encoded
     permissions_encoded_reason: NotRequired[str]  # the not-measured code, when null
     agent_work_present_reason: NotRequired[str]  # agent_workflows_unread, when null
+    agent_job_count: int  # jobs that run an agent (#849)
+    agent_jobs_read_only: int  # of those, the jobs whose effective token scope has no write
+    agent_jobs_least_privilege: bool | None  # every agent job read-only; null: no job, or unread
+    agent_job_write_access: int | None  # agent jobs with a write scope and no writer split (hazard)
+    agent_jobs_least_privilege_reason: NotRequired[str]  # the not-measured code, when null
+    agent_job_write_access_reason: NotRequired[str]  # the not-measured code, when null
 
 
 class AgentWorkflow(TypedDict):
@@ -111,6 +117,18 @@ class AgentWorkflow(TypedDict):
     event: bool
 
 
+class AgentJob(TypedDict):
+    """A committed workflow job that runs an agent, with its effective token scope
+    (``lib.agents.agent_job_scope``, #849)."""
+
+    path: str
+    job: str  # the job id; empty when the agent sign sits outside every job
+    scope: str  # read_only, write, undeclared or unread
+    write_scopes: list[str]  # permission names granted write (``write-all``; ``other`` if unknown)
+    split: bool  # writes go through another job: gh-aw safe-outputs, or a job that needs this one
+    spend_cap: bool  # max-turns or a budget limit: supporting evidence, never counted
+
+
 class AgentOpsBlock(TypedDict):
     """``run-context.json`` ``agent_ops``."""
 
@@ -120,6 +138,7 @@ class AgentOpsBlock(TypedDict):
     routine_dirs: list[AgentOpsDir]
     agent_workflows: list[AgentWorkflow]
     agent_workflows_unread: int
+    agent_jobs: list[AgentJob]
     managed: ManagedSettingsBlock
     summary: AgentOpsSummary
 

@@ -108,6 +108,8 @@ That an agent can see the system it changes run, and confirm a change there, not
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
+| `agent-job-write-access.1` An agent job holds write access (shared with Governance) | `agent_ops` | Agent jobs with a write scope and no separate writer job: is above 0 (`agent_ops.summary.agent_job_write_access gt 0`) | `measured` | no, listed | - | hazard | - | - | An agent job with a write scope and no separate writer job can push, merge or edit issues on the strength of text an outsider wrote, with nothing between the prompt and the write. | Drop the write scopes from the agent job's `permissions:` and do the writes in a job that `needs:` it, or in gh-aw `safe-outputs:`. A turn or budget cap limits cost, not what the token can do. |
+| `agent-least-privilege.1` Agent jobs run with least privilege (shared with Governance) | `agent_ops` | Every agent job runs with a read-only token: is true (`agent_ops.summary.agent_jobs_least_privilege eq true`) | `measured` | yes | - | positive | - | - | An agent acts on whatever text reaches its prompt, an issue body or a pull request included. A read-only token keeps a misled agent from pushing, merging or editing issues itself; a separate job that acts on its output does the writing, where a reviewer can see each write. | Give each job that runs an agent `permissions:` with no write scope (`contents: read`, or `read-all`), and move writes into a separate job that `needs:` the agent job, or into gh-aw `safe-outputs:`. A job-level `permissions:` replaces the workflow's, so check the agent job's own block. |
 | `layer-1-liveness.1` Some runtime telemetry is committed | `observability` | Observability rung: is at least 1 (`observability.rung gte 1`) | `declared` | no, listed | - | positive | - | - | Telemetry in the code is what any view of the running system is built on. Without it, there is nothing for an agent or a person to read when checking how a change behaves in use. | Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run. |
 | `layer-1-liveness.2` Runtime telemetry reaches rung 3 | `observability` | Observability rung: is at least 3 (`observability.rung gte 3`) | `declared` | no, listed | - | positive | - | - | When an agent can query logs or metrics itself, it can check a change against the running system instead of handing that back to a person. | Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill. |
 | `layer-5-ci.2` Every dependency manifest has its lockfile (shared with Supply chain) | `agent_environment` | Dependency manifests without a committed lockfile: is 0 (`agent_environment.pinning.unlocked_total eq 0`) | `declared` | no, listed | - | positive | - | - | A committed lockfile means an agent installs the dependency versions CI tested, so a local test result matches CI's. | Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking. |
@@ -129,6 +131,11 @@ That people stay in the loop on what agents change, and that what agents may do 
 | `secrets-guard.2` A secrets scan runs where an agent cannot skip it | `secrets_guard` | A secrets scan runs where an agent cannot skip it (CI): is true (`secrets_guard.enforcement.present eq true`) | `measured` | yes | - | positive | - | - | A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one. | Add a secrets scan step to CI that runs on each push or pull request (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify. |
 | `skill-personal-data.1` No skill file holds a detected kind of personal data (email, phone, home path, IP, SSH login, key, credential) | `skill_personal_data` | Skill and agent files holding a detected kind of personal data: is 0 (`skill_personal_data.files_with_personal_data eq 0`) | `measured` | yes | - | positive | - | - | Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user. | In each file the report names, remove the kind of data it lists, or replace it with a placeholder (user@example.com, /home/user/); a key that was committed should also be rotated. |
 
+Also carries this tag, listed under its first tag:
+
+- `agent-job-write-access.1` (Agent runtime)
+- `agent-least-privilege.1` (Agent runtime)
+
 ### Supply chain
 
 That an agent builds and tests against the same dependency versions as CI and everyone else.
@@ -144,6 +151,8 @@ Also carries this tag, listed under its first tag:
 Each pair of tags that share a condition, one line per condition both carry.
 
 - `docs` and `agent_context`: `layer-0-instructions.2`
+- `agent_runtime` and `governance`: `agent-job-write-access.1`
+- `agent_runtime` and `governance`: `agent-least-privilege.1`
 - `agent_runtime` and `supply_chain`: `layer-5-ci.2`
 
 ### Step gates
@@ -176,6 +185,8 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | Row | Title | Scope | Aggregated by | Levels |
 |---|---|---|---|---|
 | `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
+| `agent-job-write-access` | Agent job write access | team | `min` | `agent-job-write-access.1` |
+| `agent-least-privilege` | Agent jobs run with least privilege | team | `min` | `agent-least-privilege.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
 | `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
 | `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
@@ -277,19 +288,23 @@ Committed hooks, env blocks and MCP servers run in every agent session, headless
 
 Committed allowlists, hooks, sandbox rules and routines make an agent's limits and repeated work the same on every clone, and reviewable like code.
 
-Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event.
+Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job.
 
 - Collector: `core.agent_ops`, reading `repo_root`, `managed_settings`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_ops.agent_workflows.path` path, `agent_ops.agent_workflows.signs` token, `agent_ops.agent_workflows.triggers` token, `agent_ops.agent_workflows.via` path, `agent_ops.managed.reason` token, `agent_ops.managed.sources.kind` token, `agent_ops.managed.state` token, `agent_ops.settings.default_mode` token, `agent_ops.summary.agent_work_present_reason` token, `agent_ops.summary.permissions_encoded_reason` token, `agent_ops.summary.permissions_source` token.
-- Used by: row `layer-8-agent-ops`.
-- Evidence: `agent_ops.summary.agent_work_present` head_text (declared), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.permissions_encoded` config_text (config_only).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_ops.agent_jobs.job` drop, `agent_ops.agent_jobs.path` path, `agent_ops.agent_jobs.scope` token, `agent_ops.agent_jobs.write_scopes` token, `agent_ops.agent_workflows.path` path, `agent_ops.agent_workflows.signs` token, `agent_ops.agent_workflows.triggers` token, `agent_ops.agent_workflows.via` path, `agent_ops.managed.reason` token, `agent_ops.managed.sources.kind` token, `agent_ops.managed.state` token, `agent_ops.settings.default_mode` token, `agent_ops.summary.agent_job_write_access_reason` token, `agent_ops.summary.agent_jobs_least_privilege_reason` token, `agent_ops.summary.agent_work_present_reason` token, `agent_ops.summary.permissions_encoded_reason` token, `agent_ops.summary.permissions_source` token.
+- Used by: row `agent-job-write-access`, row `agent-least-privilege`, row `layer-8-agent-ops`.
+- Evidence: `agent_ops.summary.agent_job_write_access` head_structure (measured), `agent_ops.summary.agent_jobs_least_privilege` head_structure (measured), `agent_ops.summary.agent_work_present` head_text (declared), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.permissions_encoded` config_text (config_only).
 - Not measured when:
   - `agent_workflows_unread`: No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent. Nothing to change: this reads as not measured until that workflow can be read.
+  - `no_agent_jobs`: With agent_job_count at 0, no committed workflow job runs an agent, so there is no agent job scope to read. Nothing to change.
+  - `agent_job_scope_unread`: An agent job's permissions could not be read: an expression, a value that is not read, write or none, or an agent sign outside every job. No other agent job settles the reading. Write the agent job's permissions as a plain map, such as contents: read, so the scan can read it.
 
 Why the signals named here matter:
 
+- `agent_ops.summary.agent_job_write_access` feeds `agent-job-write-access.1:agent_ops.summary.agent_job_write_access`: An agent job with a write scope and no separate writer job can push, merge or edit issues on the strength of text an outsider wrote, with nothing between the prompt and the write.
+- `agent_ops.summary.agent_jobs_least_privilege` feeds `agent-least-privilege.1:agent_ops.summary.agent_jobs_least_privilege`: An agent acts on whatever text reaches its prompt, an issue body or a pull request included. A read-only token keeps a misled agent from pushing, merging or editing issues itself; a separate job that acts on its output does the writing, where a reviewer can see each write.
 - `agent_ops.summary.permissions_encoded` feeds `layer-8-agent-ops.1:agent_ops.summary.permissions_encoded`: Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code.
 - `agent_ops.summary.hooks_present` feeds `layer-8-agent-ops.2:agent_ops.summary.hooks_present`: Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it.
 - `agent_ops.summary.agent_work_present` feeds `layer-8-agent-ops.2:agent_ops.summary.agent_work_present`: Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code.

@@ -181,7 +181,7 @@ New code imports the new path.
 
 - **`agents/`**: what a repository builds with agents and how an agent runs in it, the
   Layer 8 inputs. `agent_identity` is shared core and stays at the root; `agent_consistency`,
-  `agent_systems` and `agent_instructions_grader` moved with the `instructions` group. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`, `agent_environment.py`, `agent_harness.py`, `agent_manifests.py`, `agent_ops.py`, `managed_settings.py`.
+  `agent_systems` and `agent_instructions_grader` moved with the `instructions` group. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`, `agent_environment.py`, `agent_harness.py`, `agent_job_scope.py` (#849, the token scope of agent jobs, read by `agent_ops`), `agent_manifests.py`, `agent_ops.py`, `managed_settings.py`.
 - **`ci/`**: CI configuration read offline, the `ci` group (#1392, #1393): the committed CI
   files read line by line (continuations, matrices, expressions, triggers), GitLab `include:`
   items resolved offline and the merged line view, and the blocks built from them: CI checks
