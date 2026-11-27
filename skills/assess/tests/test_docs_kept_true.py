@@ -304,6 +304,7 @@ def test_an_install_then_a_diff_is_not_a_regeneration(tmp_path: Path, step: str)
 @pytest.mark.parametrize("step", [
     "uv run --locked pytest", "uv run --with pytest-cov pytest", "uv run -- pytest",
     "poetry -C . run pytest", "pdm run -p . pytest", "hatch -e test run pytest",
+    "hatch --env test run pytest",
     "uv run --locked python -m pytest",
 ])
 def test_doctest_in_config_with_a_pytest_step_behind_wrapper_options_meets(tmp_path: Path, step: str) -> None:

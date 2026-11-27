@@ -230,7 +230,7 @@ def test_a_lerna_run_reads_like_its_package_manager_form(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", ["uv run --env-file ci.env mypy", "uvx --env-file ci.env mypy",
-                                  "uv run --env CI=1 mypy", "uv run -P sub mypy"])
+                                  "uv run -P sub mypy"])
 def test_a_shared_wrapper_option_value_is_skipped_for_lint(text: str) -> None:
     """``check_command.WRAPPER_FLAGS`` is shared with ``lib.ci.docs_kept_true`` (#1589): a
     valued option's value is never read as the program."""

@@ -27,5 +27,6 @@ The module docstring has the rules and the block shape. Known limits:
   valued options come from `lib.ci.check_command.WRAPPER_FLAGS`, one set for every wrapper,
   so both readers read a step alike. A valued option missing from it leaves its value read as
   the program (`python -W error -m pytest` is not credited). A listed option that is a plain
-  flag for another wrapper eats the next word: `-P` is poetry's `--project` but a no-value flag
-  for `python` 3.11+, so `python -P gen.py` reads no program. Neither gives a false met.
+  flag for another wrapper eats the next word: `-s` and `-P` are no-value flags for `python`
+  (`-P` from 3.11), so `python -s gen.py` reads no program. Neither gives a false met: a
+  regeneration is read from the first word, not the program.

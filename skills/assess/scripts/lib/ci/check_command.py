@@ -454,7 +454,7 @@ SETUP_TARGETS = frozenset({
 # Programs a wrapper may run that are known not to be a check (``docker run img echo hi``).
 _PLAIN_PROGRAMS = frozenset({"echo", "true", "printf", "cat", "ls", "env", "sleep", "exit"})
 # The valued options of a Python or JS wrapper (``uv run --with x``, ``poetry -P sub``, ``npx -p
-# pkg``): read here and by ``lib.ci.docs_kept_true`` (#1589), so both read one step alike.
+# pkg``, ``hatch --env test``): read here and by ``lib.ci.docs_kept_true`` (#1589), so both read one step alike.
 WRAPPER_FLAGS = _VALUED_FLAGS | {"--spec", "--with-editable", "--with-requirements", "-P",
                                  "--env-file", "--index", "--env"}
 _DOCKER_RUN_FLAGS = frozenset({
