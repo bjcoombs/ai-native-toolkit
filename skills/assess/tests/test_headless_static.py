@@ -49,12 +49,14 @@ def _init(repo: Path) -> Path:
 
 @pytest.fixture
 def instrumented(tmp_path: Path) -> Path:
-    """A service with committed telemetry config and a runbook, plus a module doc."""
+    """A service with a telemetry dependency it imports and a runbook, plus a module doc.
+
+    A dependency alone is declared, not counted (#922), so the module imports it."""
     repo = _init(tmp_path / "svc")
     _write(repo, "pyproject.toml", '[project]\nname = "svc"\ndependencies = ["opentelemetry-sdk"]\n')
     _write(repo, "docs/runbook.md", "# Runbook\n\nDashboards and logs for the service.\n")
     _write(repo, "pkg/__init__.py", "")
-    _write(repo, "pkg/core.py", "def run():\n    return 1\n")
+    _write(repo, "pkg/core.py", "from opentelemetry import trace\n\n\ndef run():\n    return 1\n")
     _write(repo, "pkg/README.md", "# pkg\n\nSee [core](core.py).\n")
     _write(repo, "README.md", "# svc\n")
     _commit(repo)
