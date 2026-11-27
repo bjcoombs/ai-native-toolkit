@@ -309,3 +309,34 @@ def test_a_gitlab_include_is_read_as_gitlab_merges_it(tmp_path: Path, root: str,
 def test_a_hidden_template_taken_by_anchor_or_reference_is_a_run(tmp_path: Path, ci: str) -> None:
     root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}", ".gitlab-ci.yml": ci})
     assert _block(root)["dirs"][0]["ci"] is True
+
+
+INCLUDED_EVALS = "evals:\n  script:\n    - pytest evals/\n"
+INCLUDED_TEMPLATE = ".evals:\n  script:\n    - pytest evals/\n"
+
+
+@pytest.mark.parametrize(("root", "included", "present"), [
+    # The merged view cannot settle a flow map over a block map: not a run, and not measured.
+    ("include:\n  - local: ci/evals.yml\nevals: {script: [pytest tests/]}\n", INCLUDED_EVALS, None),
+    # extends: names a template that does not exist: GitLab rejects the job.
+    ("include:\n  - local: ci/evals.yml\nevals:\n  extends: [.evals, .nope]\n", INCLUDED_TEMPLATE, None),
+    # An include under rules: GitLab may leave it out.
+    ("include:\n  - local: ci/evals.yml\n    rules:\n      - if: $X\n        when: never\n", INCLUDED_EVALS, None),
+    # An anchor does not cross files: an anchored template with no alias in its own file runs nothing.
+    ("include:\n  - local: ci/evals.yml\n", ".evals: &evals\n  script:\n    - pytest evals/\n", False),
+    # A !reference to the template's rules: does not run its script.
+    ("include:\n  - local: ci/evals.yml\ntest:\n  rules:\n    - !reference [.evals, rules]\n  script:\n    - pytest tests/\n",
+     ".evals:\n  rules:\n    - when: always\n  script:\n    - pytest evals/\n", False),
+])
+def test_an_unsettled_or_unused_gitlab_job_is_not_a_run(tmp_path: Path, root: str, included: str,
+                                                          present: bool | None) -> None:
+    block = _block(_git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                                   ".gitlab-ci.yml": root, "ci/evals.yml": included}))
+    assert (block["present"], block["dirs"][0]["ci"]) == (present, False)
+
+
+@pytest.mark.parametrize("when", ["never", "manual"])
+def test_a_gitlab_job_that_never_runs_on_its_own_is_not_a_run(tmp_path: Path, when: str) -> None:
+    root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                            ".gitlab-ci.yml": f"evals:\n  when: {when}\n  script:\n    - pytest evals/\n"})
+    assert _block(root)["dirs"][0]["ci"] is False

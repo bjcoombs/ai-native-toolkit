@@ -142,7 +142,12 @@ Known limits:
   recipe or a `package.json` script. A recipe that calls another target is not followed.
 - A baseline outside the suite folder (`baselines/evals.json` beside `evals/`) is not read.
 - GitLab files are read through the merged view (`ci_merged_view`), so a root `script:` that
-  replaces an included one and an `extends:` template read as GitLab runs them, and a hidden
-  job (`.evals:`) runs nothing on its own unless it sets a YAML anchor or a `!reference` names it. When the merged view does not settle, the root and
-  included files are read as written: a root override then still counts the included command,
-  and a job that takes its script from a hidden template is not named.
+  replaces an included one and an `extends:` template read as GitLab runs them. A job the
+  merge does not settle (an unsettled render, a missing `extends:` parent, a job from an
+  include under `rules:`) is not a run and reads with `unread`, so a baselined suite reads not
+  measured. A hidden job (`.evals:`) runs nothing on its own: all of it runs when an alias in
+  the same file uses its anchor, and only the key a `!reference [.evals, key]` names otherwise.
+  A job whose own `when:` is `never` or `manual` is not a run; a `when:` inside `rules:` is not
+  read. When the merged view cannot be built, the root and included files are read as
+  written: a root override then still counts the included command, and a job that takes its
+  script from a hidden template through `extends:` is not named.

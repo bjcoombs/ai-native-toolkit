@@ -62,7 +62,9 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from typing import NotRequired, TypedDict
 
-from lib.ci.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_includes import MergedConfig
+from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci.ci_merged_view import MergedView, merged_jobs
 from lib.ci.ci_shell_text import command_text
 
 REASON_CI_UNREAD = "eval_ci_unread"
@@ -205,33 +207,59 @@ def _utility_with(tree: IndentTree, with_line: int) -> bool:
     return uses.lower().startswith("actions/")
 
 
-_REFERENCE = re.compile(r"!reference\s*\[\s*['\"]?(\.[^,\]'\"\s]+)")
+_REFERENCE = re.compile(r"!reference\s*\[\s*['\"]?(\.[^,\]'\"\s]+)['\"]?\s*,\s*['\"]?([\w-]+)")
+_IDLE = frozenset({"never", "manual"})  # a GitLab job ``when:`` that does not run it on a pipeline
 
 
-def hidden_references(texts: Iterable[str]) -> frozenset[str]:
-    """The GitLab hidden jobs a ``!reference [.name, key]`` in ``texts`` names."""
-    return frozenset(m.group(1) for text in texts for m in _REFERENCE.finditer(text))
+def hidden_references(texts: Iterable[str]) -> frozenset[tuple[str, str]]:
+    """The GitLab hidden job and key each ``!reference [.name, key]`` in ``texts`` names."""
+    return frozenset((m.group(1), m.group(2)) for text in texts for m in _REFERENCE.finditer(text))
 
 
-def run_texts(text: str, referenced: frozenset[str] | None = None) -> list[str]:
+def _hidden_keep(tree: IndentTree, text: str, referenced: frozenset[tuple[str, str]]) -> dict[int, set[str] | None]:
+    """For each top-level GitLab hidden job, what of it may run: None for all of it (an anchor
+    that an alias in the same file uses; anchors do not cross files), else the keys a
+    ``!reference`` names (an empty set: nothing)."""
+    out: dict[int, set[str] | None] = {}
+    for i, line in enumerate(tree.lines):
+        if line.structural and line.key.startswith(".") and not tree.ancestors(i):
+            anchor = re.match(r"&([\w.-]+)", line.value)
+            used = anchor is not None and re.search(r"\*" + re.escape(anchor.group(1)) + r"(?![\w.-])", text)
+            out[i] = None if used else {key for job, key in referenced if job == line.key}
+    return out
+
+
+def _idle(tree: IndentTree) -> set[int]:
+    """The top-level jobs whose own ``when:`` is ``never`` or ``manual``."""
+    return {up[0] for i, line in enumerate(tree.lines)
+            if line.structural and line.key == "when" and len(up := tree.ancestors(i)) == 1
+            and strip_comment(line.value).strip().strip("'\"") in _IDLE}
+
+
+def run_texts(text: str, referenced: frozenset[tuple[str, str]] | None = None) -> list[str]:
     """What a CI file runs: each shell value (``run:``, ``script:`` and its items) as
     ``command_text`` reads it, so a quoted argument, an ``echo`` and a comment name nothing, and
     each ``working-directory:``, ``with:`` or ``args:`` value as written. A job id, a step
     ``name:``, a ``paths:`` filter, a step or job whose ``if:`` is never true, a command segment
     in ``NOT_RUNNERS``, the ``with:`` inputs of a GitHub ``actions/`` utility and a GitLab hidden
     job (``.evals:``, which runs only inside a job that extends it) run nothing; skip flags
-    (``--ignore=evals``, ``-k ...``) are blanked. A hidden job a job can take without
-    ``extends:`` is kept: one that sets a YAML anchor (``.evals: &evals``) or that a
-    ``!reference [.evals, ...]`` in ``referenced`` (every CI text read) names."""
+    (``--ignore=evals``, ``-k ...``) are blanked. What a job can take from a hidden job without
+    ``extends:`` is kept: all of one whose YAML anchor (``.evals: &evals``) an alias in the same
+    file uses, and the key a ``!reference [.evals, script]`` in ``referenced`` (every CI text
+    read) names. A GitLab job whose own ``when:`` is ``never`` or ``manual`` runs nothing."""
     tree = IndentTree(parse_lines(text.splitlines()))
     dead = _dead(tree)
-    named = referenced if referenced is not None else hidden_references([text])
+    hidden = _hidden_keep(tree, text, referenced if referenced is not None else hidden_references([text]))
+    idle = _idle(tree)
     out: list[str] = []
     for i, line in enumerate(tree.lines):
         if not line.structural or i in dead:
             continue
-        top = tree.lines[(tree.ancestors(i) or [i])[-1]]
-        if top.key.startswith(".") and not top.value.startswith("&") and top.key not in named:
+        up = tree.ancestors(i)
+        if up and up[-1] in idle:
+            continue
+        if up and up[-1] in hidden and (keep := hidden[up[-1]]) is not None and \
+                tree.lines[([i, *up])[-2]].key not in keep:
             continue
         parent = tree.ancestors(i)[:1]
         owner = tree.lines[parent[0]].key if parent else ""
@@ -293,6 +321,27 @@ def _recipes(read: Callable[[str], str], tracked: frozenset[str], targets: set[s
         if isinstance(scripts, dict):
             out += [str(scripts[t]) for t in sorted(targets) if t in scripts]
     return out
+
+
+def gitlab_eval_texts(config: MergedConfig, view: MergedView) -> tuple[list[str], int]:
+    """The GitLab texts the scan reads, as GitLab merges them, and how many jobs are left out
+    as not settled: a merged job whose rendered lines ``view.unsettled`` holds, and a visible
+    job with an unresolved merge (an include under ``rules:``, an include order) other than an
+    ``unreadable`` anchor merge, which keeps its own reading as ``lib.ci.ci_merged_view`` does.
+    A job left out is never a run; its count reads with ``ci_unread``."""
+    merged = {job.name for job in merged_jobs(config)}
+    unknown = [job for job in config.jobs.values() if not job.hidden and job.name not in merged
+               and job.unresolved not in (None, "unreadable")]
+    blank: dict[int, set[int]] = {}
+    for job in unknown:
+        for d in job.defs:
+            blank.setdefault(d.source, set()).update(range(d.start, d.end))
+    texts = ["\n".join("" if i in blank.get(s, ()) else line for i, line in enumerate(text.splitlines()))
+             for s, text in enumerate(view.texts)]
+    rendered = view.rendered.splitlines()
+    texts.append("\n".join("" if i in view.unsettled else line for i, line in enumerate(rendered)))
+    unsettled = sum(i in view.unsettled and line.startswith("job") for i, line in enumerate(rendered))
+    return texts, len(unknown) + unsettled
 
 
 def scan_agent_evals(tracked: frozenset[str], read: Callable[[str], str], ci_texts: Mapping[str, str],
