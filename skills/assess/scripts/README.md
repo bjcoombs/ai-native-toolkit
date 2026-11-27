@@ -28,6 +28,7 @@ for how the scans plug in.
 | `gen_catalog.py` | Writes the measures catalog from the check manifest (`make catalog`) |
 | `identity_candidates.py` | Lists bot and agent accounts waiting to be classified |
 | `levels_new.py` | Copies a maturity model you can edit and run with `--levels` |
+| `calibration_corpus.py` | Diffs a run of the calibration corpus clones against their expected-state files and reports the conditions that do not discriminate |
 | `base_baseline.sh`, `gitlab_gate.sh` | The gate's baseline comparison and its GitLab CI job script |
 
 ## Tests
