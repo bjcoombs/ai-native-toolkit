@@ -521,6 +521,8 @@ def test_a_third_tool_linked_to_any_file_in_the_chain_stays_linked(tmp_path: Pat
     "See AGENTS.md.\n",   # points back to the start
     "@AGENTS.md\n",       # imports the start back
     "@CLAUDE.md\n",       # imports a link of the chain back
+    "See GEMINI.md.\n",   # points at itself
+    "@CLAUDE.md\nRun `make test`.\n",  # content, but imports the chain back (as #1505)
 ])
 def test_a_chain_that_loops_back_is_no_delegation(tmp_path: Path, gemini: str) -> None:
     root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "See GEMINI.md.\n",
@@ -592,3 +594,13 @@ def test_the_prose_pointer_finding_is_counts_only_safe(tmp_path: Path) -> None:
              if f["kind"] == "claude_prose_pointer"]
     assert len(found) == 1
     assert "detail" not in found[0]
+
+
+def test_aider_reading_a_pointer_in_the_chain_reads_the_canonical_file(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "See GEMINI.md.\n",
+                            "GEMINI.md": CLAUDE_RULES, ".aider.conf.yml": "read: CLAUDE.md\n"})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "GEMINI.md"
+    assert _links(dict(block))[".aider.conf.yml"] == "config_read"
+    assert "aider" in block["systems"]
+    assert block["unlinked"] == 0

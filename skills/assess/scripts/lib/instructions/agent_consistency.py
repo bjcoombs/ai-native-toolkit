@@ -9,7 +9,8 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
 1. **Root context.** Per system, its files that load at the repository root at
    session start (``scope.always_loaded`` at directory ``.``), empty files
    dropped. Aider counts when ``.aider.conf.yml`` reads a file: its
-   ``CONVENTIONS.md``, or the canonical file itself (link ``config_read``).
+   ``CONVENTIONS.md``, or the canonical file itself or a pointer in its
+   delegation chain (link ``config_read``, #1507).
 2. **Canonical source.** The root ``AGENTS.md`` when there is one, or the root
    file it delegates to when it is a bare one-line pointer (one of the fixed
    ``instruction_discovery.POINTER_FORMS`` naming a sibling file,
@@ -58,7 +59,7 @@ Cross-agent instruction consistency (#768): does every agent system get the same
 systems_total, applicable, canonical, files, divergences, conflicts, unlinked,
 consistent, next_steps, not_read}`. It reads each system's root-context files (scope
 `always_loaded` at directory `.`, empty files dropped; Aider when `.aider.conf.yml`
-reads a file, as `config_read` when it reads the canonical file directly). The canonical
+reads a file, as `config_read` when it reads the canonical file or a pointer in its chain). The canonical
 file is the root `AGENTS.md` (or the root file a bare one-line `AGENTS.md` pointer names,
 `delegation_target`, #1505, followed through further bare pointers to the file with content,
 #1507, unless the chain reaches, imports or symlinks back into itself), else the first root
@@ -282,14 +283,16 @@ def _delegation_chain(start: InstructionCandidate, files: list[InstructionCandid
 
     Each step is a bare one-line pointer (``delegation_target``) to a sibling at the
     root: `See .claude/CLAUDE.md` names a path, no sibling. A chain whose next file
-    is already in it, or that imports or symlinks back into it, holds no
-    instructions, so it is no delegation (#1505, #1507).
+    is already in it (a self-pointer included), or that imports or symlinks back
+    into it, is a loop and no delegation, even when the last file holds text
+    beside its import, as #1505 rules for the direct case (#1507).
     """
     siblings = {c.rel: c for c in files if "/" not in c.rel}
     chain = [start]
     while True:
         cur = chain[-1]
-        target = delegation_target(cur.body, sorted(n for n in siblings if n != cur.rel))
+        # The file's own name stays in the list, so a self-pointer is a loop.
+        target = delegation_target(cur.body, sorted(siblings))
         if target is None:
             return chain
         rels = {c.rel for c in chain}
@@ -396,7 +399,9 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
     rows: list[ConsistencyFile] = []
     linked: dict[str, bool] = {}
     texts: dict[str, str] = {}
-    aider_reads_canon = canon is not None and canon.rel in aider_reads
+    # Aider reading any file of the chain reads its way to the canonical file (#1507).
+    aider_reads_canon = canon is not None and any(
+        f.rel in aider_reads for f in [canon, *via])
     for system in _sort_systems([*by_system, *(["aider"] if aider_reads_canon else [])]):
         parts: list[str] = []
         links: list[Link] = []
