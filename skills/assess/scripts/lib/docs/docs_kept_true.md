@@ -19,3 +19,6 @@ The module docstring has the rules and the block shape. Known limits:
   A verify and update pair names no subtree.
 - The doctest flag in a pytest configuration is found by text (`--doctest-` outside a `#`
   comment) in the four root files; a configuration under a sub-folder is not read.
+- A doc-file doctest run (`--doctest-glob`, `--markdown-docs`, Sphinx `doctest`) exempts the
+  docs it runs from churn staleness. It proves their examples run, not that the prose around
+  them still describes the code.

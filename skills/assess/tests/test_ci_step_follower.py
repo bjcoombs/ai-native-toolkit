@@ -348,3 +348,35 @@ def test_maven_reads_only_the_reactor_its_modules_name(tmp_path: Path) -> None:
     assert got.paths == ("pom.xml",) and "japicmp-maven-plugin:cmp" not in got.tasks
     missing = _repo(tmp_path / "m", {"pom.xml": _PARENT})
     assert set(_one(missing, "mvn verify").unknown) == {"module: api/pom.xml", "module: core/pom.xml"}
+
+
+def test_a_maven_phase_it_cannot_read_is_unknown(tmp_path: Path) -> None:
+    """Issue #1583: a phase given as a property, or one outside the lifecycles read, is unknown."""
+    follower = _repo(tmp_path, {"pom.xml": _POM})
+    assert "phase: ${goals}" in _one(follower, "mvn ${goals}").unknown
+    assert "phase: $GOALS" in _one(follower, "mvn -B $GOALS").unknown
+    site = _one(follower, "mvn site")
+    assert "phase: site" in site.unknown and site.tasks == ()
+
+
+def test_a_remote_reusable_workflow_is_unknown(tmp_path: Path) -> None:
+    """Issue #1583: a job's call to a reusable workflow in another repository is unknown, while
+    a step's remote action is not."""
+    remote = "org/repo/.github/workflows/ci.yml@v1"
+    caller = (f"on: push\njobs:\n  a:\n    uses: {remote}\n  b:\n    runs-on: x\n    steps:\n"
+              "      - uses: actions/checkout@v4\n      - run: pytest -q\n")
+    follower = _repo(tmp_path, {".github/workflows/call.yml": caller})
+    got = _one(follower, "uses: ./.github/workflows/call.yml")
+    assert got.commands == ("pytest -q",) and got.unknown == (remote,)
+    direct = _one(follower, f"uses: {remote}")
+    assert direct == Followed("workflow", (), unknown=(remote,))
+
+
+def test_follow_step_finds_a_gradle_build_without_files(tmp_path: Path) -> None:
+    """Issue #1583: with no tracked-file list, the build files are found through the reader."""
+    follower = _repo(tmp_path, {"build.gradle": "plugins { id 'java' }\n", "app/build.gradle": _GRADLE,
+                                "settings.gradle": "include 'app'\n"})
+    with_files = follow_step("./gradlew check", follower.read_local, follower.files)
+    without = follow_step("./gradlew check", follower.read_local)
+    assert without == with_files and without[0].paths == ("build.gradle", "app/build.gradle")
+    assert "japicmp" in without[0].tasks

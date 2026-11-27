@@ -7,7 +7,7 @@ import pytest
 
 from lib.ci.ci_checks import scan_ci_checks
 from lib.ci.ci_triggers import gitlab_line_triggers
-from lib.gitlab_rules import Context, Rule, Truth, evaluate, outcome
+from lib.gitlab_rules import CONTEXTS, Context, Rule, Truth, evaluate, outcome
 
 _NIGHTLY = '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 _TAG_ONLY = "$CI_COMMIT_TAG && $CI_COMMIT_BRANCH == null"
@@ -204,3 +204,21 @@ def test_a_tag_only_tests_job_is_not_enforced(tmp_path: Path) -> None:
 
 def test_an_or_mix_with_an_unread_variable_is_null(tmp_path: Path) -> None:
     assert _enforced(tmp_path, f'{_SCHEDULE} || $RUN_TESTS == "1"') is None
+
+
+@pytest.mark.parametrize(("expression", "truth"), [
+    ('$CI_PIPELINE_SOURCE == "schedule"', "true"),
+    (_NIGHTLY, "varies"),  # which branch the schedule runs on
+    ('$CI_PIPELINE_SOURCE == "push"', "false"),
+    ("$CI_MERGE_REQUEST_IID", "false"),
+    ("$CI_COMMIT_TAG", "varies"),  # a schedule may target a tag
+    ('$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_TAG', "varies"),
+    ('$CI_PIPELINE_SOURCE == "schedule" && $REFINE == "true"', "varies"),  # a schedule's own variable
+    ('$CI_PROJECT_PATH == "a/b"', "unknown"),  # predefined, not modelled
+    ('$GITLAB_USER_LOGIN == "bot"', "unknown"),
+])
+def test_the_schedule_context(expression: str, truth: Truth) -> None:
+    # #1406: asked for by name; the ordinary contexts leave it out.
+    assert evaluate(expression, "schedule") == truth
+    assert "schedule" not in CONTEXTS
+    assert evaluate("$REFINE", "push") == "unknown"

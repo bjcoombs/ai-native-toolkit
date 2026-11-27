@@ -248,3 +248,10 @@ def test_a_renamed_child_or_newer_source_stays_stale_under_a_covering_check() ->
     newer = {**_staleness_row("docs/y.md", 0.0), "provenance": {"source_newer": True}, "kept_true_by": by}
     assert is_stale(renamed) and is_stale(newer)
     assert not is_stale({**_staleness_row("docs/z.md", 9.0), "kept_true_by": by})
+
+
+def test_a_script_run_behind_a_passing_fallback_is_not_followed(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {**DOCS, "Makefile": "check:\n\t./hack/check.sh || true\n",
+                            "hack/check.sh": "#!/bin/sh\nmake gen\ngit diff --exit-code docs\n",
+                            ".github/workflows/ci.yml": _workflow("make check")})
+    assert _block(root)["present"] is False

@@ -30,7 +30,8 @@ Masking (#775, ``lib.ci.ci_masking.mask_lines``): a CI file is read through its 
 lines, so ``continue-on-error``, ``|| true`` and the not-measured forms (``git diff
 --exit-code || echo changed``) never count. A followed script or recipe line is not
 YAML: there a command followed by ``||`` counts only when the fallback re-raises
-(``exit 1``, ``exit $rc``, ``false``) before the next ``;`` or ``&&``.
+(``exit 1``, ``exit $rc``, ``false``) before the next ``;`` or ``&&``, and a script or
+recipe such a line runs is not followed.
 
 ``present`` is true when any check is found. With none found and a tracked CI file of a
 system this reader does not parse (``lib.unread_ci``: Jenkins, Prow, Buildkite ...), it is
@@ -200,14 +201,15 @@ class _Reader:
                   path: tuple[str, ...], depth: int) -> None:
         regenerated = False
         for line in lines:
-            for cmd in _commands(ci_line_text(line)):
+            commands = list(_commands(ci_line_text(line)))
+            for cmd in commands:
                 words = cmd["words"]
                 if not cmd["masked"]:
                     self._classify(words, regenerated, found)
                 if _regenerates(words) and not _diff_check(words):
                     regenerated = True
-            if depth >= _MAX_FOLLOW:
-                continue
+            if depth >= _MAX_FOLLOW or any(c["masked"] for c in commands):
+                continue   # a line whose fallback can pass: what it runs cannot fail the job
             for followed in self.follower.step(line):
                 if any(p in path for p in followed.paths):
                     continue

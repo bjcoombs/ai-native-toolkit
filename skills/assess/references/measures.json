@@ -2599,7 +2599,7 @@
     {
       "name": "backlog_ready",
       "title": "Backlog kept agent-ready (intake configuration)",
-      "summary": "How new issues are taken in, read from committed files. An issue form has a required field. A workflow on issues opened adds an untriaged label. A ready label is documented with its criteria. No stale job can close a ready issue.",
+      "summary": "How new issues are taken in, read from committed files. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue.",
       "collector": "core.backlog_ready",
       "reads": [
         "repo_root"
@@ -2624,18 +2624,18 @@
       "unknown_reasons": [
         {
           "code": "form_unreadable",
-          "means": "No issue form read has a required field, and a form could not be read. Causes are a tab indent, an unclosed flow collection, or no top-level body list.",
+          "means": "No issue form read has a required field, and a form or GitLab template could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.",
           "next_step": "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue."
         },
         {
-          "code": "gitlab_templates",
-          "means": "The repository is on GitLab and holds no GitHub issue form. GitLab issue templates are not read yet, so the form signal is not measured.",
-          "next_step": "Nothing to change: GitLab issue templates will be read in a later release."
+          "code": "gitlab_ci_unreadable",
+          "means": "No workflow adds an untriaged label, and .gitlab-ci.yml has a tab in its indentation or an unclosed flow collection, which GitLab rejects.",
+          "next_step": "Fix .gitlab-ci.yml so GitLab accepts it; the pipeline editor's validate tab names the line."
         },
         {
-          "code": "gitlab_ci_not_read",
-          "means": "The repository is on GitLab and holds no GitHub workflow. GitLab has no CI trigger for a new issue, and a scheduled refinement job is not read yet.",
-          "next_step": "Nothing to change: GitLab refinement jobs will be read in a later release."
+          "code": "gitlab_ci_unsettled",
+          "means": "No workflow or GitLab job read adds an untriaged label on a schedule. But something this reader cannot follow may: an include not read offline, or an anchor merge, !reference, variable label or unread rule.",
+          "next_step": "Nothing to change if a scheduled job labels new issues; a literal label, plain rules: and a local include let the scan read it."
         },
         {
           "code": "workflow_unreadable",
@@ -6821,12 +6821,12 @@
     },
     {
       "path": "backlog_ready.required_form_field",
-      "title": "An issue form has a required field",
+      "title": "An issue form has a required field, or a GitLab template the six sections",
       "type": "bool",
       "collector": "core.backlog_ready",
       "input_class": "config_text",
       "grade": "config_only",
-      "null_means": "form_unreadable: a form could not be read and none read has a required field; gitlab_templates: a GitLab repository, whose issue templates are not read yet"
+      "null_means": "form_unreadable: a form or GitLab template could not be read, none read has a required field and no template read has the six sections"
     },
     {
       "path": "backlog_ready.stale_job_safe",
@@ -6839,12 +6839,12 @@
     },
     {
       "path": "backlog_ready.untriaged_on_open",
-      "title": "A workflow labels each new issue untriaged",
+      "title": "A workflow or scheduled GitLab job labels new issues untriaged",
       "type": "bool",
       "collector": "core.backlog_ready",
       "input_class": "config_text",
       "grade": "config_only",
-      "null_means": "workflow_unreadable: no workflow read adds an untriaged label on issues opened, and a workflow's on: key could not be read; gitlab_ci_not_read: a GitLab repository, whose scheduled refinement jobs are not read yet"
+      "null_means": "workflow_unreadable: no workflow read adds an untriaged label on issues opened, and a workflow's on: key could not be read; gitlab_ci_unreadable: .gitlab-ci.yml is malformed; gitlab_ci_unsettled: an include, merge or rule not read may hold a scheduled job that adds one"
     },
     {
       "path": "ci_checks.enforced_check_runs",

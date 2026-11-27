@@ -388,7 +388,7 @@ It tells a documentation repository from a software one, so the report does not 
 
 An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.
 
-How new issues are taken in, read from committed files. An issue form has a required field. A workflow on issues opened adds an untriaged label. A ready label is documented with its criteria. No stale job can close a ready issue.
+How new issues are taken in, read from committed files. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue.
 
 - Collector: `core.backlog_ready`, reading `repo_root`.
 - Network: no.
@@ -397,9 +397,9 @@ How new issues are taken in, read from committed files. An issue form has a requ
 - Used by: no row or finding yet.
 - Evidence: `unclassified`, as no criterion reads its signals: `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_on_open` config_text (config_only).
 - Not measured when:
-  - `form_unreadable`: No issue form read has a required field, and a form could not be read. Causes are a tab indent, an unclosed flow collection, or no top-level body list. Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue.
-  - `gitlab_templates`: The repository is on GitLab and holds no GitHub issue form. GitLab issue templates are not read yet, so the form signal is not measured. Nothing to change: GitLab issue templates will be read in a later release.
-  - `gitlab_ci_not_read`: The repository is on GitLab and holds no GitHub workflow. GitLab has no CI trigger for a new issue, and a scheduled refinement job is not read yet. Nothing to change: GitLab refinement jobs will be read in a later release.
+  - `form_unreadable`: No issue form read has a required field, and a form or GitLab template could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit. Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue.
+  - `gitlab_ci_unreadable`: No workflow adds an untriaged label, and .gitlab-ci.yml has a tab in its indentation or an unclosed flow collection, which GitLab rejects. Fix .gitlab-ci.yml so GitLab accepts it; the pipeline editor's validate tab names the line.
+  - `gitlab_ci_unsettled`: No workflow or GitLab job read adds an untriaged label on a schedule. But something this reader cannot follow may: an include not read offline, or an anchor merge, !reference, variable label or unread rule. Nothing to change if a scheduled job labels new issues; a literal label, plain rules: and a local include let the scan read it.
   - `workflow_unreadable`: No workflow read adds an untriaged label when an issue opens, and a workflow's on: key could not be read. Nothing to change if that workflow labels new issues; a plain on: issues: types: [opened] lets the scan read it.
   - `stale_input_unresolved`: No stale job is sure to close a ready issue. But one sets its close days or exempt labels to an expression, which this reader does not follow. Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it.
 

@@ -14,7 +14,7 @@ import pytest
 
 from lib.ci.ci_checks import scan_ci_checks
 from lib.ci.ci_includes import TOOLKIT_GATE_JOBS, include_items, merged_config, resolve_includes
-from lib.ci.ci_merged_view import merged_view
+from lib.ci.ci_merged_view import merged_view, rendered_job
 
 REPO = Path(__file__).resolve().parents[3]
 LINT = "lint:\n  script:\n    - ruff check .\n"
@@ -322,3 +322,14 @@ def test_a_nested_sequence_at_its_key_indent_merges(tmp_path: Path) -> None:
     view = merged_view(config)
     assert view.unsettled == frozenset()
     assert "    - .cache" in view.rendered and "    key: k" in view.rendered
+
+
+def test_rendered_job_renders_one_job_merged_or_not(tmp_path: Path) -> None:
+    # #1406: a reader that takes each visible job whole, merged or not.
+    files = {".gitlab-ci.yml": ".t:\n  script:\n    - make\nlint:\n  extends: .t\n  when: manual\nplain:\n  script: [x]\n"}
+    config = merged_config(_repo(tmp_path / "repo", files))
+    assert config is not None
+    text, settled = rendered_job(config, config.jobs["lint"])
+    assert settled and text.splitlines()[0] == "job:" and "    - make" in text and "  when: manual" in text
+    assert "extends" not in text
+    assert rendered_job(config, config.jobs["plain"]) == ("job:\n  script: [x]", True)
