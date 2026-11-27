@@ -739,3 +739,11 @@ def test_a_scope_that_is_a_dash_prefix_of_another_stays_an_image(first: str, sec
 def test_scopes_that_only_share_letters_are_both_inlined() -> None:
     pics = [picture(f"{s}.svg", "A", "Q", _scoped(s)) for s in ("fleet-a", "fleet-ab", "fleet-b-a")]
     assert all(p["svg"] is not None for p in unique_scopes(pics))
+
+
+def test_no_two_generator_fleet_scopes_share_a_dash_prefix() -> None:
+    # unique_scopes leaves the later of two such scopes an image (#1502), so a new generator scope
+    # such as fleet-step would quietly stop fleet-step-funnel inlining: fail here instead.
+    from lib.svg_scope import SCOPES
+    fleet = sorted(s for s in SCOPES.values() if s.startswith("fleet-"))
+    assert fleet and not [(a, b) for a in fleet for b in fleet if b.startswith(f"{a}-")]

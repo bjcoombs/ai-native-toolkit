@@ -350,6 +350,8 @@ def test_a_scope_with_an_empty_part_is_refused(scope: str) -> None:
     _own("", box='viewBox="0 0 40 40000"'),
     _own("", box='viewBox="0 0 40000 40"'),
     _own("", box='viewBox="0 0 0 40"'),
+    _own("", box=f'viewBox="0 0 {"9" * 400} {"9" * 400}"'),
+    _own("", box='viewBox="0 0 1234567 1234567"'),
     _own("", box='viewBox="-20 0 40 40"'),
     _own("", box='viewBox="0,0,40,40"'),
     _own("", box='viewbox="0 0 40 40"'),

@@ -35,7 +35,8 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   in its SVG spelling (``viewBox``, not ``viewbox`` or ``ID``), is in ``ATTRIBUTES``: what the
   generators write, plus an ``href`` and a ``style``. The root takes only ``ROOT_ATTRIBUTES``, so
   no ``transform``, ``overflow`` or ``style`` there. Every ``viewBox`` reads ``0 0 W H`` within
-  ``MAX_WIDE`` (10:1) and ``MAX_TALL`` (1:64), the generators' range; the root has one, and its
+  ``MAX_WIDE`` (10:1) and ``MAX_TALL`` (1:64), the generators' range, with at most six digits per
+  side (a 309-digit side would read as infinite and pass); the root has one, and its
   ``width`` and ``height``, when given, are its ``W`` and ``H``, so the diagram cannot stretch the
   page (``viewBox="0 0 40 40000"`` would be 868,000 px tall). Anything else refuses.
 - **CSS allow-list.** A ``<style>`` is kept only if the whole sheet parses as the shape the
@@ -116,7 +117,7 @@ _FETCH = re.compile(r"""url\(\s*['"]?(?!#)""", re.I)  # a url() that is not #-lo
 _ROOT_CLASS = re.compile(r'<svg\b[^>]*?\sclass="([^"]*)"')
 _URL_OPEN = re.compile(r"url\(", re.I)  # CSS reads URL( as url( (#1502)
 _URL_LOCAL = re.compile(r"url\(#([A-Za-z0-9_-]+)\)", re.I)
-_VIEWBOX = re.compile(r"0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)", re.A)
+_VIEWBOX = re.compile(r"0 0 (\d{1,6}(?:\.\d{1,3})?) (\d{1,6}(?:\.\d{1,3})?)", re.A)  # finite: no 1e400
 _SCOPE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", re.A)  # no empty, doubled or trailing part
 _ROOT_VIEWBOX = re.compile(r'<svg\b[^>]*?\sviewBox="')
 
