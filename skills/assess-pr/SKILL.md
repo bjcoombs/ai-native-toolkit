@@ -272,7 +272,7 @@ Once the tracker is known, use its native tooling. The skill doesn't enumerate e
 | Linear (via CLI) | `linear issue create ...` |
 | Anything else | follow the user's documented convention |
 
-**Build the items from `actions.json`, never from the report.** One command renders every item, one per `actions` entry in `rank` order, as a JSON array of `{rank, title, body}`:
+**Build the items from `actions.json`, never from the report.** One command renders every item, one per `actions` entry in `rank` order, each followed by one item per entry in its `sub_items` (the report's lettered sub-actions, such as `2a`), as a JSON array of `{rank, title, body}`; a sub-item's object also carries its `label` (`2a`):
 
 ```bash
 <!-- chat-replace:uv-actions-render -->
@@ -280,11 +280,11 @@ RENDER="${CLAUDE_SKILL_DIR}/../assess/scripts/assess_actions_render.py"   # set 
 uv run "$RENDER" "$REPO_ROOT" items --report-link "<full-report link>"   # omit --report-link when there is none
 ```
 
-- **Title**: the entry's `action`, as `title` gives it.
+- **Title**: the entry's `action`, as `title` gives it; a sub-item's title is its label and action (`2a. <action>`).
 - **Body**: `body` as given: the finding and its files first (the `condition` when the entry has no `finding`), then the First step, the **Done when** criterion, the Scope fence, a Context block (Layer, Effort, the full-report link) and last a one-line footer linking back to the plugin. Write each body to a file and pass it with `--body-file` (or the tracker's equivalent); do not reword it.
 - **Tag / Label / Category** that supports idempotency (see 6c)
 
-**One concern per item.** Each item carries one change a maintainer can accept or decline on its own. `actions.json` holds one entry per rank. If an entry's `action` still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), file each change as its own item with its own one-line title. Start each split item from the entry's body and narrow its First step, Done when and Scope fence to that one change, so each item closes on its own change alone; keep the finding line and the Context block as rendered. The parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it. List every reference for that rank in its Issue cell (6d).
+**One concern per item.** Each item carries one change a maintainer can accept or decline on its own. `actions.json` holds one entry per rank, and each lettered sub-action is already its own item. If an entry's `action` still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), file each change as its own item with its own one-line title. Start each split item from the entry's body and narrow its First step, Done when and Scope fence to that one change, so each item closes on its own change alone; keep the finding line and the Context block as rendered. The parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it. List every reference for that rank, its sub-items' included, in its Issue cell (6d).
 
 **Done when** is the entry's `done_when`, written in the repository's own terms when the report was assembled (`assess-findings`): a command that passes, a file state or a CI result first, the `/assess` re-run criterion after it, marked optional.
 

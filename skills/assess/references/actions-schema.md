@@ -53,7 +53,21 @@
 
 ### Recommended (passed through when the LLM supplies them)
 
-`layer`, `condition`, `effort`, `files`, `first_step`, `finding` and `cost` are carried through verbatim if present. `condition` is the **condition id** of the maturity-model condition the action moves (`<row id>.<level>`, e.g. `layer-5-ci.1`), as the run's level result lists it in `run-context.json` `level.conditions[].id`; it ties the advice to the same conditions as the headline's Step and verified tally (#747). `assess_finalize.py` checks it before writing anything: an id the level result does not list, or a condition named on a run with no level result, is refused with a non-zero exit naming the id, and `actions.json` is left unchanged. An action without `condition` (a finding-driven action) is accepted as before. `finding` is the finding type the action addresses; it drives `mode` derivation and, together with `files`, forms the action's identity for status carry-forward, so supplying both is what keeps a completed action's lifecycle attached to it.
+`layer`, `condition`, `effort`, `files`, `first_step`, `finding`, `cost` and `sub_items` are carried through verbatim if present. `condition` is the **condition id** of the maturity-model condition the action moves (`<row id>.<level>`, e.g. `layer-5-ci.1`), as the run's level result lists it in `run-context.json` `level.conditions[].id`; it ties the advice to the same conditions as the headline's Step and verified tally (#747). `assess_finalize.py` checks it before writing anything: an id the level result does not list, or a condition named on a run with no level result, is refused with a non-zero exit naming the id, and `actions.json` is left unchanged. An action without `condition` (a finding-driven action) is accepted as before. `finding` is the finding type the action addresses; it drives `mode` derivation and, together with `files`, forms the action's identity for status carry-forward, so supplying both is what keeps a completed action's lifecycle attached to it.
+
+### `sub_items` (optional, #1263)
+
+The report's lettered sub-actions (`2a. <change> - Done when: <criterion>`, written under the Top 3 table) for the entry. Each is an object:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `label` | string | The letter, `a`, `b`, ... The rendered reference is the parent's `rank` plus the label (`2a`); a label already written as `2a` is kept as it is. |
+| `action` | string | The sub-action's directive. |
+| `done_when` | string | Its own exit criterion, in the same form as the entry's. |
+| `first_step` | string, optional | Its own first step. The parent's first step is not inherited: it belongs to the parent's change. |
+| `scope_fence` | string, optional | Its own fence; the parent's applies when absent. |
+
+`assess_actions_render.py items` files each sub-item as its own tracker item after its parent, titled `2a. <action>`, with the parent's finding line, a line naming the parent action, and the parent's Context block. The PR table keeps one row per entry. A sub-item missing `label`, `action` or `done_when` is skipped with a warning; the entry still renders. Lifecycle fields (`status`, `claimed_by`, `completed_sha`) belong to the entry, not to a sub-item. An entry without `sub_items` reads as before, so the schema stays `2`.
 
 ## `status` lifecycle
 

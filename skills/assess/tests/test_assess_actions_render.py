@@ -216,3 +216,70 @@ def test_an_earlier_runs_actions_are_refused(tmp_path: Path, capsys: pytest.Capt
         assert captured.out == "" and "'r1'" in captured.err and "'r2'" in captured.err
     context.write_text(json.dumps({}), encoding="utf-8")  # a context without a run_id is not a mismatch
     assert render.main([str(repo), "table"]) == 0
+
+
+def _with_sub_items(tmp_path: Path, sub_items: object) -> Path:
+    """One entry carrying ``sub_items`` (#1263) beside one without."""
+    assess = tmp_path / ".assess"
+    assess.mkdir(parents=True)
+    payload = {"schema": 2, "actions": [
+        {"rank": 1, "action": "Plain entry", "done_when": "d1", "scope_fence": "s1"},
+        {"rank": 2, "action": "Run ruff over every script dir", "done_when": "`make lint` covers skills/assess",
+         "scope_fence": "Makefile only", "finding": "unactioned_intent", "files": ["Makefile"], "layer": 3,
+         "first_step": "edit the lint target", "sub_items": sub_items},
+    ]}
+    (assess / "actions.json").write_text(json.dumps(payload), encoding="utf-8")
+    return tmp_path
+
+
+def test_a_sub_item_is_filed_as_its_own_item(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    sub = {"label": "a", "action": "Add skills/fleet/scripts to the ruff and mypy runs",
+           "done_when": "`make lint` runs ruff on skills/fleet/scripts"}
+    items = json.loads(_run(_with_sub_items(tmp_path, [sub]), "items", capsys=capsys))
+    assert [(i["rank"], i.get("label")) for i in items] == [(1, None), (2, None), (2, "2a")]
+    parent, child = items[1], items[2]
+    assert parent["title"] == "Run ruff over every script dir"
+    assert child["title"] == "2a. Add skills/fleet/scripts to the ruff and mypy runs"
+    body = child["body"]
+    assert body.startswith("**Finding:** `unactioned_intent` in `Makefile`")
+    assert "**Sub-action 2a of action 2:** Run ruff over every script dir" in body
+    assert "- `make lint` runs ruff on skills/fleet/scripts" in body
+    assert "Makefile only" in body  # the parent's fence when the sub-item sets none
+    assert "edit the lint target" not in body  # the parent's first step is the parent's change
+    assert "- Layer: 3" in body
+
+
+def test_entries_with_and_without_sub_items_both_render(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    sub = {"label": "2b", "action": "Pin mypy", "done_when": "d", "scope_fence": "pyproject.toml only",
+           "first_step": "uv add mypy==1.0"}
+    repo = _with_sub_items(tmp_path, [sub])
+    rows = _run(repo, "table", capsys=capsys).splitlines()[2:]
+    assert [r.split(" | ")[1] for r in rows] == ["Plain entry", "Run ruff over every script dir"]  # one row per entry
+    items = json.loads(_run(repo, "items", capsys=capsys))
+    assert [i["title"] for i in items] == ["Plain entry", "Run ruff over every script dir", "2b. Pin mypy"]
+    assert "pyproject.toml only" in items[2]["body"] and "uv add mypy==1.0" in items[2]["body"]
+    assert "Makefile only" not in items[2]["body"]
+
+
+@pytest.mark.parametrize("sub_items", [
+    "not a list", [], ["junk", {"label": "a", "action": "no exit"}, {"action": "x", "done_when": "d"}],
+])
+def test_malformed_sub_items_are_skipped_not_the_entry(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], sub_items: object
+) -> None:
+    items = json.loads(_run(_with_sub_items(tmp_path, sub_items), "items", capsys=capsys))
+    assert [i["title"] for i in items] == ["Plain entry", "Run ruff over every script dir"]
+
+
+def test_finalize_keeps_sub_items_for_the_renderer(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    import assess_finalize
+
+    assess = tmp_path / ".assess"
+    assess.mkdir()
+    sub = {"label": "a", "action": "Pin ruff", "done_when": "`uv.lock` pins ruff"}
+    action = {"rank": 1, "action": "Run ruff", "done_when": "d", "scope_fence": "s", "sub_items": [sub]}
+    assess_finalize._write_actions_contract(assess, [action], run_id="r1")
+    written = json.loads((assess / "actions.json").read_text(encoding="utf-8"))
+    assert written["schema"] == 2 and written["actions"][0]["sub_items"] == [sub]
+    items = json.loads(_run(tmp_path, "items", capsys=capsys))
+    assert [i["title"] for i in items] == ["Run ruff", "1a. Pin ruff"]
