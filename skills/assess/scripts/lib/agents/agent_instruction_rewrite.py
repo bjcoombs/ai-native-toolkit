@@ -72,23 +72,28 @@ def frontmatter(text: str) -> str | None:
 def gh_aw_imports(rel: str, front: str) -> list[str]:
     """The local files a gh-aw frontmatter's ``imports:`` names, relative to ``rel``'s folder.
 
-    Block (``- shared/x.md``) and flow (``[a.md, b.md]``) lists are read; a ``#Section``
-    suffix is dropped and a remote ``owner/repo/path@ref`` import is skipped.
+    Block (``- shared/x.md``) and flow (``[a.md, b.md]``, over one line or several) lists are
+    read; a trailing comment and a ``#Section`` suffix are dropped and a remote
+    ``owner/repo/path@ref`` import is skipped.
     """
-    tree = IndentTree(parse_lines(front.splitlines()))
+    lines = front.splitlines()
+    tree = IndentTree(parse_lines(lines))
     top = next((i for i, line in enumerate(tree.lines) if line.structural and line.level == 0
                 and not line.dash and line.key == "imports"), None)
     if top is None:
         return []
     flow = tree.lines[top].value
-    if flow.startswith("[") and flow.endswith("]"):
-        values = flow[1:-1].split(",")
+    if flow.startswith("["):
+        end = next((k for k in range(top + 1, len(lines)) if "]" in strip_comment(lines[k])),
+                   top) if "]" not in flow else top
+        joined = " ".join([flow, *(strip_comment(line.strip()) for line in lines[top + 1:end + 1])])
+        values = joined[1:].split("]", 1)[0].split(",")
     else:
         values = [tree.lines[k].value for k in tree.children(top)
                   if tree.lines[k].dash and not tree.lines[k].key]
     found: list[str] = []
     for raw in values:
-        value = raw.strip().strip("'\"").split("#", 1)[0].strip()
+        value = strip_comment(raw.strip()).strip("'\"").split("#", 1)[0].strip()
         if value and not _REMOTE_IMPORT.search(value):
             found.append(posixpath.normpath(posixpath.join(posixpath.dirname(rel), value)))
     return found
