@@ -781,3 +781,15 @@ def test_a_callers_split_and_spend_cap_reach_a_redirect_beside_a_direct_agent_jo
     leaf_job = next(j for j in _jobs(repo) if j["path"] == ".github/workflows/leaf.yml")
     assert (leaf_job["scope"], leaf_job["split"], leaf_job["spend_cap"]) == ("write", True, True)
     assert _summary(repo)["agent_job_write_access"] == 0
+
+
+def test_an_unread_reading_is_not_cleared_by_a_split_write_reading(git_repo) -> None:
+    callee = ENV_CALLEE.replace("on: workflow_call\n", "on:\n  workflow_call:\n  workflow_dispatch:\n")
+    caller = _caller("write-all") + "  after:\n    needs: call\n    runs-on: ubuntu-latest\n" \
+        "    steps:\n      - run: gh pr merge\n"
+    repo = _repo(git_repo, {".github/workflows/agent.yml": callee,
+                            ".github/workflows/caller.yml": caller})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("", "unread")]
+    summary = _summary(repo)
+    assert summary["agent_job_write_access"] is None
+    assert summary["agent_job_write_access_reason"] == "agent_job_scope_unread"

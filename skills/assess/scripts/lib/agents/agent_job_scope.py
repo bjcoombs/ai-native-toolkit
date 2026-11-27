@@ -30,7 +30,8 @@ read-only and moves writes into a separate job that acts on the agent's output.
   the token it is given (``capped``). It is split when that scope is ``write`` and every
   write-scoped called agent job is split. A called workflow with its own trigger as well is read
   on its own and through each caller; ``merge_readings`` counts each of its jobs once, at the
-  worst reading, split only when every write-scoped reading is (#1562).
+  worst reading, split only when every write-scoped reading is (#1562); a split ``write``
+  beside an ``unread`` reading reads ``unread``, since the split settles nothing about it.
 - **Spend cap.** ``max-turns`` / ``max_turns`` or a budget limit in the job: recorded as
   supporting evidence only, never counted.
 
@@ -238,7 +239,8 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
 
 def merge_readings(jobs: list[AgentJob], readings: list[AgentJob]) -> list[AgentJob]:
     """``jobs`` with each job read more than once (on its own trigger and through local callers)
-    folded into one entry: the worst scope, split only when every write-scoped reading is."""
+    folded into one entry: the worst scope, split only when every write-scoped reading is, and
+    ``unread`` when a split write reading sits beside an unread one."""
     groups: dict[tuple[str, str], list[AgentJob]] = {}
     for j in [*jobs, *readings]:
         groups.setdefault((j["path"], j["job"]), []).append(j)
@@ -250,6 +252,8 @@ def merge_readings(jobs: list[AgentJob], readings: list[AgentJob]) -> list[Agent
         scope, writes = _worst([(j["scope"], j["write_scopes"]) for j in group])
         # when the merged scope is not write, split has no effect on the count
         split = all(j["split"] for j in group if j["scope"] == WRITE or scope != WRITE)
+        if scope == WRITE and split and any(j["scope"] == UNREAD for j in group):
+            scope, writes = UNREAD, []  # a split write settles nothing about an unread reading
         merged.append(AgentJob(path=group[0]["path"], job=group[0]["job"], scope=scope,
                                write_scopes=writes, split=split,
                                spend_cap=any(j["spend_cap"] for j in group)))
