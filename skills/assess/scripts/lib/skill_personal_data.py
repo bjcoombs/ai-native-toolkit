@@ -21,7 +21,8 @@ example, and the noise would bury real findings.
   ``password=``/``token=``/``api_key=`` assignment whose value is at least 20 characters with a
   letter, a digit and 3.5 bits of entropy per character. A placeholder such as ``xxx``,
   ``<...>``, ``your_...``, a short ``sk-`` stub, a run of one character, an ascending run such
-  as ``1234``, a placeholder word, a URL or path, or a reference to a secret held elsewhere
+  as ``1234``, a placeholder word, the jwt.io sample, GitHub's or Slack's published example token
+  (an exact match), a URL or path, or a reference to a secret held elsewhere
   (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is not a finding. An
   assignment the instruction-file scan matches and this rule sets aside, such as
   ``password: hunter2``, is counted in ``credential_candidates`` for information only. The
@@ -261,8 +262,17 @@ def _literal_secret(value: str) -> bool:
     return _concrete(value) and _high_entropy(value)
 
 
+# Providers' own published example tokens, set aside on an exact match only: GitHub's REST API
+# authentication docs and Slack's bot token docs. Split so no whole token sits in the source.
+_PUBLISHED_SAMPLES = frozenset({
+    "gh" + "p_16C7e42F292c6912E7710c838347Ae178B4a",
+    "xo" + "xb-17653672481-19874698323-pdFZKVeTuE8sk7oOcBrzbqgy",
+})
+
+
 def _provider_key(text: str) -> bool:
-    return any(not _dummy(next(g for g in m.groups() if g)) for m in _PROVIDER_KEY.finditer(text))
+    return any(m.group(0) not in _PUBLISHED_SAMPLES and not _dummy(next(g for g in m.groups() if g))
+               for m in _PROVIDER_KEY.finditer(text))
 
 
 # An unquoted value followed by another word is prose after a label; a real secret is one token

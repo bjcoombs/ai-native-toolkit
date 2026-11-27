@@ -37,6 +37,11 @@ JWT_IO_SAMPLE = ".".join([_b64({"alg": "HS256", "typ": "JWT"}),
                           "SflKxwRJSMeKKF2QT4" + "fwpMeJf36POk6yJV_adQssw5c"])
 
 
+# GitHub's REST API authentication docs and Slack's bot token docs publish these as examples.
+GITHUB_DOCS_SAMPLE = "gh" + "p_16C7e42F292c6912E7710c838347Ae178B4a"
+SLACK_DOCS_SAMPLE = "xo" + "xb-17653672481-19874698323-pdFZKVeTuE8sk7oOcBrzbqgy"
+
+
 def _uuid() -> str:
     h = _body(32, HEX)
     return f"{h[:8]}-{h[8:12]}-4{h[13:16]}-a{h[17:20]}-{h[20:]}"
@@ -116,6 +121,9 @@ PLACEHOLDERS: list[str] = [
     "Token: The value from step 2",
     "token: str",
     f'token = "{JWT_IO_SAMPLE}"',
+    # Providers' published example tokens, exact matches only (see the test below for a near miss).
+    "export GITHUB_TOKEN=" + GITHUB_DOCS_SAMPLE,
+    "SLACK_BOT_TOKEN=" + SLACK_DOCS_SAMPLE,
     'url = "https://x-access-token:' + 'gh' + 's_abc123@github.com/a/b",',  # a short value before the host
     "api_key: Optional[str] = None",
 ]
@@ -141,6 +149,13 @@ def test_precision_and_recall_on_the_fixture_set_clear_the_gate() -> None:
     precision = hits_real / (hits_real + hits_placeholder)
     recall = hits_real / len(REAL)
     assert precision >= 0.95 and recall >= 0.8, (precision, recall)
+
+
+@pytest.mark.parametrize("sample", [GITHUB_DOCS_SAMPLE, SLACK_DOCS_SAMPLE], ids=["github-docs", "slack-docs"])
+def test_a_published_sample_is_set_aside_on_an_exact_match_only(sample: str) -> None:
+    assert "credential" not in kinds_in(f"Use {sample} as in the provider's docs.")
+    near = sample[:-1] + ("Z" if sample[-1] != "Z" else "Y")  # one character off: a real-shaped key
+    assert "credential" in kinds_in(f"Use {near} here.")
 
 
 def test_credential_is_a_finding_kind() -> None:
