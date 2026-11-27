@@ -30,7 +30,8 @@ Link syntax, resolution and the link pass live in ``lib.docs.doc_links``; the
 render-side helpers (radial shells, node classes, ghost grouping) live in
 ``lib.docs.doc_graph_layout``. reST and Sphinx docs (``:doc:``, ``:ref:``,
 ``.. include::``, toctrees; a Sphinx root's index is an entry) are read by
-``lib.docs.doc_rst``; link parents and the directory breakdown live in
+``lib.docs.doc_rst``, AsciiDoc and Antora docs (``xref:``, ``include::``; an
+Antora nav is an entry) by ``lib.docs.doc_adoc``; link parents and the directory breakdown live in
 ``lib.docs.doc_graph_rows``. Full reference: lib/docs/doc_graph.md.
 """
 from __future__ import annotations
@@ -43,6 +44,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
+from lib.docs.doc_adoc import ADOC_EXTENSIONS, harvest_adoc_links, is_antora_nav, without_adoc
 from lib.docs.doc_graph_rows import directory_breakdown as _directory_breakdown
 from lib.docs.doc_graph_rows import link_parents as _link_parents
 from lib.docs.doc_links import (
@@ -134,7 +136,8 @@ def is_excluded_path(rel: Path) -> bool:
 # Entry-doc basenames: legitimately have no inbound links (they are where a
 # reader starts), so they are excluded from the orphan count and used as the
 # roots for reachability.
-ENTRY_BASENAMES = {"readme.md", "readme.rst", "agents.md", "claude.md", "index.md", "home.md"}
+ENTRY_BASENAMES = {
+    "readme.md", "readme.rst", "readme.adoc", "agents.md", "claude.md", "index.md", "home.md"}
 
 # Declared-MOC conventions (filename signals a map-of-content). Cross-checked
 # against the graph: a real MOC is a structural hub.
@@ -339,10 +342,10 @@ def discover_doc_files(
     extra_exclude_patterns: list[str] | None = None,
     scope: Scope | None = None,
 ) -> list[Path]:
-    """Return all in-repo markdown and reST docs under repo_root (a `.txt` only
-    under a Sphinx root, `lib.docs.doc_rst`), skipping excluded dirs."""
+    """Return all in-repo markdown, reST and AsciiDoc docs under repo_root (a `.txt`
+    only under a Sphinx root, `lib.docs.doc_rst`), skipping excluded dirs."""
     return sphinx_filter(_discover_files(
-        repo_root, DOC_EXTENSIONS | RST_DISCOVERY_EXTENSIONS, extra_exclude_dirs,
+        repo_root, DOC_EXTENSIONS | RST_DISCOVERY_EXTENSIONS | ADOC_EXTENSIONS, extra_exclude_dirs,
         extra_exclude_patterns, scope=scope,
     ), repo_root.resolve())
 
@@ -640,25 +643,16 @@ def build_doc_graph(
 
     if not _NETWORKX_AVAILABLE:
         return DocGraphResult(
-            available=False,
-            reason="networkx not installed; doc link-graph not assessed",
-            vault_detected=vault,
-            obsidiantools_available=obs,
-        )
+            available=False, reason="networkx not installed; doc link-graph not assessed",
+            vault_detected=vault, obsidiantools_available=obs)
 
-    docs = (
-        doc_files if doc_files is not None
-        else discover_doc_files(
-            repo_root,
-            extra_exclude_dirs=extra_exclude_dirs,
-            extra_exclude_patterns=extra_exclude_patterns,
-            scope=scope,
-        )
-    )
+    docs = (doc_files if doc_files is not None else discover_doc_files(
+        repo_root, extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns, scope=scope))
     docs = [d.resolve() for d in docs]
     unparsed = unparsed_formats(_discover_files(
         repo_root, set(UNPARSED_DOC_FORMATS), extra_exclude_dirs, extra_exclude_patterns,
-        scope=scope))
+        scope=scope)) if UNPARSED_DOC_FORMATS else []
     if not docs:
         return DocGraphResult(
             available=True, doc_count=0, unparsed_doc_formats=unparsed,
@@ -680,10 +674,10 @@ def build_doc_graph(
     for d in docs:
         graph.add_node(rel(d))
     harvest = harvest_links(
-        docs, texts, repo_root, graph, rel,
-        doc_exts=DOC_EXTENSIONS | RST_DISCOVERY_EXTENSIONS, code_exts=CODE_EXTENSIONS,
-    )
+        docs, without_adoc(texts), repo_root, graph, rel, code_exts=CODE_EXTENSIONS,
+        doc_exts=DOC_EXTENSIONS | RST_DISCOVERY_EXTENSIONS | ADOC_EXTENSIONS)
     harvest_rst_links(docs, texts, repo_root, graph, harvest)
+    harvest_adoc_links(docs, texts, repo_root, graph, harvest)
     # A link between the same pair keeps kind link.
     graph.add_edges_from([
         (rel(src), rel(tgt)) for src, tgt in ref_pairs
@@ -914,7 +908,8 @@ def _pick_entry_points(
     entries: list[str] = []
     for d in docs:
         r = d.relative_to(repo_root)
-        if (len(r.parts) == 1 and r.name.lower() in ENTRY_BASENAMES) or is_sphinx_index(d):
+        if ((len(r.parts) == 1 and r.name.lower() in ENTRY_BASENAMES) or is_sphinx_index(d)
+                or is_antora_nav(d, repo_root)):
             entries.append(rel(d))
     mocs = [(rel(d), pagerank.get(rel(d), 0.0)) for d in docs if _is_declared_moc(d)]
     if mocs:

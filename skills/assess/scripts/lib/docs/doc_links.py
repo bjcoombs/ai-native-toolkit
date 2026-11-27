@@ -359,6 +359,7 @@ XREF_SKIP_NAMES = {
     "contributing.md", "code_of_conduct.md", "security.md", "agents.md",
     "claude.md", "gemini.md", "home.md", "notes.md",
     "readme.rst", "index.rst", "index.txt",
+    "readme.adoc", "index.adoc", "nav.adoc", "contributing.adoc",
 }
 
 

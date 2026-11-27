@@ -30,8 +30,8 @@ Literal blocks (a paragraph ending ``::``) and code directives (``code-block``,
 syntax, so their indented bodies are blanked before any parse.
 
 :data:`UNPARSED_DOC_FORMATS` names doc formats that are present in a repo but not
-read for links (AsciiDoc until #841), so the block can say so rather than read a
-low reachability as the whole story.
+read for links, so the block can say so rather than read a low reachability as
+the whole story. It is empty since AsciiDoc is read (#841, ``lib.docs.doc_adoc``).
 
 Stdlib only and imports no ``lib`` module at runtime, like ``lib.docs.doc_links``;
 ``LinkHarvest`` is imported for annotations only. Tests:
@@ -55,7 +55,7 @@ RST_DISCOVERY_EXTENSIONS = frozenset({".rst", ".txt"})
 SPHINX_INDEX_NAMES = frozenset({"index.rst", "index.txt"})
 # Doc formats found but not parsed for links, by suffix, as the token the block
 # reports.
-UNPARSED_DOC_FORMATS = {".adoc": "asciidoc", ".asciidoc": "asciidoc"}
+UNPARSED_DOC_FORMATS: dict[str, str] = {}
 _NON_DOC_TXT = re.compile(r"^(requirements|constraints)([-_.].*)?\.txt$", re.IGNORECASE)
 _TXT_SOURCE_SUFFIX = re.compile(r"source_suffix\s*=[^=]*?['\"]\.txt['\"]")
 _ROLE_RE = re.compile(r"(?<![\w`]):(?:std:)?(doc|ref):`([^`]+)`")

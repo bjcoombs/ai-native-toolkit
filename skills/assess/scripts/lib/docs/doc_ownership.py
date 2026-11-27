@@ -39,7 +39,7 @@ The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness
 `doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
 ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
 directory's code; a skill's `SKILL.md` is a base doc ranked just after `README.md`, so it
-owns its skill's subtree, #614), then a parallel `docs/` tree (one production module by
+owns its skill's subtree, #614; a `README.adoc` ranks next, #841), then a parallel `docs/` tree (one production module by
 stem, then parent name, #817), explicit code links, and the empty
 `repo-baseline` subject. `subject_spec` records each doc's method and roots as
 repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
@@ -65,11 +65,11 @@ from lib.run_context_types import DocToCodeEdge
 # (issue #614): it describes the skill directory's scripts, so it owns that
 # subtree's code. A ``README.md`` beside it still wins the directory.
 BASE_DOC_PRECEDENCE = [
-    "readme.md", "skill.md", "index.md", "_index.md", "agents.md", "claude.md",
+    "readme.md", "skill.md", "readme.adoc", "index.md", "_index.md", "agents.md", "claude.md",
 ]
 # Boilerplate that names a directory but does not *describe* its code.
 BOILERPLATE_BASENAMES = {
-    "license.md", "license", "changelog.md", "contributing.md",
+    "license.md", "license", "changelog.md", "contributing.md", "contributing.adoc",
     "code_of_conduct.md", "security.md", "notice.md", "authors.md",
 }
 # A staleness row lists at most this many of its subject paths (sorted); the

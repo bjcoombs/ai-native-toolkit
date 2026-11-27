@@ -205,7 +205,7 @@ New code imports the new path.
   vault queries. `doc_graph` imports `ownership_parser` inside a function, because
   `ownership_parser` imports `doc_graph`. The folder holds two kinds of file: the doc-scan
   modules (`.py`) and every group's long module references (`.md`, one per module, #981).
-  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`, `doc_graph.py`, `doc_graph_layout.py`, `doc_graph_rows.py`, `doc_links.py`, `doc_ownership.py`, `doc_provenance.py`, `doc_rst.py`, `doc_staleness.py`, `doc_staleness_scale.py`, `ownership_parser.py`, `parallel_docs.py`, `vault_queries.py`.
+  Files: `__init__.py`, `doc_adoc.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`, `doc_graph.py`, `doc_graph_layout.py`, `doc_graph_rows.py`, `doc_links.py`, `doc_ownership.py`, `doc_provenance.py`, `doc_rst.py`, `doc_staleness.py`, `doc_staleness_scale.py`, `ownership_parser.py`, `parallel_docs.py`, `vault_queries.py`.
 - **`fleet/`** ([README](fleet/README.md)): the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 5.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
