@@ -390,3 +390,32 @@ def test_a_failed_platform_read_keeps_the_offline_ai_review_credit() -> None:
     measured = {"available": True, "present": True}
     replaced = join(_fleet_row({"review_evidence": offline}), {"review_evidence": measured})
     assert replaced["scans"] is not None and replaced["scans"]["review_evidence"] == measured
+
+
+# A GitLab review_reality block (lib/hosting/review_reality.py, scan_gitlab_review_reality)
+# where the notes left reviewed_share undecided but the AI-review share was read.
+GITLAB_BOT_ONLY: dict[str, Any] = {
+    "available": True, "merged_count": 5, "oldest_merged_days_ago": 12,
+    "reviewed_share": None, "approved_share": 0.0, "bot_review_share": 0.4,
+    "self_merged_share": 1.0, "review_required": False, "hollow_required_review": None,
+    "required_approval_bypassed": False,
+}
+
+
+def test_a_gitlab_bot_review_share_evidences_review_when_reviewed_share_is_null() -> None:
+    """#1568: under --platform on GitLab, a config file and a measured bot_review_share
+    above 0 read met even though reviewed_share is null: the bot reviewed merged changes."""
+    block = review_evidence(AUTO_CONFIG, GITLAB_BOT_ONLY)
+    assert (block["available"], block["present"], block["reviewed_changes"]) == (True, True, True)
+    evaluation = _layer7({"review_reality": GITLAB_BOT_ONLY, "review_evidence": block})
+    assert evaluation["level"] >= 1
+
+
+@pytest.mark.parametrize("reality", [
+    {**GITLAB_BOT_ONLY, "bot_review_share": 0.0},  # measured: no bot review either
+    {**GITLAB_BOT_ONLY, "bot_review_share": None},  # bot share unread
+    {**GITLAB_BOT_ONLY, "available": False, "reason": NETWORK_REASON},  # not a platform read
+])
+def test_a_bot_share_without_a_measured_bot_review_stays_unknown(reality: dict[str, Any]) -> None:
+    block = review_evidence(AUTO_CONFIG, reality)
+    assert (block["available"], block["present"]) == (False, None)
