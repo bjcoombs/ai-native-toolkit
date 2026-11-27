@@ -149,6 +149,7 @@ WRITE_SUBCOMMANDS = frozenset({
     "create", "edit", "close", "reopen", "comment", "note", "delete", "merge", "lock", "unlock",
     "transfer", "pin", "unpin", "review", "approve", "revoke", "update", "ready", "subscribe",
     "unsubscribe", "set", "archive", "unarchive", "rename", "fork", "clone", "sync",
+    "run", "rerun", "cancel", "enable", "disable", "develop",
 })
 TRACKER_OBJECTS = frozenset({
     "issue", "pr", "mr", "label", "release", "repo", "variable", "secret", "milestone",
@@ -217,6 +218,11 @@ def tracker_writes(calls: list[list[str]]) -> list[list[str]]:
     ["glab", "issue", "note", "4", "-m", "b"],
     ["glab", "mr", "merge", "4"],
     ["gh", "label", "create", "assess-finding"],
+    ["gh", "workflow", "run", "ci.yml"],
+    ["gh", "workflow", "disable", "ci.yml"],
+    ["gh", "run", "rerun", "12"],
+    ["gh", "run", "cancel", "12"],
+    ["gh", "issue", "develop", "4"],
     ["gh", "api", "-X", "POST", "repos/grp/svc/issues"],
     ["gh", "api", "--method", "PATCH", "repos/grp/svc/issues/4"],
     ["gh", "api", "-XDELETE", "repos/grp/svc/issues/4/labels/x"],
@@ -245,6 +251,7 @@ def test_every_write_shape_is_caught(call):
     ["gh", "api", "graphql", "-fquery={ viewer { login } }", "-F", "first=10"],
     ["gh", "pr", "list", "--repo", "grp/svc", "--state", "merged", "--json", "mergedAt"],
     ["gh", "repo", "view", "grp/svc", "--json", "isPrivate"],
+    ["gh", "run", "list", "--repo", "grp/svc"],
     ["glab", "api", "--hostname", "gitlab.com", "projects/grp%2Fapp/merge_requests/1/notes"],
 ])
 def test_reads_are_not_writes(call):
