@@ -104,10 +104,10 @@ Outside that case a marked item is never matched by title. An item taken by titl
 | `decision` | Meaning |
 |------------|---------|
 | `open` | The step reuses an item that is already open: no new slot. |
-| `file` | Create the item, or reopen the closed item the step names, within the limit. |
+| `file` | Create the item within the limit. For a step that names a closed item, propose reopening it (`assess-pr` 6c flags a closed match to the user and never reopens it silently). |
 | `next_up` | The limit is reached: not filed. `next-up --existing <file>` lists it for the report. |
 
-Items that need a slot are taken by `tier`, the next-unlock ranking: `next_unlock` (the item's condition is in `level.next_step.blockers[].condition`), then `recovery` (the step reopens a closed item), then `gain`. The Top 3 order stands within a tier. Two items that reopen the same closed item take one slot. The rules live in `scripts/lib/report/backlog_wip.py`.
+Items that need a slot are taken by `tier`, the next-unlock ranking: `next_unlock` (the item's condition is in `level.next_step.blockers[].condition`), then `recovery` (the step matches a closed item), then `gain`. The Top 3 order stands within a tier. Two items that match the same closed item take one slot. The rules live in `scripts/lib/report/backlog_wip.py`.
 
 ## `status` lifecycle
 

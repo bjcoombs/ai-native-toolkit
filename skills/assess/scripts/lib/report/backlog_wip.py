@@ -7,19 +7,19 @@ once. ``apply_wip(items, steps, existing, level, wip)`` takes the rendered items
 ``plan_filing`` steps (``backlog_items.py``) and gives each one a ``WipStep``:
 
 - ``decision``: ``open`` when the step reuses an item that is already open (it takes no new
-  slot), ``file`` when the item is created or a closed item reopened within the limit, and
+  slot), ``file`` when the item is created, or a closed item proposed for reopening, within the limit, and
   ``next_up`` when the limit is reached: the item is not filed, and the report lists it under
   "Next up" (``next_up_markdown``).
 - ``tier``: the order the items that need a slot are taken in, the #747 next-unlock ranking:
   ``next_unlock`` (the item's condition is a blocker of the next Step,
-  ``level.next_step.blockers[].condition``), then ``recovery`` (the step reopens a closed
+  ``level.next_step.blockers[].condition``), then ``recovery`` (the step matches a closed
   item: the condition was done once and reads unmet again), then ``gain`` (anything else,
   an item without a condition included). Within a tier the Top 3 order stands.
 
 The open count is the open tracker items in the backlog: an item with a condition marker
 (``backlog_items.marker_key``), an unmarked one with ``label`` (``assess-finding``, the items
 ``plan_filing`` matches by title; no label is checked when ``label`` is empty), and any open
-item a step reuses. Two items that reopen the same closed item take one slot. Free slots are
+item a step reuses. Two items that match the same closed item take one slot. Free slots are
 ``wip`` minus the open count, never below 0, so a tracker already over the limit gets no new
 item. Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``.
 """
@@ -28,9 +28,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TypedDict
 
+from lib.assess_config import DEFAULT_BACKLOG_WIP
 from lib.report.backlog_items import DEFAULT_LABEL, FilingStep, marker_key
 
-DEFAULT_WIP = 3
+DEFAULT_WIP = DEFAULT_BACKLOG_WIP  # one default, read from the config loader
 TIERS = ("next_unlock", "recovery", "gain")
 OPEN, FILE, NEXT_UP = "open", "file", "next_up"
 
