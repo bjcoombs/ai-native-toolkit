@@ -381,7 +381,8 @@ Show `summary` verbatim as one batched message, then ask with multi-select AskUs
 WRITES=$(mktemp); COMMENT=$(mktemp)   # outside the repository
 WHO=$(git -C "$REPO_ROOT" config user.name 2>/dev/null || echo "${USER:-unknown}")
 uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same numbers>" \
-  --confirm "<confirmed numbers, all or none>" --record-declines --declined-by "$WHO" > "$WRITES"
+  --confirm "<confirmed numbers, all or none>" --record-declines --declined-by "$WHO" \
+  --declined-at "$(date +%Y-%m-%d)" > "$WRITES"
 while read -r w; do
   n=$(jq -r '.number' <<<"$w"); jq -r '.comment' <<<"$w" > "$COMMENT"
   case "$(jq -r '.op' <<<"$w")" in
@@ -394,7 +395,7 @@ while read -r w; do
 done < <(jq -c '.[]' "$WRITES")
 ```
 
-On GitLab use `glab issue close`, `glab issue reopen` and `glab issue update --label`. Each proposal the user answered and left unconfirmed is recorded in `.assess/backlog-declines.json` with who declined it, when, the model and the evidence line, and the next run holds it back until the condition's state or the model changes. Add `--decline-reason "<text>"` when the user gave one. When the user dismissed the questions without answering, skip the `--confirm` call: nothing is written or recorded, and the next run proposes the same changes again. Other trackers: show the same summary and make the confirmed changes with their own tooling.
+On GitLab use `glab issue close`, `glab issue reopen` and `glab issue update --label`. Each proposal the user answered and left unconfirmed is recorded in `.assess/backlog-declines.json` with who declined it, when, the model and the evidence line, and the next run holds it back until the condition's state or the model changes. Add one `--decline-reason "<number>=<text>"` for each declined item the user gave a reason for, and none for the others. When the user dismissed the questions without answering, skip the `--confirm` call: nothing is written to the tracker or newly recorded, and the next run proposes the same changes again. Other trackers: show the same summary and make the confirmed changes with their own tooling.
 
 ### 6f: Report back to the user
 

@@ -54,7 +54,8 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   back while the condition's state and the model are the ones it was declined under, and
   named under ``declined`` and at the foot of ``summary`` (#813); ``--record-declines``
   with ``--confirm`` records each shown proposal not confirmed in
-  ``.assess/backlog-declines.json``, with ``--declined-by`` and ``--decline-reason``. That
+  ``.assess/backlog-declines.json``, with ``--declined-by``, ``--declined-at`` and one
+  ``--decline-reason N=TEXT`` per item the user gave a reason for. That
   file is the only thing it writes, never the tracker. It needs no ``actions.json``; rules:
   ``lib/report/backlog_reconcile.py`` and ``lib/run/decline_markers.py``.
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
@@ -80,7 +81,6 @@ Tests: ``tests/test_assess_actions_render.py``.
 from __future__ import annotations
 
 import argparse
-import datetime
 import json
 import re
 import sys
@@ -422,7 +422,8 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
 
     A proposal declined earlier (``.assess/backlog-declines.json``, #813) is held back while
     its evidence holds and listed under ``declined``; a record whose evidence changed is
-    dropped from the file. ``--record-declines`` records every shown proposal not confirmed.
+    dropped from the file, as is a record for an item no longer in ``--existing``.
+    ``--record-declines`` records every shown proposal not confirmed.
     """
     existing, context = _read_json(args.existing), _read_json(assess_dir / "run-context.json")
     if not isinstance(existing, list):
@@ -436,7 +437,8 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
     conditions, model = facts["conditions"], facts["model"]
     result = reconcile(items, facts, label=args.label, filed=args.filed)
     records = read_proposal_declines(assess_dir)
-    live = live_proposal_declines(records, conditions, model)
+    numbers = {n for x in items if isinstance(n := x.get("number"), int)}
+    live = [r for r in live_proposal_declines(records, conditions, model) if r["number"] in numbers]
     if len(live) != len(records):
         write_proposal_declines(assess_dir, live)
     proposals, held = split_declined(result["proposals"], live, conditions, model)
@@ -451,10 +453,10 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
     confirmed = {p["number"] for p in proposals} if args.confirm == "all" else (
         frozenset() if args.confirm == "none" else parse_numbers(args.confirm))
     if args.record_declines:
-        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        reasons = dict(args.decline_reason)
         new = [r for p in proposals if p["number"] not in confirmed
-               and (r := decline_record(p, conditions, model, declined_by=args.declined_by, declined_at=today,
-                                        reason=args.decline_reason)) is not None]
+               and (r := decline_record(p, conditions, model, declined_by=args.declined_by,
+                                        declined_at=args.declined_at, reason=reasons.get(p["number"]))) is not None]
         if new:
             write_proposal_declines(assess_dir, merge_proposal_declines(live, new))
     print(json.dumps(confirmed_writes(proposals, confirmed), indent=2, ensure_ascii=False))
@@ -510,7 +512,9 @@ def _parser() -> argparse.ArgumentParser:
     rc.add_argument("--record-declines", action="store_true",
                     help="with --confirm: record each shown proposal not confirmed in .assess/backlog-declines.json")
     rc.add_argument("--declined-by", help="who declined, for the record (git config user.name)")
-    rc.add_argument("--decline-reason", help="the user's reason for the declines, for the record")
+    rc.add_argument("--declined-at", help="the date of the declines, for the record (date +%%Y-%%m-%%d)")
+    rc.add_argument("--decline-reason", action="append", type=parse_issue, default=[], metavar="N=TEXT",
+                    help="the user's reason for declining item N, for the record; repeat per item")
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p
 

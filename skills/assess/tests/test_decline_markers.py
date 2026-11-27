@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -236,7 +235,7 @@ def _proposed(tmp_path: Path, existing: Path, capsys: pytest.CaptureFixture[str]
 
 def _decline_all(tmp_path: Path, existing: Path, capsys: pytest.CaptureFixture[str], *extra: str) -> None:
     assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--confirm", "none",
-                        "--record-declines", "--declined-by", "ben", *extra]) == 0
+                        "--record-declines", "--declined-by", "ben", "--declined-at", "2026-11-27", *extra]) == 0
     assert json.loads(capsys.readouterr().out) == []
 
 
@@ -285,11 +284,12 @@ def test_the_record_carries_who_when_the_model_and_why(
         tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     existing = _tracker(tmp_path)
     _run_context(tmp_path, "met")
-    _decline_all(tmp_path, existing, capsys, "--decline-reason", "the CI job is not trusted yet")
+    _decline_all(tmp_path, existing, capsys, "--decline-reason", "7=the CI job is not trusted yet",
+                 "--decline-reason", "8=a reason for another item")
     raw = json.loads((tmp_path / ".assess" / PROPOSAL_DECLINES).read_text(encoding="utf-8"))
     [record] = raw["declines"]
     assert record["declined_by"] == "ben"
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", record["declined_at"])
+    assert record["declined_at"] == "2026-11-27"
     assert record["model"] == MODEL
     assert (record["kind"], record["number"], record["condition"], record["state"]) == ("close", 7, CID, "met")
     assert record["evidence"].startswith("`layer-5-ci.1` reads met (verified)")
@@ -328,3 +328,13 @@ def test_proposal_declines_degrade_and_keep_what_the_run_cannot_read(tmp_path: P
     kept, held = split_declined([{"kind": "demote", "number": 4, "finding": "self_referential_tests"}],
                                 [record], None, MODEL)
     assert kept == [] and held == [record]
+
+
+def test_a_record_for_an_item_no_longer_listed_is_dropped(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _tracker(tmp_path)
+    _run_context(tmp_path, "met")
+    _decline_all(tmp_path, existing, capsys)
+    existing.write_text("[]", encoding="utf-8")
+    assert _proposed(tmp_path, existing, capsys)["proposals"] == []
+    assert read_proposal_declines(tmp_path / ".assess") == []
