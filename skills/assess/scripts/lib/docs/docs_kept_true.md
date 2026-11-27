@@ -3,8 +3,8 @@
 The module docstring has the rules and the block shape. Known limits:
 
 - Only GitHub Actions workflows directly under `.github/workflows/` and `.gitlab-ci.yml` are
-  read. A GitLab `include:` is not followed, and a check run only by Prow, Jenkins or another
-  CI system reads not measured (`ci_not_read`) when nothing else is found.
+  read. A GitLab `include:` is not followed. With nothing else found, a root `include:` or a
+  tracked Prow, Jenkins or other CI file reads not measured (`ci_not_read`).
 - A Gradle or Maven verify task is not read as a check: the follower resolves the plugins and
   tasks, but no table says which of them regenerate and diff.
 - `git status --porcelain` with `test -z`, and `git diff-index --quiet`, are not read as a

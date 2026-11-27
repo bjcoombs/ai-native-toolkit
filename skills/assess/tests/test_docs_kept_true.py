@@ -280,3 +280,16 @@ def test_false_as_an_argument_does_not_re_raise(tmp_path: Path) -> None:
     root = _repo(tmp_path, {**DOCS, "Makefile": "check:\n\tpython gen.py\n\tgit diff --exit-code docs || echo false\n",
                             ".github/workflows/ci.yml": _workflow("make check")})
     assert _block(root)["present"] is False
+
+
+def test_a_github_script_input_is_not_shell(tmp_path: Path) -> None:
+    text = _workflow() + ("      - uses: actions/github-script@v7\n        with:\n          script: |\n"
+                          "            const x = 1\n      - run: git diff --exit-code -- docs/\n")
+    root = _repo(tmp_path, {**DOCS, ".github/workflows/ci.yml": text})
+    assert _block(root)["present"] is False
+
+
+def test_a_gitlab_include_with_nothing_found_reads_not_measured(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".gitlab-ci.yml": "include:\n  - local: ci/jobs.yml\n"})
+    block = _block(root)
+    assert (block["present"], block["present_reason"]) == (None, "ci_not_read")

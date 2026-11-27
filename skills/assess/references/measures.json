@@ -3610,7 +3610,7 @@
       "unknown_reasons": [
         {
           "code": "ci_not_read",
-          "means": "No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. That system may run one.",
+          "means": "No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. Or .gitlab-ci.yml has an include: this reader does not follow. Either may run one.",
           "next_step": "Nothing to change: this reads as not measured until that system's configuration can be read."
         },
         {

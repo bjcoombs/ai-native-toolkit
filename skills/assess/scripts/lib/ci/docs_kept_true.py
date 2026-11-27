@@ -34,8 +34,8 @@ YAML: there a command followed by ``||`` counts only when the fallback re-raises
 recipe such a line runs is not followed.
 
 ``present`` is true when any check is found. With none found and a tracked CI file of a
-system this reader does not parse (``lib.unread_ci``: Jenkins, Prow, Buildkite ...), it is
-null with ``present_reason`` ``ci_not_read``, never false. ``kept_true_or_unknown`` is the
+system this reader does not parse (``lib.unread_ci``: Jenkins, Prow, Buildkite ...), or a
+``.gitlab-ci.yml`` with a top-level ``include:`` (not followed), it is null with ``present_reason`` ``ci_not_read``, never false. ``kept_true_or_unknown`` is the
 scan the staleness collector calls: a reader fault reads null (``scan_failed``) there.
 
 ``apply_kept_true(block, kept)`` joins the reading to doc staleness (#1389): a doc whose
@@ -76,7 +76,9 @@ _RERAISE = re.compile(r"(?:^|[;{(]|&&|\|\|)\s*(?:exit\s+(?:[1-9]\d*|\"?\$)|false
 _VERIFY = re.compile(r"^(?P<dir>(?:.*/)?)verify-(?P<name>[\w.-]+)$")
 _NOT_REGEN = frozenset({"git", "echo", "printf", "cd", "pushd", "popd", "ls", "cat", "pwd", "mkdir",
                         "set", "export", "true", ":", "test", "[", "exit", "apt-get", "apt", "brew"})
-_BODY_KEYS = frozenset({"run", "script", "before_script"})  # GitLab ignores after_script failures
+_GITHUB_BODY = frozenset({"run"})   # a github-script ``with: script:`` is JavaScript, not shell
+_GITLAB_BODY = frozenset({"script", "before_script"})  # GitLab ignores after_script failures
+_INCLUDE = re.compile(r"^include\s*:", re.M)
 _DOCTEST_RUNNERS = frozenset({"mdtest", "phmdoctest", "byexample"})
 _WRAPPERS = frozenset({"uv", "poetry", "pdm", "hatch", "pipenv", "rye", "python", "python3", "run", "exec"})
 
@@ -246,16 +248,17 @@ def _config_doctest(text: str) -> bool:
     return any("--doctest-" in line.split("#", 1)[0] for line in text.splitlines())
 
 
-def _job_lines(text: str) -> list[list[str]]:
+def _job_lines(text: str, gitlab: bool) -> list[list[str]]:
     """Each job's unmasked shell lines in order (GitHub ``jobs.<id>``, GitLab top-level keys):
-    the lines of a ``run:``, ``script:`` or ``before_script:`` body. GitLab ignores an
-    ``after_script:`` failure when it sets the job status, so that body is not read."""
+    a GitHub ``run:`` body, or a GitLab ``script:`` or ``before_script:`` body. GitLab ignores
+    an ``after_script:`` failure when it sets the job status, so that body is not read."""
+    keys = _GITLAB_BODY if gitlab else _GITHUB_BODY
     lines = text.splitlines()
     unmasked, _unsure = mask_lines(text)
     tree = IndentTree(parse_lines(lines))
     spans: dict[int, list[str]] = {}
     for i, line in enumerate(unmasked):
-        if line.strip() and tree.lines[tree.body(i)].key in _BODY_KEYS:
+        if line.strip() and tree.lines[tree.body(i)].key in keys:
             spans.setdefault(tree.job(i).start, []).append(line)
     return list(spans.values())
 
@@ -271,7 +274,7 @@ def scan_docs_kept_true(repo_root: Path) -> DocsKeptTrueBlock:
         text = read_config(repo, rel)
         if rel not in CI_CONFIG_FILES:
             text = follow_workflow(text, reader.read_local).text
-        for lines in _job_lines(text):
+        for lines in _job_lines(text, rel in CI_CONFIG_FILES):
             for kind, covers in reader.job(lines):
                 merged = seen.setdefault((rel, kind), [])
                 merged.extend(c for c in covers if c not in merged)
@@ -280,7 +283,8 @@ def scan_docs_kept_true(repo_root: Path) -> DocsKeptTrueBlock:
     block = DocsKeptTrueBlock(files_read=len(files), regen_diff=count["regen_diff"],
                               verify_pair=count["verify_pair"], doc_tests=count["doc_tests"],
                               present=bool(checks), checks=checks)
-    if not checks and unread_ci_paths(tracked):
+    gitlab_includes = any(_INCLUDE.search(read_config(repo, rel)) for rel in files if rel in CI_CONFIG_FILES)
+    if not checks and (unread_ci_paths(tracked) or gitlab_includes):
         block["present"] = None
         block["present_reason"] = REASON_CI_NOT_READ
     return block

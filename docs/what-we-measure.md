@@ -656,7 +656,7 @@ Each doc's last content change against its code subject's churn, following renam
 - Used by: row `doc-freshness`, row `docs-kept-true`.
 - Evidence: `doc_staleness.kept_true.present` head_structure (measured), `doc_staleness.summary.stale_pct` git_history (measured).
 - Not measured when:
-  - `ci_not_read`: No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. That system may run one. Nothing to change: this reads as not measured until that system's configuration can be read.
+  - `ci_not_read`: No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. Or .gitlab-ci.yml has an include: this reader does not follow. Either may run one. Nothing to change: this reads as not measured until that system's configuration can be read.
   - `scan_failed`: The reader of CI checks that keep docs true raised an error. The doc staleness block is kept, and this one condition reads not measured. Nothing to change in the repository: report the error so the reader can be fixed.
 
 Why the signals named here matter:
