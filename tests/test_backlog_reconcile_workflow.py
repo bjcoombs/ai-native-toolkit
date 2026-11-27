@@ -56,8 +56,8 @@ def test_one_writer_job_with_the_narrowest_token() -> None:
     assert jobs["apply"]["permissions"] == {"contents": "read", "issues": "write"}
     writers = [n for n, j in jobs.items() if "write" in j["permissions"].values()]
     assert writers == ["apply"]
-    for job in jobs.values():
-        assert job["if"].startswith("inputs.enabled")
+    assert jobs["plan"]["if"] == "inputs.enabled"
+    assert jobs["apply"]["if"] == "inputs.enabled && needs.plan.outputs.writes != '0'"
 
 
 def test_no_model_no_secret_and_no_cache() -> None:
