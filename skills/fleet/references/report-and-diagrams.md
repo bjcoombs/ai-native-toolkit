@@ -63,7 +63,6 @@ lowest Step: the lowest Step a measured repository of the group holds, with "N o
 the roll-up `fleet-data.json` units carry (#772 option A). No average is taken across
 repositories, so no group sits beside another on a mean. A repository with no Step counts in M
 only, never as Step 1 or 0; a group with none measured has no point. The activity and maturity
-quadrantThe activity and maturity
 quadrant (`quadrant.svg`) was dropped in #1255, because it placed repositories against each other
 (#806); a run removes any copy an earlier run left. The per-layer bars (`layer-bars.svg`) were retired in #1073: the fleet rolls up by truth
 tag, and `fleet-data.json` carries the per-tag tally each tag drawing reads.
