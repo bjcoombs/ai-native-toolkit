@@ -142,6 +142,9 @@ def test_ci_names_the_suite_by_marker_or_module(tmp_path: Path, command: str, na
     "  t:\n    steps:\n      - run: pytest -m evaluation_slow tests\n",
     "  t:\n    steps:\n      - run: git ls-files -z 'evals/**/scaffold.sh'\n",
     "  t:\n    steps:\n      - run: ruff check evals && pytest tests\n",
+    "  t:\n    steps:\n      - run: python -m pip install -r evals/requirements.txt\n",
+    "  t:\n    steps:\n      - run: uv pip install -r evals/requirements.txt\n",
+    "  t:\n    steps:\n      - run: uv run --frozen ruff check evals\n",
     "  t:\n    steps:\n      - run: |\n          rm -rf evals/.cache\n          sudo pip install evals\n",
     "  t:\n    steps:\n      - run: pytest tests\n      - uses: actions/upload-artifact@v4\n        with:\n"
     "          name: evals\n          path: evals/results.json\n",
@@ -156,6 +159,8 @@ def test_a_name_that_runs_nothing_is_not_a_run(tmp_path: Path, jobs: str) -> Non
 
 @pytest.mark.parametrize("jobs", [
     "  t:\n    steps:\n      - run: |\n          uv sync\n          uv run pytest evals/\n",
+    "  t:\n    steps:\n      - run: python evals/run.py\n",
+    "  t:\n    steps:\n      - run: python -m pytest evals\n",
     "  t:\n    defaults:\n      run:\n        working-directory: evals\n    steps:\n      - run: pytest\n",
     "  t:\n    steps:\n      - uses: promptfoo/promptfoo-action@v1\n        with:\n          config: evals/promptfooconfig.yaml\n",
 ])

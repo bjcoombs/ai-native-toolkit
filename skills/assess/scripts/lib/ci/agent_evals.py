@@ -106,6 +106,8 @@ NOT_RUNNERS = frozenset({
     "pip", "pip3", "pipx", "test", "[",
 })
 _SEGMENT = re.compile(r"&&|\|\||[;|&\n]")
+# Launcher words read past before the first word is checked (``python -m pip``, ``uv run ruff``).
+_LAUNCHERS = frozenset({"python", "python3", "-m", "uv", "run", "poetry", "pipenv", "pdm", "hatch", "rye", "--"})
 _LEAD = re.compile(r"^(?:\s*(?:[A-Za-z_]\w*=\S*|sudo|time|exec|env)\s+)*")
 _RUNNER = re.compile(r"""(?:^|[\s;&|(])(?:(make|just)(?:\s+-\S+)*|(?:npm|pnpm|yarn|bun)\s+run|pnpm|yarn)\s+([\w:.-]+)""")
 _MAKE_RULE = re.compile(r"^([^\s:#=][^:#=]*?)\s*::?(?!=)")
@@ -181,10 +183,13 @@ def _value(tree: IndentTree, i: int) -> str:
 
 
 def runnable(command: str) -> str:
-    """``command`` without the segments whose first word is in ``NOT_RUNNERS``."""
+    """``command`` without the segments whose first word, past a launcher (``python -m``, ``uv``,
+    ``uv run``, ``poetry run``), is in ``NOT_RUNNERS``."""
     keep = []
     for segment in _SEGMENT.split(command):
         words = _LEAD.sub("", segment.strip(" \t(")).split()
+        while len(words) > 1 and (words[0] in _LAUNCHERS or words[0].startswith("-")):
+            words = words[1:]
         if words and words[0].rsplit("/", 1)[-1] not in NOT_RUNNERS:
             keep.append(segment)
     return "\n".join(keep)
