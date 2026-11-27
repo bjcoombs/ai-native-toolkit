@@ -467,3 +467,39 @@ def test_build_run_context_carries_the_block_for_a_scoped_run(git_repo) -> None:
     block = ctx["claude_config"]
     assert block["available"] is True
     assert _rows(block) == [("unsupported_value", "svc/.claude/agents/a.md", 2, "color", "indigo")]
+
+
+# --- a key's whole scalar (#1544) ---------------------------------------------
+
+@pytest.mark.parametrize(("body", "text"), [
+    ("description:\n  Use when the text\n  sits below the key.", "Use when the text sits below the key."),
+    ("description: >\n  folded\n  lines", "folded lines"),
+    ("description: >-\n  folded\n  lines", "folded lines"),
+    ("description: |\n  one\n  # kept\n  two", "one\n# kept\ntwo"),
+    ("description: first\n  second # note", "first second"),
+    ("description: \"a\n  b\" # note", "a b"),
+    ("description: 'it''s\n  here'", "it's here"),
+    ("description: one line", "one line"),
+    ("description: >\n", None),
+    ("description:", None),
+])
+def test_a_key_reads_its_whole_scalar(body: str, text: str | None) -> None:
+    fm = parse_frontmatter(_fm("name: x", body))
+    assert fm is not None and fm.errors == []
+    (entry,) = [e for e in fm.entries if e.key == "description"]
+    assert entry.text == text
+
+
+def test_a_nested_map_or_list_has_no_scalar_text() -> None:
+    fm = parse_frontmatter(_fm("hooks:", "  PreToolUse:", "    - command: x", "tools:", "  - Read"))
+    assert fm is not None
+    assert [(e.key, e.value, e.text, [c.key for c in e.children]) for e in fm.entries] == [
+        ("hooks", None, None, ["PreToolUse"]), ("tools", None, None, [])]
+
+
+def test_the_first_line_value_and_the_findings_do_not_move() -> None:
+    """``value`` stays the first line, so a wrapped value is checked and reported as before."""
+    fm = parse_frontmatter(_fm("description:", "  below", "color: >", "  indigo"))
+    assert fm is not None
+    assert [(e.key, e.value) for e in fm.entries] == [("description", None), ("color", "<block scalar>")]
+    assert check_file("a.md", "agent", "project", _fm("name: a", "description:", "  below")) == []

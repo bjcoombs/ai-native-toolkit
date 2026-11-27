@@ -209,3 +209,9 @@ def test_this_repository_has_no_missing_reference_and_every_file_has_a_descripti
     files = sd.scan_skill_disclosure(REPO_ROOT)["files"]
     assert files and not [f["path"] for f in files if "reference_missing" in f["breaks"]]
     assert not [f["path"] for f in files if f["kind"] == "skill" and not f["description_present"]]
+
+
+def test_a_description_on_the_line_below_its_key_is_read_whole(tmp_path: Path) -> None:
+    """#1544: the text below an empty ``description:`` lost its first character."""
+    _skill(tmp_path, "body\n", frontmatter="name: demo\ndescription:\n  hello there")
+    assert _one(tmp_path)["description_chars"] == len("hello there")

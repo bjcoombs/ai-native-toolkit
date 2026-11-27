@@ -22,9 +22,13 @@ to the scope folder, and only files under the scope count.
 outside any known location (``set_aside_location``); and one whose frontmatter is missing, does
 not parse cleanly (``claude_config.parse_frontmatter``, the same parser the Claude Code
 configuration check uses) or has no ``name`` or no ``description`` (``invalid_frontmatter``,
-listed in ``invalid_files``). A tracked symlink (git mode ``120000``) that resolves outside the
+listed in ``invalid_files``). A key counts by its whole scalar (``FmEntry.text``), so a
+``description`` on the indented lines below the key or in a ``>`` / ``|`` block is valid and an
+empty block is not (#1544). A tracked symlink (git mode ``120000``) that resolves outside the
 repository counts for nothing (``symlinks_outside``), and a ``SKILL.md`` that is itself a
-symlink counts only through its target, so no skill counts twice.
+symlink counts only through its target, so no skill counts twice: its ``path`` and ``location``
+are the target's (the link's location when the target sits in no known location, or outside the
+scope), and the link is listed in ``shared_by_symlink``.
 Every file and link target is read from the commit (``git cat-file --batch``), never the
 working tree: a link's target is its committed blob, resolved lexically against the link's
 folder, so a checkout with ``core.symlinks=false`` (the Git for Windows default) and an
@@ -37,10 +41,12 @@ above the root, is outside.
   ``.claude/skills``; under ``--scope`` also one at the scope folder's prefixes) that resolves to a folder inside the repository holding counted skills,
   so several harnesses read one tree. Each entry is ``{"path", "target"}``, both
   repository-relative. A skill reached only through such a link (its tree outside the known
-  prefixes) counts, since the harness loads it from the link.
-- ``lock_files``: a tracked ``skills-lock.json``.
+  prefixes) counts, since the harness loads it from the link. A link to one ``SKILL.md`` is
+  listed when its target counts.
+- ``lock_files``: a tracked ``skills-lock.json``; under ``--scope``, only those under the scope.
 - ``hashed_manifests``: a tracked ``.claude-plugin/marketplace.json`` or ``plugin.json`` whose
-  text holds a content hash key (``sha256``, ``integrity``, ``hash``, ``sha``, ``digest``).
+  text holds a content hash key (``sha256``, ``integrity``, ``hash``, ``sha``, ``digest``), at the
+  root or, under ``--scope``, at each scope folder instead (#1544).
 
 Block (``skill_library`` in run-context.json)::
 
@@ -60,9 +66,9 @@ Skill library (#848), no model. `scan_skill_library(repo_root, scope, excludes)`
 `SKILL.md` files at `HEAD` (`git ls-tree -r -z HEAD`, contents and link targets from `git cat-file --batch`) in a known location (`skills/` at the root, a harness
 folder or `plugins/<name>/`, one or two folders deep), sets aside vendored, fixture, excluded and
 unknown-location files, checks frontmatter with `claude_config.parse_frontmatter` (clean, with
-`name` and `description`), and records tracked symlinks that share a skill tree inside the
-repository or resolve outside it, `skills-lock.json` and hashed marketplace manifests as
-evidence. Tests: `tests/test_skill_library_condition.py`.
+`name` and `description`, read whole), and records tracked symlinks that share a skill tree or
+file inside the repository or resolve outside it, `skills-lock.json` and hashed marketplace
+manifests (scope-filtered under `--scope`) as evidence. Tests: `tests/test_skill_library_condition.py`.
 """
 from __future__ import annotations
 
@@ -209,7 +215,7 @@ def valid_frontmatter(text: str) -> bool:
     fm = parse_frontmatter(text)
     if fm is None or fm.errors:
         return False
-    keys = {e.key for e in fm.entries if e.value}
+    keys = {e.key for e in fm.entries if e.text}  # the whole scalar: it may sit below the key
     return {"name", "description"} <= keys
 
 
@@ -263,7 +269,7 @@ def _links(raw: dict[str, str], scope_rels: list[str] | None,
         target = _real(rel, raw)
         if target is None:
             outside += 1
-        elif PurePosixPath(rel).name != SKILL_FILE:
+        else:
             inside[rel] = target
     return inside, outside
 
@@ -287,7 +293,9 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
     extra = set(excludes[0]) if excludes else set()
     scope_rels = None if scope is None else [r for r in (_inside(repo, f) for f in scope.folders) if r is not None]
     link_oids = {oid for mode, oid in tracked.values() if mode == _SYMLINK_MODE}
-    names = {r for r in tracked if PurePosixPath(r).name == SKILL_FILE or r in MANIFEST_NAMES}
+    # The manifests read as evidence: at the root, or under --scope at each scope folder.
+    manifests = {f"{base}/{m}" if base else m for base in (scope_rels or [""]) for m in MANIFEST_NAMES}
+    names = {r for r in tracked if PurePosixPath(r).name == SKILL_FILE or r in manifests}
     blobs = _blobs(repo, link_oids | {tracked[r][1] for r in names})
     raw = {r: blobs.get(oid, b"").decode("utf-8", "surrogateescape").strip()
            for r, (mode, oid) in tracked.items() if mode == _SYMLINK_MODE}
@@ -314,6 +322,9 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
         if real not in tracked or tracked[real][0] == _SYMLINK_MODE:
             counts["location"] += 1  # a link to no committed file
             continue
+        if real != rel and _in_scope(real, scope_rels):
+            # A linked SKILL.md sits where its target does, when that is a known location (#1544).
+            location = _location(real, scope_rels or [], links) or location
         if real in skills:
             continue
         text = _text(repo, tracked[real][1], blobs)
@@ -323,10 +334,10 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
         skills[real] = LibrarySkill(path=real, location=location)
     counted = {s["path"] for s in skills.values()}
     shared = [SharedLink(path=link, target=target) for link, target in sorted(links.items())
-              if any(p.startswith(f"{target}/") for p in counted)]
+              if any(p == target or p.startswith(f"{target}/") for p in counted)]
     locks = sorted(r for r in tracked if PurePosixPath(r).name == LOCK_FILE
-                   and _set_aside(r, extra) is None)
-    hashed = sorted(r for r in tracked if r in MANIFEST_NAMES
+                   and _set_aside(r, extra) is None and _in_scope(r, scope_rels))
+    hashed = sorted(r for r in tracked if r in manifests
                     and _HASH_KEY.search(_text(repo, tracked[r][1], blobs)))
     return SkillLibraryBlock(
         available=True, present=bool(skills), skills_counted=len(skills),

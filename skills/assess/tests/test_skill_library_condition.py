@@ -234,4 +234,49 @@ def test_counts_only_keeps_every_count_field(tmp_path: Path) -> None:
     assert (out["present"], out["skills_counted"], out["invalid_frontmatter"]) == (True, 1, 1)
 
 
+# --- #1544 edge cases ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("description", ["description:\n  Use when a is needed.",
+                                         "description: >\n  Use when a\n  is needed.",
+                                         "description: |\n  Use when a is needed."])
+def test_a_description_below_its_key_or_in_a_block_is_valid(tmp_path: Path, description: str) -> None:
+    root = _git(tmp_path, {"skills/a/SKILL.md": f"---\nname: a\n{description}\n---\nbody\n"})
+    block = scan_skill_library(root)
+    assert (block["skills_counted"], block["invalid_files"]) == (1, [])
+
+
+def test_an_empty_block_scalar_description_is_invalid() -> None:
+    assert not valid_frontmatter("---\nname: a\ndescription: >\n---\n")
+
+
+def test_a_symlinked_skill_file_takes_its_targets_location_and_is_named_as_shared(tmp_path: Path) -> None:
+    root = _git(tmp_path, {".claude/skills/a/SKILL.md": _skill("a")},
+                links={".agents/skills/a/SKILL.md": "../../../.claude/skills/a/SKILL.md"})
+    block = scan_skill_library(root)
+    assert block["skills"] == [{"path": ".claude/skills/a/SKILL.md", "location": ".claude/skills"}]
+    assert block["shared_by_symlink"] == [{"path": ".agents/skills/a/SKILL.md",
+                                           "target": ".claude/skills/a/SKILL.md"}]
+
+
+def test_a_symlinked_skill_file_to_an_unknown_location_keeps_the_links_location(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"docs/agent/a.md": _skill("a")},
+                links={".claude/skills/a/SKILL.md": "../../../docs/agent/a.md"})
+    block = scan_skill_library(root)
+    assert block["skills"] == [{"path": "docs/agent/a.md", "location": ".claude/skills"}]
+    assert block["shared_by_symlink"] == [{"path": ".claude/skills/a/SKILL.md", "target": "docs/agent/a.md"}]
+
+
+def test_scope_filters_the_lock_files_and_hashed_manifests(tmp_path: Path) -> None:
+    manifest = '{"plugins": [{"name": "p", "sha256": "0123456789abcdef0123"}]}\n'
+    root = _git(tmp_path, {"packages/web/.claude/skills/b/SKILL.md": _skill("b"),
+                           "skills-lock.json": "{}\n", ".claude-plugin/marketplace.json": manifest,
+                           "packages/web/skills-lock.json": "{}\n",
+                           "packages/web/.claude-plugin/plugin.json": manifest,
+                           "packages/api/skills-lock.json": "{}\n"})
+    block = scan_skill_library(root, Scope.of(root, Path("packages/web")))
+    assert block["lock_files"] == ["packages/web/skills-lock.json"]
+    assert block["hashed_manifests"] == ["packages/web/.claude-plugin/plugin.json"]
+
+
 SKILL_NAME = "SKILL.md"
