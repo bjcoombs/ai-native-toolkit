@@ -159,4 +159,4 @@ The final step, once every PR is merged and the retro is done: one GitHub releas
 - Testing an unmerged branch as a real plugin (`/plugin install` only sees `main`), and how `${CLAUDE_SKILL_DIR}` substitution works: `docs/testing-a-branch-locally.md`
 - Every shipped doc: `docs/index.md`
 
-Recognised by Claude Code as `CLAUDE.md`. For Codex (`AGENTS.md`) or Gemini CLI (`GEMINI.md`), copy or symlink under those names.
+Recognised by Claude Code as `CLAUDE.md`. Codex reads `AGENTS.md`, which points here; Gemini CLI reads it too once `context.fileName` in `.gemini/settings.json` lists `AGENTS.md`.

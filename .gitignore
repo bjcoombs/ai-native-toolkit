@@ -66,6 +66,8 @@ evals/**/results/
 .claude/
 **/CLAUDE.md
 !/CLAUDE.md
+# Root AGENTS.md is a one-line pointer to CLAUDE.md for Codex and Gemini CLI.
+!/AGENTS.md
 
 # Test fixtures intentionally named CLAUDE.md / .claude/skills to exercise the
 # instruction-bloat penalty and skills-delegation detection. Re-include them so
