@@ -6,6 +6,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+import lib.docs.doc_graph as doc_graph
+import lib.docs.doc_rst as doc_rst
 from lib.docs.doc_adoc import blank_verbatim, is_antora_nav
 from lib.docs.doc_graph import build_doc_graph, discover_doc_files
 
@@ -94,7 +98,8 @@ def test_verbatim_blocks_and_comments_hide_sample_links(tmp_path: Path) -> None:
     _write(tmp_path, "README.adoc", (
         "= Demo\n\n----\nxref:docs/sample.adoc[]\ninclude::docs/shown.adoc[]\n----\n"
         "////\ninclude::docs/commented.adoc[]\n////\n// xref:docs/c2.adoc[]\n"
-        "\\xref:docs/escaped.adoc[]\n"
+        "\\xref:docs/escaped.adoc[]\nWrite `+xref:page.adoc[]+` or pass:[xref:p.adoc[]] here.\n"
+        "Or ++xref:q.adoc[]++ too.\n"
     ))
     _write(tmp_path, "docs/shown.adoc", "shown\n")
     r = build_doc_graph(tmp_path)
@@ -155,3 +160,14 @@ def test_a_component_named_collector_still_counts_broken_links(tmp_path: Path) -
     assert r.broken_links == [
         {"from": f"{ROOT}/pages/index.adoc", "target": "gone.adoc", "kind": "asciidoc"}]
     assert f"{ROOT}/nav.adoc" in r.entry_points
+
+
+def test_an_unparsed_doc_format_is_named_in_the_block(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No format is unparsed today; the mechanism stays verified for the next one."""
+    monkeypatch.setattr(doc_rst, "UNPARSED_DOC_FORMATS", {".org": "org"})
+    monkeypatch.setattr(doc_graph, "UNPARSED_DOC_FORMATS", {".org": "org"})
+    _write(tmp_path, "notes.org", "* Notes\n")
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["doc_count"] == 0
+    assert d["unparsed_doc_formats"] == ["org"]
+    assert d["reason"] == "docs present but not parsed for links: org"

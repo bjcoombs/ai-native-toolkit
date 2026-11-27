@@ -28,7 +28,8 @@ An ``xref`` or ``include`` naming no file is a broken link of kind ``asciidoc``,
 except inside an Antora component whose ``antora.yml`` has a ``collector:`` key: its
 build generates pages a checkout does not hold, so a miss there is not counted.
 Listing, literal, passthrough and comment blocks (``----``, ``....``, ``++++``,
-``////``) and ``//`` comment lines only show syntax, so they are blanked before the
+``////``), inline passthroughs (``+xref:x.adoc[]+``, ``pass:[...]``) and ``//``
+comment lines only show syntax, so they are blanked before the
 ``xref`` and ``link`` parse; ``include::`` is a preprocessor line, so only comments
 hide it. Escaped macros (``\\xref:``) are skipped.
 
@@ -53,6 +54,7 @@ BROKEN_KIND = "asciidoc"
 _FAMILY_DIRS = {"page": "pages", "partial": "partials", "example": "examples"}
 _DELIMITER = re.compile(r"^(-{4,}|\.{4,}|\+{4,}|/{4,})\s*$")
 _COMMENT_LINE = re.compile(r"^//(?!/)")
+_INLINE_PASS = re.compile(r"\+\+.*?\+\+|\+[^+\n]+?\+|pass:[a-z,]*\[.*?\]")
 _XREF = re.compile(r"(?<![\w\\])xref:([^\s\[\]]+)\[")
 _SHORTHAND = re.compile(r"(?<!\\)<<([^<>,\s]+?\.(?:adoc|asciidoc)(?:#[^<>,]*)?)(?:,[^<>]*)?>>")
 _LINK = re.compile(r"(?<![\w\\])link:([^\s\[\]]+)\[")
@@ -132,7 +134,7 @@ def blank_verbatim(text: str) -> tuple[list[str], list[str]]:
             includes.append("")
             continue
         keep = "" if _COMMENT_LINE.match(line) else line
-        links.append(keep)
+        links.append(_INLINE_PASS.sub("", keep))
         includes.append(keep)
     return links, includes
 
