@@ -50,7 +50,11 @@ inline-code path spans (a path written as code is the boundary declaration we wa
 the doc graph strips them. This is the parsing foundation the structure-drift signals
 consume; it owns no drift logic itself. `parse_ownership` writes every path with
 `.as_posix()`, so the ownership block reads the same on Windows as on Linux and macOS
-(#1493, tests in `tests/test_ownership_parser.py`).
+(#1493, tests in `tests/test_ownership_parser.py`). An architecture-doc reference resolves
+through `_resolve_doc_ref`, which follows a `./` or `../` link from its doc's directory, as a
+reader does, and a token opening with `-` (an option such as `--path-separator /`) is not a
+path reference (#1231, tests in `tests/test_structure_drift.py` and
+`tests/test_ownership_parser.py`).
 """
 from __future__ import annotations
 
@@ -379,7 +383,8 @@ def _extract_path_refs(
     for m in _BARE_PATH_RE.finditer(defenced):
         token = _strip_anchor(m.group(1))
         refs.add(token.rstrip("/.,;:)"))
-    return {r for r in refs if r}
+    # An option such as ``--path-separator /`` is a command-line flag, not a path.
+    return {r for r in refs if r and not r.startswith("-")}
 
 
 def _resolve_ref(
@@ -409,6 +414,40 @@ def _resolve_ref(
         if by_name:
             return by_name
     return set()
+
+
+def _resolve_doc_ref_keyed(
+    ref: str, doc_rel: str, repo_root: Path, rel_paths: set[str],
+) -> tuple[str, set[Path]]:
+    """Resolve a reference declared in the doc at ``doc_rel``: ``(key, files)``.
+
+    A ``./`` or ``../`` reference is a markdown link, which a reader follows from the doc's
+    own directory, so it resolves there only, never by basename elsewhere in the tree; one
+    that climbs above the repo root names nothing. Any other reference resolves through
+    ``_resolve_ref`` as repo-relative first, then from the doc's directory, so a link written
+    as ``sub/file.md`` still lands (#1231). ``key`` is the repo-relative form that resolved
+    (the reference as written when none did): ``architecture_boundaries`` compares keys, so
+    one module named two ways counts once.
+    """
+    local = posixpath.normpath(posixpath.join(posixpath.dirname(doc_rel), ref))
+    escapes = local == ".." or local.startswith("../")
+    if ref.startswith(("./", "../")):
+        if escapes:
+            return ref, set()
+        exact = {Path(local)} if local in rel_paths else set()
+        return local, exact or {Path(rp) for rp in rel_paths if rp.startswith(local + "/")}
+    files = _resolve_ref(ref, repo_root, rel_paths)
+    if files or escapes or ref.startswith("/"):
+        return ref, files
+    found = _resolve_ref(local, repo_root, rel_paths)
+    return (local, found) if found else (ref, found)
+
+
+def _resolve_doc_ref(
+    ref: str, doc_rel: str, repo_root: Path, rel_paths: set[str],
+) -> set[Path]:
+    """The tracked files a reference in the doc at ``doc_rel`` names (``_resolve_doc_ref_keyed``)."""
+    return _resolve_doc_ref_keyed(ref, doc_rel, repo_root, rel_paths)[1]
 
 
 def parse_architecture_md(repo_root: Path) -> dict[str, set[Path]]:
@@ -472,7 +511,7 @@ def _parse_one_arch_doc(
         segment = "\n".join(lines)
         files: set[Path] = set()
         for ref in _extract_path_refs(segment):
-            files |= _resolve_ref(ref, repo_root, rel_paths)
+            files |= _resolve_doc_ref(ref, doc_rel, repo_root, rel_paths)
         if files:
             out.setdefault(section_key, set()).update(files)
 

@@ -245,6 +245,24 @@ def test_architecture_wikilink_references_resolve(tmp_path: Path) -> None:
     assert _matched_strs(modules["ARCHITECTURE.md::Payments"]) == {"docs/payments.md"}
 
 
+def test_architecture_relative_links_resolve_from_their_doc(tmp_path: Path) -> None:
+    """``./`` and ``../`` links resolve from the declaring doc; a plain path falls back
+    to it; a link above the repo root names nothing (#1231)."""
+    repo = _init_repo(tmp_path)
+    for rel in ("CLAUDE.md", "pkg/api/server.py", "pkg/core/model.py", "api/other.py"):
+        _write(repo, rel)
+    _write(repo, "pkg/ARCHITECTURE.md", "\n".join([
+        "## Map",
+        "The map module owns [a](../CLAUDE.md), [b](./api/server.py), [c](core/model.py)",
+        "and [d](../../outside.md).",
+    ]) + "\n")
+    _commit_all(repo)
+
+    modules = parse_architecture_md(repo)
+    assert _matched_strs(modules["pkg/ARCHITECTURE.md::Map"]) == {
+        "CLAUDE.md", "pkg/api/server.py", "pkg/core/model.py"}
+
+
 # --- 3. Empty-glob detection -------------------------------------------------
 
 def test_find_empty_globs_flags_zero_match_patterns(tmp_path: Path) -> None:
