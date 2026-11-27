@@ -151,7 +151,8 @@ CONCURRENCY: JsonDict = {
         "informational": _field({"type": "boolean"}, "Always true: nothing scores this block."),
         "merge_sample": _field(_INT, "The most first-parent commits read, newest first."),
         "merges": _field(_INT, "First-parent commits read: one per merged change on a "
-                               "squash-merge or merge-commit branch."),
+                               "squash-merge or merge-commit branch. Under a scope, only those "
+                               "that touched it, so every share is relative to them."),
         "threshold": _field({"type": "number"}, "The touch share (0 to 1) a file is counted "
                                                 "above at or past: 0.25, one merge in four."),
         "files_touched": _field(_INT, "Distinct files the merges changed."),

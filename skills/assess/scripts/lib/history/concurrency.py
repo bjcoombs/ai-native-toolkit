@@ -36,9 +36,12 @@ limits[]}`; shapes in `lib/run_context_types_concurrency.py`. A share with nothi
 divide by is null; `max_fan_in` is null with `none_above_threshold` when no file reaches
 the threshold. Fewer than `MIN_MERGES` merges reads `short_history`, a shallow clone
 `shallow_clone` (or `shallow_unknown`), and a git failure `no_git`, `git_timeout`,
-`not_a_repo` or `git_failed`, each as `available: false` with a `code: sentence` reason
-that counts-only output keeps as its code. Scope (#1110): only files under the
-`--scope` folders are counted. Output is sorted, so a pooled run (`--jobs`) writes the
+`not_a_repo` (the first read) or `git_failed` (a later one), each as `available: false`
+with a `code: sentence` reason that counts-only output keeps as its code. Scope (#1110):
+the merges read are those that touched the `--scope` folders (or `repo_root`, when it is
+below the repository top), and only their files under it are counted, so every share is
+relative to the changes into that part of the tree. The linguist-generated attribute and
+the generator header are read from the working tree, not from `rev`. Output is sorted, so a pooled run (`--jobs`) writes the
 same bytes as `--jobs 1`. Tests: `tests/test_concurrency.py`.
 """
 from __future__ import annotations
@@ -73,6 +76,8 @@ LIMITS = (
     "generated-name pattern, or its first lines carry a generator marker; a deleted file is "
     "judged by its attribute and name only.",
     "Paths are the names each merge used; a renamed file counts under each of its names.",
+    "Under --scope, only merges that touched the scope are read and only its files counted.",
+    "Generated is judged from the working tree's .gitattributes and file heads, not each merge's.",
 )
 
 
@@ -80,7 +85,10 @@ class _GitFailed(Exception):
     """A git read that failed; the message is a ``code: sentence`` reason."""
 
 
-def _git(repo_root: Path | str, *args: str, stdin: str | None = None) -> str:
+def _git(repo_root: Path | str, *args: str, stdin: str | None = None, first: bool = False) -> str:
+    """``git -C repo_root <args>`` stdout. A refused call reads ``not_a_repo`` when it is the
+    ``first`` read, and ``git_failed`` for any later one, which the first read has already
+    shown runs on a repository."""
     try:
         return subprocess.run(
             ["git", "-C", str(repo_root), "-c", "core.quotepath=false", *args], input=stdin,
@@ -92,7 +100,9 @@ def _git(repo_root: Path | str, *args: str, stdin: str | None = None) -> str:
     except subprocess.TimeoutExpired as e:
         raise _GitFailed(f"git_timeout: git timed out after {GIT_TIMEOUT_SECONDS}s") from e
     except subprocess.CalledProcessError as e:
-        raise _GitFailed("not_a_repo: not a git repository, or one with no commits") from e
+        if first:
+            raise _GitFailed("not_a_repo: not a git repository, or one with no commits") from e
+        raise _GitFailed("git_failed: a git read of the history failed") from e
 
 
 def _share(count: int, total: int) -> float | None:
@@ -108,10 +118,12 @@ def first_parent_merges(repo_root: Path, rev: str, since: str | None, scope: Sco
                         limit: int) -> list[frozenset[str]]:
     """The files each of the newest ``limit`` first-parent commits changed, newest first.
 
-    Paths are relative to the repository top. ``-M`` pins rename detection, so a renamed
-    file counts once, under its new name, whatever the user's ``diff.renames``."""
+    Paths are relative to the repository top. The pathspec is the scope's roots, or ``.``,
+    so a ``repo_root`` below the top reads only the merges that touched it. ``-M`` pins
+    rename detection, so a renamed file counts once, under its new name, whatever the
+    user's ``diff.renames``."""
     bound = [f"--since={since}"] if since else []
-    pathspec = [str(r) for r in scope.roots] if scope is not None else []
+    pathspec = [str(r) for r in scope.roots] if scope is not None else ["."]
     out = _git(repo_root, "log", rev, "--first-parent", "-m", "-M", "--name-only",
                "--format=%x1e", f"-n{limit}", *bound, "--", *pathspec)
     return [frozenset(line for line in record.splitlines() if line.strip())
@@ -150,7 +162,7 @@ def concurrency_block(repo_root: Path, scope: Scope | None, history_window: str 
     """The block for the newest ``merge_sample`` first-parent commits of ``rev`` in the window."""
     label = resolve_window(history_window)
     try:
-        anchor = _git(repo_root, "log", "-1", "--format=%ct", rev).strip()
+        anchor = _git(repo_root, "log", "-1", "--format=%ct", rev, first=True).strip()
         since = anchored_since(history_window, int(anchor)) if anchor.isdigit() else None
         shallow = _git(repo_root, "rev-parse", "--is-shallow-repository").strip()
         if shallow != "false":

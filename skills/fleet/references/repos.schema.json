@@ -761,7 +761,7 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "'code: sentence'. The codes name the missing piece: short_history (the window holds fewer than 10 first-parent commits, too few for a share to mean anything); shallow_clone (the checkout is a shallow clone, so the merges read are cut short); shallow_unknown (git could not confirm the checkout is a full clone); not_a_repo (the path is not a git repository, or one with no commits); no_git (git is not installed where the scan ran); git_timeout (a git read took longer than the scan allows). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                    "description": "'code: sentence'. The codes name the missing piece: short_history (the window holds fewer than 10 first-parent commits, too few for a share to mean anything); shallow_clone (the checkout is a shallow clone, so the merges read are cut short); shallow_unknown (git could not confirm the checkout is a full clone); not_a_repo (the path is not a git repository, or one with no commits); no_git (git is not installed where the scan ran); git_failed (a git read after the first (the merge log or the attribute read) failed on a repository the first read could open); git_timeout (a git read took longer than the scan allows). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                   }
                 },
                 "required": [
@@ -794,7 +794,7 @@
                 },
                 "merges": {
                   "type": "integer",
-                  "description": "First-parent commits read: one per merged change on a squash-merge or merge-commit branch."
+                  "description": "First-parent commits read: one per merged change on a squash-merge or merge-commit branch. Under a scope, only those that touched it, so every share is relative to them."
                 },
                 "threshold": {
                   "type": "number",

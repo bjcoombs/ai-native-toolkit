@@ -231,3 +231,33 @@ def test_registered_through_the_manifest_and_read_by_no_condition() -> None:
     assert spec.reads == ("repo_root", "scope", "history_window")
     levels = (TOOLKIT / "skills/assess/levels/default.toml").read_text(encoding="utf-8")
     assert "concurrency" not in levels
+
+
+def test_a_root_below_the_repository_top_reads_only_its_merges(tmp_path: Path) -> None:
+    r = _init(tmp_path)
+    for i in range(MIN_MERGES):
+        _commit(r, {f"sub/f{i}.txt": "x\n", "registry.py": f"N = {i}\n"}, T0 + i * DAY)
+    for i in range(5):
+        _commit(r, {f"other/g{i}.txt": "y\n"}, T0 + (20 + i) * DAY)
+    block = _ok(scan_concurrency(r / "sub", None, None))
+    assert block["merges"] == MIN_MERGES
+    assert block["files_touched"] == MIN_MERGES  # registry.py lies outside sub/
+    assert block["files_above_threshold"] == 0
+
+
+def test_a_later_git_failure_reads_git_failed(registry_repo: Path,
+                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.history.concurrency as concurrency
+
+    real = subprocess.run
+
+    def refuse_check_attr(cmd, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if "check-attr" in cmd:
+            raise subprocess.CalledProcessError(128, cmd)
+        return real(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(concurrency.subprocess, "run", refuse_check_attr)
+    block = scan_concurrency(registry_repo, None, None)
+    assert block["available"] is False and block["reason"].startswith("git_failed: ")
+    reduced = counts_only_scans({"concurrency": block})["concurrency"]
+    assert reduced == {"available": False, "reason": "git_failed"}

@@ -464,6 +464,7 @@ No other scan says whether many agents can change the repository at once; this r
   - `shallow_unknown`: Git could not confirm the checkout is a full clone. Nothing to change in the repository; run the scan on a full clone.
   - `not_a_repo`: The path is not a git repository, or one with no commits. Nothing to change: there is no history to read.
   - `no_git`: git is not installed where the scan ran. Install git where the scan runs.
+  - `git_failed`: A git read after the first (the merge log or the attribute read) failed on a repository the first read could open. Nothing to change in the repository; re-run the scan, and report the failure if it repeats.
   - `git_timeout`: A git read took longer than the scan allows. Nothing to change in the repository; a shorter --window reads less history.
 
 ### `config_drift`: Configuration drift

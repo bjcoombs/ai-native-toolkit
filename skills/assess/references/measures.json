@@ -2729,6 +2729,11 @@
           "next_step": "Install git where the scan runs."
         },
         {
+          "code": "git_failed",
+          "means": "A git read after the first (the merge log or the attribute read) failed on a repository the first read could open.",
+          "next_step": "Nothing to change in the repository; re-run the scan, and report the failure if it repeats."
+        },
+        {
           "code": "git_timeout",
           "means": "A git read took longer than the scan allows.",
           "next_step": "Nothing to change in the repository; a shorter --window reads less history."
