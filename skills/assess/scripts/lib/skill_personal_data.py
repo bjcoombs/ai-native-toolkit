@@ -204,7 +204,7 @@ _PLACEHOLDER_SECRET = re.compile(
 
 # A known provider key at the provider's length (#1196), found anywhere in the text: GitHub, Anthropic,
 # OpenAI, Slack, Stripe live keys, Google, GitLab, npm, Hugging Face, SendGrid and PyPI. Each shape
-# captures the body after its prefix, checked by ``_dummy`` so ``ghp_`` plus 36 ``x`` stays a placeholder.
+# captures the body after its prefix, checked by ``_placeholder_body`` so ``ghp_`` plus 36 ``x`` stays a placeholder.
 _PROVIDER_KEY = re.compile(
     r"(?<![\w-])(?:gh[pousr]_([A-Za-z0-9]{36})|github_pat_([A-Za-z0-9]{22}_[A-Za-z0-9]{59})"
     r"|sk-ant-(?:api|admin)\d{2}-([\w-]{80,})|sk-(?:proj-|svcacct-|admin-)([\w-]{40,})|sk-([A-Za-z0-9]{48})"
@@ -220,6 +220,7 @@ _DUMMY_WORD = re.compile(r"example|sample|dummy|placeholder|your|fake|redacted|c
                          r"secret|token|password|xxx|eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIi",
                          re.IGNORECASE)
 _REPEAT = re.compile(r"(.)\1{3}")
+_LONG_REPEAT = re.compile(r"(.)\1{7}")
 # A value that names a place, not a secret: a URL, a path or a file name.
 _LOCATION = re.compile(r"://|^[~.]?/|\.(?:ya?ml|json|toml|txt|md|env|pem|key|cfg|ini)$", re.IGNORECASE)
 # A value with a bracket is code (``_strip_anchor(m.group(1))``, ``cfg["key"]``), not a literal.
@@ -243,8 +244,9 @@ _PUBLISHED_SAMPLES = frozenset({
 })
 
 
-def _ascending(value: str) -> bool:
-    return any(all(ord(value[i + j + 1]) - ord(value[i + j]) == 1 for j in range(3)) for i in range(len(value) - 3))
+def _ascending(value: str, run: int = 4) -> bool:
+    return any(all(ord(value[i + j + 1]) - ord(value[i + j]) == 1 for j in range(run - 1))
+               for i in range(len(value) - run + 1))
 
 
 def _dummy(value: str) -> bool:
@@ -284,8 +286,17 @@ def _literal_secret(value: str) -> bool:
     return _concrete(value) and _high_entropy(value)
 
 
+def _placeholder_body(body: str) -> bool:
+    """A provider key body that is a placeholder: a placeholder word other than ``xxx``, a run of eight
+    of one character, or an ascending run of six (``123456``, ``abcdef``). The prefix at the provider's
+    length carries the precision, so the stricter ``_dummy`` runs would drop real keys (Slack's numeric
+    segments, the ``xxx`` that a 156-character body holds by chance about once in 200)."""
+    return (bool(_DUMMY_WORD.search(body.lower().replace("xxx", ""))) or bool(_LONG_REPEAT.search(body))
+            or _ascending(body.lower(), 6))
+
+
 def _provider_key(text: str) -> bool:
-    return any(m.group(0) not in _PUBLISHED_SAMPLES and not _dummy(next(g for g in m.groups() if g))
+    return any(m.group(0) not in _PUBLISHED_SAMPLES and not _placeholder_body(next(g for g in m.groups() if g))
                for m in _PROVIDER_KEY.finditer(text))
 
 

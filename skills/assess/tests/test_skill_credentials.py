@@ -177,6 +177,18 @@ def test_recall_holds_over_many_random_bodies(n: int, alphabet: str) -> None:
     assert found / len(bodies) >= 0.97, found
 
 
+@pytest.mark.parametrize("shape", ["slack", "openai-project"])
+def test_provider_key_recall_holds_over_many_random_bodies(shape: str) -> None:
+    rng = random.Random(len(shape))
+
+    def body(n: int, alphabet: str) -> str:
+        return "".join(rng.choice(alphabet) for _ in range(n))
+    keys = [("xo" + "xb-" + f"{body(12, string.digits)}-{body(13, string.digits)}-{body(24, ALNUM)}")
+            if shape == "slack" else "sk-" + "proj-" + body(156, URLSAFE) for _ in range(2000)]
+    found = sum("credential" in kinds_in(f"Use {key} here.") for key in keys)
+    assert found / len(keys) >= 0.995, found
+
+
 def test_credential_is_a_finding_kind() -> None:
     assert "credential" in FINDING_KINDS
 
