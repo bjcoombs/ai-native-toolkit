@@ -85,6 +85,13 @@ def test_a_condition_met_everywhere_and_one_met_nowhere_are_both_non_discriminat
     assert cc.discrimination({}) == []
 
 
+def test_a_condition_no_repository_measured_is_reported_apart() -> None:
+    states = {"r1": {"d.1": "not_measured", "e.1": "not_measured"},
+              "r2": {"d.1": "not_measured", "e.1": "unmet"}}
+    assert [(r["condition"], r["verdict"]) for r in cc.discrimination(states)] == [
+        ("d.1", cc.NOT_MEASURED_ANYWHERE), ("e.1", cc.MET_IN_NONE)]
+
+
 def test_report_reads_the_expected_files_alone(corpus: tuple[Path, Path, dict[str, Path]],
                                                capsys: pytest.CaptureFixture[str]) -> None:
     _, out, _ = corpus

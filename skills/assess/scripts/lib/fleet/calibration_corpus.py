@@ -13,8 +13,10 @@ clone is in it, under ``skills/assess/calibration/corpus/`` (``CORPUS_DIR``).
 
 ``repo`` is the clone's layout id (``runner.Target.repo``) and ``pinned`` its ``HEAD`` commit,
 each hashed with ``lib.counts_only.content_free.hash_value`` under ``CORPUS_SALT``, so the file
-names no repository and holds no commit a search could find (a sha finds its repository,
-#907); the key is ``repo`` without its ``h:``. ``states`` holds every condition of the model
+holds no repository name and no commit sha a search could find (a sha finds its repository,
+#907); the key is ``repo`` without its ``h:``. The salt is public, so the hash hides a name
+from a search, not from a guess: anyone can hash a candidate ``owner/name`` under it and
+confirm a match, then hash that repository's commits to find ``pinned``. ``states`` holds every condition of the model
 and its ``state`` (``lib.scoring.level_tally.STATES``) from ``level_result``, the function
 ``/assess`` and ``fleet --levels`` run.
 
@@ -36,7 +38,11 @@ of the pinned commit and the toolkit code alone.
 - ``discrimination``: the #842 discrimination rule, the way a condition enters the model
   (``lib/fleet/condition_demotion.py`` is the way out). A condition met in no repository of
   the corpus (``met_in_none``) or in every one (``met_in_all``) does not separate
-  repositories, so it is reported non-discriminating. It reads the run's states, or the
+  repositories, so it is reported non-discriminating. Only ``met`` counts as meeting it:
+  ``unmet``, ``not_applicable``, ``declined`` and ``not_measured`` do not. A condition no
+  repository measured (every state ``not_measured``) is reported apart, as
+  ``not_measured_anywhere``, since the offline run cannot read it at all rather than every
+  repository lacking it. It reads the run's states, or the
   expected files alone (``report``), so it needs no clones.
 
 Tests: ``tests/test_calibration_corpus.py``.
@@ -60,6 +66,7 @@ CORPUS_SALT = "assess-calibration-corpus"
 WINDOW = "12mo"  # the calibration rounds' --window
 ABSENT = "absent"
 MET_IN_NONE, MET_IN_ALL = "met_in_none", "met_in_all"
+NOT_MEASURED_ANYWHERE = "not_measured_anywhere"
 NO_CLONE, WRONG_COMMIT, SCAN_FAILED = "no_clone", "wrong_commit", "scan_failed"
 _FIELDS = frozenset({"corpus_version", "repo", "pinned", "levels_version", "states"})
 
@@ -93,7 +100,7 @@ class Discrimination(TypedDict):
     condition: str
     met: int  # repositories meeting it
     repos: int  # repositories in the corpus
-    verdict: str  # MET_IN_NONE or MET_IN_ALL
+    verdict: str  # MET_IN_NONE, MET_IN_ALL or NOT_MEASURED_ANYWHERE
 
 
 def repo_key(repo_id: str) -> str:
@@ -212,9 +219,13 @@ def discrimination(states_by_repo: Mapping[str, Mapping[str, str]]) -> list[Disc
         return out
     for cid in sorted({c for states in states_by_repo.values() for c in states}):
         met = sum(states.get(cid) == "met" for states in states_by_repo.values())
-        if met in (0, repos):
-            out.append(Discrimination(condition=cid, met=met, repos=repos,
-                                      verdict=MET_IN_NONE if met == 0 else MET_IN_ALL))
+        if all(states.get(cid) == "not_measured" for states in states_by_repo.values()):
+            verdict = NOT_MEASURED_ANYWHERE
+        elif met in (0, repos):
+            verdict = MET_IN_NONE if met == 0 else MET_IN_ALL
+        else:
+            continue
+        out.append(Discrimination(condition=cid, met=met, repos=repos, verdict=verdict))
     return out
 
 
