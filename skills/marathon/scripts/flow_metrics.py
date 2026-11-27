@@ -34,7 +34,9 @@ Definitions (each metric is null, never 0, when its input is missing):
 - throughput: merged PRs per hour of the run window.
 - units lost to combining: a wave's DAG width (units with no unmet
   dependency) minus its units after hot-file combining; the run total sums the
-  waves and is null when any wave lacks either count.
+  waves and is null when any wave lacks either count. A count must be a JSON
+  integer (`true` is not 1), and a wave recording more units than its DAG width
+  reads null, never a negative loss; the markdown output names that wave.
 - combining hot files: files ranked by the combines they caused. Files a wave
   lists in `sequential_hot_files` (a version counter, a lockfile) cost merge
   order, not combining, so they are ranked apart and never count as combining
@@ -178,16 +180,20 @@ def mean_wip(prs: List[Json], start: datetime, end: datetime) -> Tuple[float, in
     return (round(area / span, 2) if span > 0 else 0.0), peak
 
 
+def as_count(value: Any) -> Optional[int]:
+    """A recorded count, or None for anything but an int; `bool` is an int subclass but not a count."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def mean_of(prs: List[Json], key: str) -> Optional[float]:
     values = [p[key] for p in prs if p.get(key) is not None]
     return round(sum(values) / len(values), 2) if values else None
 
 
-def wave_total(waves: List[Json], key: str) -> Optional[int]:
-    values = [w.get(key) for w in waves]
-    if not waves or any(not isinstance(v, int) for v in values):
+def wave_total(values: List[Optional[int]]) -> Optional[int]:
+    if not values or any(v is None for v in values):
         return None
-    return sum(v for v in values if isinstance(v, int))
+    return sum(v for v in values if v is not None)
 
 
 def ranked(counts: Dict[str, int]) -> List[Json]:
@@ -212,8 +218,8 @@ def combining(flow: Json) -> Optional[Json]:
     combined: Dict[str, int] = {}
     per_wave: List[Json] = []
     for i, w in enumerate(waves, 1):
-        width, units = w.get("dag_width"), w.get("units")
-        lost = width - units if isinstance(width, int) and isinstance(units, int) else None
+        width, units = as_count(w.get("dag_width")), as_count(w.get("units"))
+        lost = width - units if width is not None and units is not None and units <= width else None
         in_order = files(w.get("sequential_hot_files"))
         for f in in_order:
             sequential[f] = sequential.get(f, 0) + 1
@@ -241,15 +247,15 @@ def compute(tracking: Json, gh_dir: Path) -> Json:
     red_min = sum(minutes(parse_ts(e.get("start")), parse_ts(e.get("end")) or end) or 0.0 for e in red)
     loads = [e for e in events if e.get("type") == "load" and e.get("load1") is not None]
     load_peak = max(loads, key=lambda e: e["load1"]) if loads else None
-    tokens = (flow.get("tokens") or {}).get("total")
+    tokens = as_count((flow.get("tokens") or {}).get("total"))
     waits = [p for p in prs if p["wait_green_to_merged_min"] is not None]
     largest = max(waits, key=lambda p: p["wait_green_to_merged_min"]) if waits else None
 
     combine = combining(flow)
-    waves = flow.get("waves") if combine is not None else []
-    width_total = wave_total(waves, "dag_width")
-    units_total = wave_total(waves, "units")
-    lost_total = width_total - units_total if width_total is not None and units_total is not None else None
+    per_wave = combine["per_wave"] if combine is not None else []
+    width_total = wave_total([w["dag_width"] for w in per_wave])
+    units_total = wave_total([w["units_after_combining"] for w in per_wave])
+    lost_total = wave_total([w["units_lost"] for w in per_wave])
 
     def count(kind: str) -> int:
         return sum(1 for e in events if e.get("type") == kind)
@@ -323,6 +329,11 @@ def render_combining(result: Json, previous: Optional[Json]) -> List[str]:
     for w in combine["per_wave"]:
         lines.append(f"| {w['wave']} | {cell(w['dag_width'])} | {cell(w['units_after_combining'])} "
                      f"| {cell(w['units_lost'])} | {w['combines']} |")
+    for w in combine["per_wave"]:
+        width, units = w["dag_width"], w["units_after_combining"]
+        if width is not None and units is not None and units > width:
+            lines += ["", f"Wave {w['wave']} records more units after combining ({units}) than its "
+                          f"DAG width ({width}), so its units lost reads n/a."]
     lines += ["", ranking_line("Top combining hot files", combine["hot_files"],
                                before.get("hot_files") or [], "combines"),
               ranking_line("Sequential-merge hot files (merge order, not combining)",
