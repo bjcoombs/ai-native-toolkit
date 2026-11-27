@@ -237,7 +237,8 @@ def _section(text: str, heading: str) -> str:
     return text[start:start + len(heading) + 2 + nxt.start()] if nxt else text[start:]
 
 
-HAZARDS = {"agent-job-write-access.1", "ci-skip-label.1", "ci-test-failures-ignored.1"}  # the default model's hazards (#849, #828)
+HAZARDS = {"agent-job-write-access.1", "ci-skip-label.1", "ci-test-failures-ignored.1",
+           "agent-rewrites-instructions.1"}  # the default model's hazards (#849, #828, #858)
 
 
 def test_every_condition_carries_its_frame_fields() -> None:

@@ -34,7 +34,8 @@ body (read from inline code, wikilinks, and bare prose paths) to the module the 
 names, keyed `<doc>::<header>` so two docs declaring the same section don't collide, and
 keeping only references that resolve to real files. `find_empty_globs` flags the CODEOWNERS
 patterns that match zero tracked files - the cheapest drift, a boundary the filesystem has
-left behind - and `parse_ownership` runs both with the module-shape degradation contract
+left behind - `codeowned(text, rel)` says whether the last CODEOWNERS line matching a path
+names an owner (the agent instruction-rewrite hazard's guard, #858), and `parse_ownership` runs both with the module-shape degradation contract
 (`available: False`, reason `"no ownership map"` when neither map exists).
 `is_boundary_pattern(pattern, files)` says whether a CODEOWNERS line or an architecture-doc
 reference declares a module boundary: a literal path segment and at least one matched
@@ -154,7 +155,8 @@ def _glob_to_fnmatch(pattern: str) -> tuple[str, ...]:
       any depth. fnmatch has no anchor concept, so an unanchored pattern is
       tried both as-is (matching at root) *and* prefixed with ``*/`` (matching in
       any subdirectory) - so a bare ``Makefile`` claims both ``Makefile`` and
-      ``tools/Makefile``. An anchored or already-path-qualified pattern is tried
+      ``tools/Makefile``. A leading ``**/`` is tried with and without it, so
+      ``**/AGENTS.md`` claims the root ``AGENTS.md`` as GitHub does. An anchored or already-path-qualified pattern is tried
       root-relative only.
     - A trailing ``/`` (a directory) matches everything beneath it, so ``docs/``
       becomes ``docs/*``.
@@ -167,7 +169,11 @@ def _glob_to_fnmatch(pattern: str) -> tuple[str, ...]:
     pat = pat.lstrip("/")
     if pat.endswith("/"):
         pat = pat + "*"
+    deep = pat.startswith("**/")
     pat = pat.replace("**", "*")
+    # A leading ``**/`` matches at the root too, which ``*/`` alone never does (#858).
+    if deep:
+        return (pat, pat[2:])
     # An anchored or path-qualified pattern is root-relative; a bare, unanchored
     # pattern matches at any depth, so also try the subdirectory form.
     if anchored or "/" in pat.rstrip("*"):
@@ -274,6 +280,45 @@ def parse_codeowners(repo_root: Path) -> dict[str, set[Path]]:
             continue
         out.setdefault(pattern, set()).update(_match_glob(pattern, rel_paths))
     return out
+
+
+def codeowned(text: str, rel: str) -> bool:
+    """Whether the CODEOWNERS ``text`` names an owner for the repo-relative path ``rel``.
+
+    GitHub reads the last matching line, so a later line with no owner takes the path back
+    out of ownership. ``rel`` need not exist yet: it is matched as a string. Unlike the
+    fnmatch forms ``parse_codeowners`` uses, a single ``*`` or ``?`` here never crosses ``/``,
+    as GitHub reads it, since this match decides a gate (#858)."""
+    owners: list[str] | None = None
+    for raw in text.splitlines():
+        parts = raw.split("#", 1)[0].split()
+        if parts and _codeowners_regex(parts[0]).fullmatch(rel):
+            owners = parts[1:]
+    return bool(owners)
+
+
+def _codeowners_regex(pattern: str) -> re.Pattern[str]:
+    """A CODEOWNERS pattern as GitHub matches it: ``**`` crosses ``/``, ``*`` and ``?`` do not; a
+    pattern with no inner ``/`` matches at any depth; a literal last segment also claims
+    everything below it."""
+    anchored = pattern.startswith("/") or "/" in pattern.strip("/")
+    body = pattern.strip("/")
+    out = ""
+    i = 0
+    while i < len(body):
+        if body.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif body.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif body[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        elif body[i] == "?":
+            out, i = out + "[^/]", i + 1
+        else:
+            out, i = out + re.escape(body[i]), i + 1
+    # a literal last segment names a file or a folder; ``docs/*`` stops at one level (GitHub docs)
+    below = "" if "*" in body.rsplit("/", 1)[-1] else "(?:/.*)?"
+    return re.compile(("" if anchored else "(?:.*/)?") + out + below)
 
 
 def _tracked_rel_paths(
