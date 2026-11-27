@@ -233,7 +233,7 @@ gh api repos/<owner>/<repo>/branches/$BASE_BRANCH/protection \
 ```
 Store non-required check names in `meta.flaky_checks`.
 
-**Flow data.** Add a `flow` object to the tracking file now and keep it to the end: spawn and PR times per unit, and an event row for each semantic conflict, failed re-check, contract re-freeze, red main and load sample. The CRUD above deletes a `tasks` entry after cleanup; `flow` is never deleted, because Completion computes the flow metrics from it. Shape and recording rules: [Flow metrics](references/flow-metrics.md).
+**Flow data.** Add a `flow` object to the tracking file now and keep it to the end: spawn and PR times per unit, a row per wave with its DAG width, units after combining and the hot files behind each combine, and an event row for each semantic conflict, failed re-check, contract re-freeze, red main and load sample. The CRUD above deletes a `tasks` entry after cleanup; `flow` is never deleted, because Completion computes the flow metrics from it. Shape and recording rules: [Flow metrics](references/flow-metrics.md).
 
 ## Step 3: Spawn Teammates
 
@@ -632,7 +632,7 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 - Wall clock: ~<N> min spawn to final merge
 - Estimated waste: ~<N> min (CI waits, conflict resolution, stalled teammates)
 
-**Flow** (from `flow_metrics.py`: per-PR table, per-run metrics against the previous run, largest wait)
+**Flow** (from `flow_metrics.py`: per-PR table, per-run metrics against the previous run, a per-wave table of DAG width and units after combining, the run's top combining hot files, largest wait)
 <paste the script's markdown output; name the cause of the largest wait>
 ```
 
