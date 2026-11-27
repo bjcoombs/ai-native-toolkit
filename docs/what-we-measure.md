@@ -101,6 +101,7 @@ That an agent starts each task knowing how this repository works and how to chec
 | `layer-0-instructions.2` Every checkable instruction claim holds (shared with Docs) | `instruction_claims` | Instruction claims that do not hold: is 0 (`instruction_claims.failed eq 0`) | `declared` | no, listed | - | positive | - | - | An agent takes its instructions literally. A line saying a script runs in CI, or a version is pinned, that is no longer true sends it the wrong way with full confidence. | Update the instruction lines whose claims no longer match the repository. |
 | `layer-0-instructions.2` Always-loaded instructions fit in 200 lines (shared with Docs) | `nested_instructions` | Always-loaded Claude Code instruction lines: is at most 200 (`nested_instructions.budget.claude_code.lines lte 200`) | `declared` | no, listed | - | positive | - | - | Always-loaded text is read on every task and competes with the task for the agent's attention. Long files bury the rules that matter. | Move detail that is needed only sometimes into files the instructions point to. |
 | `skill-disclosure.1` Skills load only what the task needs | `skill_disclosure` | Skill and agent files that break a disclosure rule: is 0 (`skill_disclosure.files_breaking eq 0`) | `measured` | yes | - | positive | - | - | A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses. | For each file the report names, fix the rule it breaks. Give each SKILL.md and agent definition a name, and a description of at most 1024 characters. Move detail that only some tasks need into references/, linked from SKILL.md. Link each reference to a file that exists. |
+| `skill-library.1` A skill library is committed | `skill_library` | A skill library is committed: a valid SKILL.md in a known skill location: is true (`skill_library.present eq true`) | `measured` | yes | - | positive | - | - | A committed skill library gives every clone and every harness the team's procedures, loaded when a task needs them. Skills kept in one person's home folder reach nobody else, so each session restates them. | Commit a skills/<name>/SKILL.md (or .claude/skills/<name>/SKILL.md) for a procedure the team repeats, with frontmatter giving a name and a description of when to use it. To share one tree with other harnesses, link .agents/skills to it. |
 
 ### Agent runtime
 
@@ -191,6 +192,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `model-ci-gated` | Model-backed CI jobs are gated | team | `min` | `model-ci-gated.1` |
 | `secrets-guard` | Secrets guard | team | `min` | `secrets-guard.1`, `secrets-guard.2` |
 | `skill-disclosure` | Skill disclosure | team | `min` | `skill-disclosure.1` |
+| `skill-library` | Skill library | team | `min` | `skill-library.1` |
 | `skill-personal-data` | Personal data in skill text | team | `min` | `skill-personal-data.1` |
 | `skill-script-tests` | Skill script tests | team | `min` | `skill-script-tests.1` |
 
@@ -960,6 +962,20 @@ Each SKILL.md and agent definition against Anthropic's skill authoring guidance:
 - Evidence: `skill_disclosure.files_breaking` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+### `skill_library`: Committed skill library
+
+A committed skill library gives every clone and every harness the team's procedures, loaded when a task needs them. Skills kept in one person's home folder reach nobody else, so each session restates them.
+
+Each committed SKILL.md in a known skill location, with frontmatter that names it and says when to use it. A known location is a skills/ folder at the root, in a harness folder such as .claude or .agents, or in plugins/<name>/. Files under node_modules, vendored or fixture folders do not count. Nor do symlinks that leave the repository. A symlink that shares one skill tree, a skills-lock.json and a hashed manifest are evidence.
+
+- Collector: `core.skill_library`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_library.hashed_manifests` path, `skill_library.invalid_files` path, `skill_library.lock_files` path, `skill_library.reason` reason, `skill_library.shared_by_symlink.path` path, `skill_library.shared_by_symlink.target` path, `skill_library.skills.location` path, `skill_library.skills.path` path.
+- Used by: row `skill-library`.
+- Evidence: `skill_library.present` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
 ### `skill_personal_data`: Personal data in skill text
 
 Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user.
@@ -1211,7 +1227,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
 | `keyhole_blocks` | Keyhole blocks | `keyhole`, `run_scope` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
 | `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
 | `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
 | `measured_commit` | Measured commit | `repo_root` | private input | no |
@@ -1240,6 +1256,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `shared_tooling` | Shared tooling | `repo_root` | `shared_tooling` | no |
 | `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement`, `packs` | `since_last_run` | no |
 | `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
+| `skill_library` | Committed skill library | `repo_root`, `scope`, `excludes` | `skill_library` | no |
 | `skill_personal_data` | Personal data in skill text | `repo_root`, `scope`, `excludes` | `skill_personal_data` | no |
 | `skill_script_tests` | Skill script tests | `repo_root`, `scope`, `excludes` | `skill_script_tests` | no |
 | `skills` | Skills factoring | `instruction_grading` | `skills_present`, `skills_count`, `skill_files` | no |
@@ -1252,7 +1269,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `test_pressure_scan` | Test pressure scan | `repo_root`, `current`, `coverage_data` | private input | no |
 | `unfinalized` | Unfinalized exclusions | `assess_dir`, `superseded`, `first_flagged`, `current`, `diff`, `excludes` | private input | no |
 | `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |
 | `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |

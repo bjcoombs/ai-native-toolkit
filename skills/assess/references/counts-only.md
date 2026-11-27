@@ -920,6 +920,19 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `skill_disclosure.files.breaks` | token |
 | `skill_disclosure.files.references.target` | path (hashed when hashing is on) |
 
+## skill_library
+
+| Field | Kept as |
+|---|---|
+| `skill_library.reason` | reason code |
+| `skill_library.skills.path` | path (hashed when hashing is on) |
+| `skill_library.skills.location` | path (hashed when hashing is on) |
+| `skill_library.invalid_files` | path (hashed when hashing is on) |
+| `skill_library.shared_by_symlink.path` | path (hashed when hashing is on) |
+| `skill_library.shared_by_symlink.target` | path (hashed when hashing is on) |
+| `skill_library.lock_files` | path (hashed when hashing is on) |
+| `skill_library.hashed_manifests` | path (hashed when hashing is on) |
+
 ## skill_personal_data
 
 | Field | Kept as |

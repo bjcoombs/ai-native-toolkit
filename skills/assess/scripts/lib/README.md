@@ -259,10 +259,11 @@ New code imports the new path.
   entries, its published schema and the described scan blocks. `scan_plan`, `scan_pool` and
   `scan_timings` postdate the #917 module map and moved with `scan_registry`, which they
   serve; `unit_pass` (#1382) is one monorepo unit's pass as a function a worker process can
-  run. `run_setup` and `signals` locate the repository root from their own path
+  run. `scan_spec` (#848) is the spec machinery split out of `scan_registry`: `ScanSpec`, `validate`
+  and `spec_from_manifest`, re-exported there. `run_setup` and `signals` locate the repository root from their own path
   (`parents[5]`). `signals_schema` also runs as a script: run the moved file,
   `python scripts/lib/run/signals_schema.py`. The `run_context_types*` modules are shared
-  core and stay at the root. Files: `__init__.py`, `context_blocks.py`, `core_scans.py`, `decline_markers.py`, `degrade.py`, `headless_layers.py`, `headless_static.py`, `interactivity.py`, `run_publish.py`, `run_scope.py`, `run_setup.py`, `scan_binding.py`, `scan_block_schemas.py`, `scan_plan.py`, `scan_pool.py`, `scan_registry.py`, `scan_timings.py`, `signals.py`, `signals_schema.py`, `unit_pass.py`.
+  core and stay at the root. Files: `__init__.py`, `context_blocks.py`, `core_scans.py`, `decline_markers.py`, `degrade.py`, `headless_layers.py`, `headless_static.py`, `interactivity.py`, `run_publish.py`, `run_scope.py`, `run_setup.py`, `scan_binding.py`, `scan_block_schemas.py`, `scan_plan.py`, `scan_pool.py`, `scan_registry.py`, `scan_spec.py`, `scan_timings.py`, `signals.py`, `signals_schema.py`, `unit_pass.py`.
 - **`scoring/`**: maturity models and how a run is scored against them, the `scoring` group
   (#1395): the model loader with its condition fields, unknown-path hints and starter copy,
   the input class and grade of each signal a condition reads, the verified tally with its

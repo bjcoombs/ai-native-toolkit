@@ -103,6 +103,7 @@ fragments = [
   "skill_disclosure",
   "skill_script_tests",
   "skill_personal_data",
+  "skill_library",
   "ci_model_jobs",
   "org_security_policy",
   "github_secret_scanning",
