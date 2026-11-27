@@ -40,6 +40,26 @@ git add -A && git commit
 
 `tests/test_make_regen.py` (in `plugin contract pytest`) copies the tree, overwrites every `linguist-generated` file with a conflict, runs `make regen` and fails on any remaining diff. A new generated file therefore needs two edits: a `linguist-generated` line in `.gitattributes` and its generator in the `regen` recipe. A few goldens are frozen oracles that no current code may rewrite, so they are left out of both. Under `skills/assess/tests/fixtures/` (relative to the repository root): `structure_golden/` (written by the pre-#708 builder), the captured `/assess` run in `golden/run-context-baseline.json` and `golden/assess-report-baseline.md`, and `fleet_legacy/` (the pre-2.0.0 format). At the root: `tests/canaries/`.
 
+## The complexity gate
+
+The gate is ruff's C901 (mccabe) with `max-complexity = 15` under `[tool.ruff.lint.mccabe]` in `skills/assess/pyproject.toml` and `scripts/pyproject.toml`, run by the `ruff + mypy gates` job. The CCN that `/assess` prints in its complexity profile, hotspot table and treemap comes from lizard, which counts more, so a function can read ccn 28 or more in the report while C901 passes it. Neither figure is wrong; they count different things, and only the ruff figure gates. Measured on `main` at `daec64c6` with the locked lizard 1.23.0 and ruff 0.17.0 ([#1225](https://github.com/bjcoombs/ai-native-toolkit/issues/1225)):
+
+| Function (relative to `skills/assess/scripts/`) | lizard CCN | ruff C901 |
+|------|-----|-----|
+| `scan_ci_checks` in `lib/ci/ci_checks.py` | 73 | 11 |
+| `_check_verdict` in `lib/ci/check_command.py` | 28 | 15 |
+| `_owners` in `lib/manifest/check_manifest.py` | 28 | 12 |
+| `mask_lines` in `lib/ci/ci_masking.py` | 28 | 14 |
+
+Ruff walks statements only ([`get_complexity_number`](https://github.com/astral-sh/ruff/blob/0.17.0/crates/ruff_linter/src/rules/mccabe/rules/function_is_too_complex.rs#L79-L165)): `if`, `elif`, `for`, `while`, each `except` and a `try`'s `else` add 1, and it never looks inside an expression. Lizard reads tokens ([`lizard_languages/python.py`](https://github.com/terryyin/lizard/blob/1.23.0/lizard_languages/python.py#L34-L35) for the keyword and operator sets, [L89-L90](https://github.com/terryyin/lizard/blob/1.23.0/lizard_languages/python.py#L89-L90) for the `case` soft keyword): every `if`, `elif`, `for`, `while`, `except`, `finally`, `and`, `or` and `case` adds 1 wherever it appears. Four constructs account for the whole gap:
+
+- **Boolean operators.** `a and b or c` is 2 to lizard and 0 to ruff.
+- **Comprehensions and conditional expressions.** Each `for` and `if` inside `[x for x in xs if x]`, and the `if` in `1 if a else 2`, count for lizard; ruff skips them as expressions.
+- **`match` and `try`.** Both tools add 1 per `case`, but ruff takes 1 off when the last case is an irrefutable wildcard such as `case _:`, as it would for an `else`. Lizard counts `finally` and ruff does not.
+- **Nested functions.** Lizard reports a nested `def` as its own function (`_owners.place`) and leaves it out of the outer figure. Ruff adds 1 for the `def` and folds the nested body into the outer function.
+
+Each row above reconciles exactly. `scan_ci_checks` holds 24 extra boolean operands, 21 comprehension clauses and 17 conditional expressions: 11 + 62 = 73. `_check_verdict` is 15 + 13 boolean operands, and `mask_lines` is 14 + 1 boolean operand + 11 comprehension clauses + 2 conditional expressions. `_owners` is 12 under ruff, of which 1 is the nested `place`, and 11 + 17 expression-level counts under lizard. A high lizard reading with a passing gate is a function dense with conditions in expressions: worth a look when it is also a hotspot, but it does not need a refactor to pass CI. To see ruff's figure for every function, run `uv run --locked ruff check --select C901 --ignore-noqa --config 'lint.mccabe.max-complexity=0' <path>` from `skills/assess` or `scripts/`, whichever package holds the file. The limit of 0 lists functions at complexity 1 too, and `--ignore-noqa` lists the functions waived with `# noqa: C901`; a waived function's figure does not fail the gate.
+
 ## The type gate
 
 mypy runs `strict` over all of `skills/assess/scripts/` (lib, orchestrators, renderers) with `disallow_any_generics` on for every module and no per-module exception, so a bare `dict` or `list` fails. Known shapes are `TypedDict`s: shared run-context rows and the orchestrators' file shapes, the stats sidecar and `finalize-input.json`, live in `lib/run_context_types.py`; `dict[str, Any]` is for blocks whose keys genuinely vary.
