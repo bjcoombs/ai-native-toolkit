@@ -232,6 +232,9 @@ _MIN_ENTROPY = 3.5  # bits per character; a random 20-character alphanumeric val
 # A hex value has 16 symbols, so its entropy tops out at 4 and a random 20-character one falls below
 # 3.5 about 78% of the time; at 2.8 about 0.4% does. A repeated hex word (``deadbeef...``) stays under it.
 _MIN_ENTROPY_HEX = 2.8
+# A provider key body: a random one is near 4.7 bits per character; a hand-typed periodic one
+# (``abc123`` repeated) is near 2.6.
+_MIN_ENTROPY_PROVIDER = 3.0
 _HEX = re.compile(r"[0-9a-f]+|[0-9A-F]+")
 
 
@@ -288,11 +291,14 @@ def _literal_secret(value: str) -> bool:
 
 def _placeholder_body(body: str) -> bool:
     """A provider key body that is a placeholder: a placeholder word other than ``xxx``, a run of eight
-    of one character, or an ascending run of six (``123456``, ``abcdef``). The prefix at the provider's
+    of one character, an ascending run of six (``123456``, ``abcdef``, or in every other character, as
+    in ``1a2b3c``), or entropy under ``_MIN_ENTROPY_PROVIDER``. The prefix at the provider's
     length carries the precision, so the stricter ``_dummy`` runs would drop real keys (Slack's numeric
     segments, the ``xxx`` that a 156-character body holds by chance about once in 200)."""
-    return (bool(_DUMMY_WORD.search(body.lower().replace("xxx", ""))) or bool(_LONG_REPEAT.search(body))
-            or _ascending(body.lower(), 6))
+    low = body.lower()
+    return (bool(_DUMMY_WORD.search(low.replace("xxx", ""))) or bool(_LONG_REPEAT.search(body))
+            or any(_ascending(part, 6) for part in (low, low[0::2], low[1::2]))  # ``1a2b3c...`` too
+            or _entropy(body) < _MIN_ENTROPY_PROVIDER)
 
 
 def _provider_key(text: str) -> bool:

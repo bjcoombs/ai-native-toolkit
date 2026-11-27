@@ -132,6 +132,9 @@ PLACEHOLDERS: list[str] = [
     # Providers' published example tokens, exact matches only (see the test below for a near miss).
     "export GITHUB_TOKEN=" + GITHUB_DOCS_SAMPLE,
     "SLACK_BOT_TOKEN=" + SLACK_DOCS_SAMPLE,
+    # Hand-typed bodies at the provider's length: interleaved ascending, and periodic.
+    "gh" + "p_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r",
+    "sk-" + "abc123" * 8,
     "secret_key: " + STRIPE_DOCS_SAMPLE,
     'url = "https://x-access-token:' + 'gh' + 's_abc123@github.com/a/b",',  # a short value before the host
     "api_key: Optional[str] = None",
