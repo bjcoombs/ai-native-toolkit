@@ -22,7 +22,10 @@ evidence behind them, each kind a token:
   each file are read, where imports and module-level loggers sit, so a large
   repository with no match costs a bounded read per file rather than its whole
   tree; a call made only deeper in a file is not seen. Once a rule has matched,
-  files only it could match are not read again.
+  files only it could match are not read again. A suffix with several rules (a
+  ``.py`` file has the logger and the telemetry-import rule, a ``.yml`` file both
+  launcher rules) is read until every one of its rules has matched, so a repository
+  with a logger but no telemetry import still reads each ``.py`` head once.
   The same reader credits an import of a telemetry library (``CODE_RULES``
   labelled ``telemetry library import (<language>)``): ``opentelemetry``,
   ``prometheus_client``, ``structlog`` or ``sentry_sdk`` in Python,

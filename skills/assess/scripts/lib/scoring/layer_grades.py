@@ -28,8 +28,9 @@ Fields:
     nested file (``root`` when always loaded, else ``nested_only``).
   - ``none``: no instruction file at any known location.
 
-  Null only when there is no root file and the ``nested_instructions`` block
-  is unavailable, so whether a nested file exists was not measured.
+  Null only when there is no root file with a body (none, or only stubs) and
+  the ``nested_instructions`` block is unavailable, so whether a nested file
+  exists was not measured. ``instructions_grade`` keeps a stub's grade then.
 - ``instructions_grade``: the best letter grade of the files ``instruction_presence``
   counts: the root grading (``instruction_files.grade_instruction_files``, the
   value of the run-context key of the same name) when a root location holds a
@@ -159,8 +160,10 @@ def scan_layer_grades(instruction_grading: tuple[Any, ...], nested_instructions:
     if root_grade is not None and files and all(f.get("heading_only") is True for f in files):
         stub_grade, root_grade = root_grade, None  # every root file is a stub (#922)
     presence, best = instruction_presence(root_grade, nested_instructions)
-    if presence == NONE and stub_grade is not None:
+    if stub_grade is not None and presence == NONE:
         presence, best = STUB, stub_grade
+    elif stub_grade is not None and presence is None:
+        best = stub_grade  # a file is committed: the grade stays non-null (CLAUDE.md invariant)
     present = None if presence is None else presence not in (NONE, STUB)
     return {"instructions_grade": best, "instruction_file_present": present,
             "instruction_presence": presence}

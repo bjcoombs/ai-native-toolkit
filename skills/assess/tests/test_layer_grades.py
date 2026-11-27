@@ -53,7 +53,7 @@ def test_a_stub_root_file_reads_by_a_nested_file_beside_it() -> None:
         "instructions_grade": "B", "instruction_file_present": True,
         "instruction_presence": "nested_only"}
     assert scan_layer_grades(({"CLAUDE.md": STUB}, "F"), {"available": False}) == {
-        "instructions_grade": None, "instruction_file_present": None,
+        "instructions_grade": "F", "instruction_file_present": None,
         "instruction_presence": None}
 
 

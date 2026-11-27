@@ -623,7 +623,8 @@ LAYER_GRADES: JsonDict = {
             "path-scoped file (pkg/AGENTS.md, a .claude/rules file with paths), loaded on demand "
             "where the agent works. stub: every root file holds only headings and blank lines, and "
             "no nested file exists (#922). none: no instruction file at any known location. Null when "
-            "there is no root file and the nested_instructions scan did not run."),
+            "there is no root file with a body (none, or only stubs) and the nested_instructions scan "
+            "did not run."),
         "instruction_file_present": _field(
             {"type": ["boolean", "null"]},
             "True for root and nested_only, false for stub and none, null with instruction_presence. "
@@ -631,7 +632,7 @@ LAYER_GRADES: JsonDict = {
         "instructions_grade": _field(
             {"type": ["string", "null"]},
             "Best letter grade (A to F) of the files instruction_presence counts: the root files, "
-            "else the always-loaded or nested ones. Null only for none."),
+            "else the always-loaded or nested ones, or a stub's. Null only for none."),
     },
 }
 
