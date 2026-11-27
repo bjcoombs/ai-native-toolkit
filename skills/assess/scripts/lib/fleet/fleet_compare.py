@@ -4,10 +4,11 @@ A run is a directory holding ``repos.jsonl``, ``groups.jsonl`` and the run
 stamp ``run.json`` (an ``--out`` directory or a history entry). ``load_run``
 reads one; ``compare`` is a pure function of two loaded runs.
 
-Comparability follows ``diff_reliability._diff_is_reliable``: the plugin's
-major version and the stamp version must match. A comparison is also refused
+Comparability rests on the stamped versions, never the plugin's major version
+(#867; the ``/assess`` snapshot trend keeps its own rule in
+``diff_reliability._diff_is_reliable``). A comparison is refused
 (``comparable: false`` with every reason, and no deltas) when the runs differ
-in maturity-model version, window, output mode, scan selection, path hashing or
+in run stamp version, maturity-model version, window, output mode, scan selection, path hashing or
 ``--fleet-config`` (its ``fleet_config_sha256``; a stamp from before #706 reads as
 no fleet config) or ``--platform`` (``platform``; a stamp from before #714 reads
 as ``false``) or in the rules of the maturity model (``rules_sha256``, #952, when both
@@ -44,7 +45,10 @@ side for a signal that run's scans lack is ``set`` with ``absent_signals``.
 Per repository scanned on both sides, ``signals`` lists every leaf of the
 ``scans`` map whose value changed (dotted path, value then and now; a side
 where the leaf is absent omits its key). A pure rename is read under its new path on both
-sides first (``lib.signal_aliases.renamed``, #970), so it is no leaf change. Lists compare whole. Output has
+sides first (``lib.signal_aliases.renamed``, #970), so it is no leaf change. When the two rows'
+``signals_schema_version`` differ, the lower side reads each signal whose meaning changed
+since as absent (``aligned``, ``lib/signal_meaning.py``, #867); a moved team row reading one
+is ``set`` with ``absent_signals``. Lists compare whole. Output has
 sorted keys and no absolute path, so comparing the same two runs again gives
 the same bytes. With hashed paths on both sides, hashes compare only under one
 ``--hash-salt``; ``notes`` says so.
@@ -52,9 +56,8 @@ the same bytes. With hashed paths on both sides, hashes compare only under one
 Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 `skills/fleet/scripts/fleet_compare.py`. `load_run` reads a run directory (raising
 `RunVersionError` for another envelope version or a run with no `run.json`, which callers
-turn into a not-comparable result). `comparability` reuses
-`diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
-adds maturity-model version, window, output mode, scan selection, path hashing and the
+turn into a not-comparable result). `comparability` checks the stamped versions, never the
+plugin major (#867): run stamp version, maturity-model version, window, output mode, scan selection, path hashing and the
 `--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
 `platform` (a pre-#714 stamp is false), and the rules hash (`rules_sha256`, #952,
 `lib/fleet/fleet_method.py`: a reason only when both stamps recorded one, and the practice
@@ -65,7 +68,8 @@ gives `comparable: false` with no deltas. `compare` reports the measured-set mov
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
 a `cause` of `level` (set unchanged), `set` (the group or row on one side, or only a
 team row's set moved) or `set_and_level` (a team row's set and evidence moved), plus the #774 causes below. An org
-row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map.
+row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map, read through `aligned` (#867:
+the lower `signals_schema_version` side reads each signal `lib/signal_meaning.py` lists as changed since as absent).
 `write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
 only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
 `heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
@@ -87,7 +91,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
-from lib.complexity.diff_reliability import _diff_is_reliable
 from lib.fleet.runner import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
 from lib.fleet.fleet_data import FLEET_DATA_FILE
 from lib.fleet.fleet_level import LEVEL_FILE
@@ -96,6 +99,7 @@ from lib.fleet.fleet_legacy import stamp_value, upgrade
 from lib.fleet.fleet_method import METHOD_PREFIXES, method_notes, rule_reasons
 from lib.scoring.levels import floor_of
 from lib.signal_aliases import renamed
+from lib.signal_meaning import held, reads, stale_paths, without
 from lib.fleet.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet.fleet_scanner_diff import (
@@ -295,12 +299,9 @@ def _row_signals(path: Path) -> dict[str, frozenset[str]] | None:
 def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], list[str]]:
     """``(reasons, notes)``: every reason the runs are not comparable, and caveats."""
     reasons: list[str] = []
-    reliable, note = _diff_is_reliable(
-        earlier.get("plugin_version"), later.get("plugin_version"),
-        earlier.get("fleet_stamp_version"), later.get("fleet_stamp_version"))
-    if not reliable and note:
-        reasons.append(note)
-    for key, label in (("levels_version", "maturity-model version"), ("window", "window"),
+    # #867: the stamped versions decide, never the plugin's major version (a proxy for them)
+    for key, label in (("fleet_stamp_version", "run stamp version"),
+                       ("levels_version", "maturity-model version"), ("window", "window"),
                        ("counts_only", "counts-only mode"), ("scans", "scan selection"),
                        ("paths_hashed", "path hashing"), ("fleet_config_sha256", "fleet config"),
                        ("platform", "platform pass"), ("managed_settings", "managed settings read")):
@@ -340,7 +341,7 @@ _ABSENT = object()
 
 
 def _leaves(value: Any, prefix: str) -> Iterator[tuple[str, Any]]:
-    if isinstance(value, dict) and value:
+    if isinstance(value, dict) and (value or not prefix):  # an empty scans map has no leaves
         for key in sorted(value):
             yield from _leaves(value[key], f"{prefix}.{key}" if prefix else str(key))
     else:
@@ -460,9 +461,11 @@ def compare(earlier: FleetRun, later: FleetRun, scanner: ScannerDiff | None = No
     then_repos = {row["repo"]: row for row in earlier.repos}
     now_repos = {row["repo"]: row for row in later.repos}
     repos: list[RepoSignals] = []
+    stale: dict[str, list[str]] = {}
     for repo in sorted(set(then_repos) & set(now_repos)):
         if then_repos[repo]["status"] == STATUS_OK and now_repos[repo]["status"] == STATUS_OK:
-            changes = signal_changes(renamed(then_repos[repo]["scans"]), renamed(now_repos[repo]["scans"]))
+            then_scans, now_scans, stale[repo] = aligned(then_repos[repo], now_repos[repo])
+            changes = signal_changes(then_scans, now_scans)
             if changes:
                 repos.append({"repo": repo, "signals": changes})
     changed = {entry["repo"] for entry in repos}
@@ -474,7 +477,7 @@ def compare(earlier: FleetRun, later: FleetRun, scanner: ScannerDiff | None = No
                      now_groups.get(name), changed)
         for name in sorted(set(then_by) | set(now_by) | set(then_groups) | set(now_groups))
     ]
-    _attribute(groups, earlier, later, then_by, now_by, repos, scanner, producer_map)
+    _attribute(groups, earlier, later, then_by, now_by, repos, scanner, producer_map, stale)
     if scanner is not None and scanner["status"] == "unavailable":
         notes = [*notes, unavailable_note(scanner)]
     overall = set_changes(then_repos, now_repos)
@@ -484,11 +487,35 @@ def compare(earlier: FleetRun, later: FleetRun, scanner: ScannerDiff | None = No
             "movement": movement, "repositories": overall, "groups": groups, "repos": repos}
 
 
+def aligned(then: FleetRow, now: FleetRow) -> tuple[Any, Any, list[str]]:
+    """Two ok rows' scans read under one schema (#867): ``(then, now, stale)``.
+
+    Renames are read under the new path (``renamed``). The side at the lower
+    ``signals_schema_version`` reads each signal whose meaning changed since as absent
+    (``lib/signal_meaning.py``); at a version this toolkit does not know, the earlier side
+    reads every signal as absent. ``stale`` lists the paths dropped that the side held."""
+    then_scans, now_scans = renamed(then["scans"]), renamed(now["scans"])
+    old, new = then.get("signals_schema_version"), now.get("signals_schema_version")
+    paths = stale_paths(old, new)
+    later_older = paths is not None and type(old) is int and type(new) is int and new < old
+    older = now_scans if later_older else then_scans
+    if paths is None:
+        dropped = sorted(older) if isinstance(older, dict) else []
+        stripped: Any = {}
+    else:
+        dropped = sorted(p for p in paths if held(older, p))
+        stripped = without(older, paths)
+    return (then_scans, stripped, dropped) if later_older else (stripped, now_scans, dropped)
+
+
 def _attribute(groups: list[GroupChange], earlier: FleetRun, later: FleetRun,
                then_by: dict[str, dict[str, FleetRow]], now_by: dict[str, dict[str, FleetRow]],
                repos: list[RepoSignals], scanner: ScannerDiff | None,
-               producer_map: Mapping[str, frozenset[str]] | None) -> None:
-    """Re-attribute moved team rows to an absent signal or a scanner change (``lib/fleet/fleet_scanner_diff.py``)."""
+               producer_map: Mapping[str, frozenset[str]] | None,
+               stale: Mapping[str, list[str]]) -> None:
+    """Re-attribute moved team rows to an absent signal or a scanner change (``lib/fleet/fleet_scanner_diff.py``).
+
+    A signal whose meaning changed (``stale``, #867) that a row reads counts as absent."""
     blocks: dict[str, list[str]] = {}
     if scanner is not None and scanner["status"] == "changed":
         blocks = changed_blocks(scanner, producers() if producer_map is None else producer_map)
@@ -511,6 +538,7 @@ def _attribute(groups: list[GroupChange], earlier: FleetRun, later: FleetRun,
                 if state is not None and state["status"] == "unknown" and stored is not None:
                     missing = [s for lv in stored["levels"] if lv["id"] == row["id"] for s in lv["missing_signals"]]
                     absent += absent_signals(missing, mine, other)
+            absent += _stale_reads(row["id"], earlier, later, [stale.get(r, []) for r in both])
             reads = _row_blocks(row["id"], earlier, later)
             result = attribute(row["cause"], absent=absent, diff=scanner, blocks_changed=blocks,
                                row_blocks=reads, moved_blocks=moved_blocks)
@@ -521,6 +549,13 @@ def _attribute(groups: list[GroupChange], earlier: FleetRun, later: FleetRun,
                 row["absent_signals"] = result["absent_signals"]
             if result.get("set_moved"):
                 row["set_moved"] = True
+
+
+def _stale_reads(row_id: str, earlier: FleetRun, later: FleetRun, stale: list[list[str]]) -> list[str]:
+    """The stale paths a row reads, from either run's cell signals; every one when neither has them."""
+    found = [run.row_signals.get(row_id, frozenset()) for run in (earlier, later) if run.row_signals is not None]
+    signals = frozenset().union(*found) if found and any(found) else None
+    return sorted({p for paths in stale for p in paths if signals is None or reads(p, signals)})
 
 
 def _row_blocks(row_id: str, earlier: FleetRun, later: FleetRun) -> frozenset[str] | None:
@@ -535,7 +570,7 @@ def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
     """For a level-only view of two runs (``heatmap.py --compare``): ``(reasons, set_moved)``.
 
     ``reasons`` says why the runs are not comparable (this module's rule: maturity model
-    version, window, output mode, scans, path hashing, fleet config, platform pass, plugin major version,
+    version, window, output mode, scans, path hashing, fleet config, platform pass, run stamp version,
     file versions, a run with no ``run.json``); ``set_moved`` names the groups
     whose measured set moved, so a level change there is not read as a real
     one. Both are empty when either path is not a run directory (a bare

@@ -6,7 +6,7 @@ directory (``lib/fleet/fleet_history.py``) and keeps each entry that:
 - has a readable ``run.json`` (or, only when it has none, the copy of the stamp in its
   ``fleet-data.json``) at this toolkit's stamp version (an entry from before
   the 2.0.0 rename is upgraded, ``lib/fleet/fleet_legacy.py``) that ``fleet_compare.comparability``
-  accepts against this run: same plugin major version, maturity-model version, window,
+  accepts against this run: same stamp version, maturity-model version, window,
   output mode, scan selection, path hashing, ``--fleet-config`` and ``--platform``;
 - has a ``fleet-data.json`` at a version in ``READABLE_FLEET_DATA_VERSIONS`` (entries
   from before #703 have none and are passed over; version 1 differs from 2 only in

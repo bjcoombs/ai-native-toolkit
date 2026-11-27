@@ -6,8 +6,9 @@ and not from the repository. This module gives such a move its own ``cause``, so
 it is never presented as a repository slip (or gain).
 
 **Convention first.** A scanner change that alters what a signal means ships
-under a new signal name or a ``signals_schema_version`` bump; an earlier run then
-reads the new signal as absent (unknown), not as a false repository move. The
+under a new signal name or a ``signals_schema_version`` bump with its paths in
+``lib/signal_meaning.MEANING_CHANGES``; ``fleet_compare.aligned`` then reads the
+signal as absent in the earlier run (#867), not as a false repository move. The
 backstop below catches a change that kept the name.
 
 **Scanner diff** (``scanner_diff``), from the two run stamps:
@@ -60,8 +61,9 @@ not scans, and keep their cause.
 Delta attribution for scanner changes (issue #774), read by `fleet_compare.compare`.
 
 Signal meaning convention: a scanner change that alters a signal's meaning ships under a new
-signal name or a `signals_schema_version` bump (`lib/run/signals.py` `SIGNALS_SCHEMA_VERSION`). An
-earlier run then reads the new signal as absent (unknown), never as a false repository move.
+signal name or a `signals_schema_version` bump (`lib/run/signals.py` `SIGNALS_SCHEMA_VERSION`) that
+lists its paths in `lib/signal_meaning.MEANING_CHANGES`. `fleet_compare.aligned` then reads the
+signal as absent in the earlier run (#867), never as a false repository move.
 A pure rename is aliased instead (`signal_aliases.SIGNAL_ALIASES`).
 
 The backstop catches a change that kept the name. `scanner_diff` compares the stamps'

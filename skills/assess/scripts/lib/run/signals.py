@@ -113,6 +113,8 @@ from lib.run.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 # or when a scanner change alters when an existing signal reads true or null
 # without a new signal name (the fleet comparison convention,
 # lib/fleet/fleet_scanner_diff.py). Per-scan block shapes are not versioned here.
+# A bump lists the signals whose meaning changed in lib/signal_meaning.py, which the
+# fleet comparison reads as absent in the earlier run (#867).
 # History: skills/assess/changes/history/signals_schema.md, newest entry first.
 SIGNALS_SCHEMA_VERSION = 4
 

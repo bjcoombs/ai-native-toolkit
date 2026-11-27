@@ -19,6 +19,8 @@ During a version freeze, a PR that would bump a version counter adds one file he
 
 A note bumps its counter when folded, except `fleet_row`: the fleet history readers accept only the current row version, so the fold refuses to pick its value. The release PR passes `--set fleet_row=3` to bump it (and moves the readers), or `--set fleet_row=2` to record the notes without a bump, as `head_sha` and `dirty` were added.
 
+A `signals_schema` bump also needs an entry for the new version in `MEANING_CHANGES` (`skills/assess/scripts/lib/signal_meaning.py`): the signal paths whose meaning the folded notes changed, or none. `/fleet --compare` reads each as absent in the run at the lower version (#867), and `skills/assess/tests/test_signal_meaning.py` fails on a bump without the entry.
+
 Each counter's history is `history/<counter>.md`, newest entry first. Above each constant one comment line points to that file; the history no longer sits in comments in the source file, so a source file does not grow at each release (#1262).
 
 The release PR runs `scripts/fold_changes.py`, which writes each counter's notes as one entry at the top of its history file, below the marker line, sets each counter and deletes the notes. `scripts/tests/test_fold_changes.py` fails on a note that names an unknown counter or is not a bullet, on an `Unreleased` block in a source or history file, on a counter without its pointer line, and on a history entry left as a comment above a counter. Steps: [Releasing](../../../docs/contributing/release.md#version-freeze-notes).
