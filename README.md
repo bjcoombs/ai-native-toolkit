@@ -513,6 +513,10 @@ cd ../worktree/fix-login-bug
 ```text
 ai-native-toolkit/
 ├── README.md
+├── CONTRIBUTING.md                    # Set up a clone, run the checks, open a pull request
+├── SECURITY.md                        # Report a vulnerability privately; supported versions and scope
+├── CODE_OF_CONDUCT.md                 # Contributor Covenant 2.1, by reference
+├── CHANGELOG.md                       # One section per GitHub release, linking its notes
 ├── CLAUDE.md                          # Contract for agents editing this repo
 ├── FLOOR.md                           # Constitutional floor of the acceptance-contract workflow
 ├── .file-size-ratchet.toml            # Line limits for Python files: 800 by default, recorded ceilings for larger files
@@ -556,6 +560,14 @@ ai-native-toolkit/
 ```
 
 The [Map of Content](docs/index.md) links each subtree's entry doc: [`skills/README.md`](skills/README.md) for skills, and its own [Agents](docs/index.md#agents) section for `agents/`, which holds no README because Claude Code would load one as an agent.
+
+## Contributing
+
+Set up a clone with `make setup` and run every merge-gating check with `make check`. [CONTRIBUTING.md](CONTRIBUTING.md) covers the pull request rules and links the detailed guides in `docs/contributing/`. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). What changed in each release: [CHANGELOG.md](CHANGELOG.md).
+
+## Security
+
+Report a vulnerability privately through GitHub's private vulnerability reporting, never in a public issue. [SECURITY.md](SECURITY.md) gives the route, the supported versions and the scope.
 
 ## Contributors
 
