@@ -422,8 +422,8 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
 
     A proposal declined earlier (``.assess/backlog-declines.json``, #813) is held back while
     its evidence holds and listed under ``declined``; a record whose evidence changed is
-    dropped from the file, as is a record for an item no longer in ``--existing``.
-    ``--record-declines`` records every shown proposal not confirmed.
+    dropped from the file. A record for an item missing from ``--existing`` stays: a
+    truncated or author-filtered listing does not prove the item is gone. ``--record-declines`` records every shown proposal not confirmed.
     """
     existing, context = _read_json(args.existing), _read_json(assess_dir / "run-context.json")
     if not isinstance(existing, list):
@@ -437,8 +437,7 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
     conditions, model = facts["conditions"], facts["model"]
     result = reconcile(items, facts, label=args.label, filed=args.filed)
     records = read_proposal_declines(assess_dir)
-    numbers = {n for x in items if isinstance(n := x.get("number"), int)}
-    live = [r for r in live_proposal_declines(records, conditions, model) if r["number"] in numbers]
+    live = live_proposal_declines(records, conditions, model)
     if len(live) != len(records):
         write_proposal_declines(assess_dir, live)
     proposals, held = split_declined(result["proposals"], live, conditions, model)

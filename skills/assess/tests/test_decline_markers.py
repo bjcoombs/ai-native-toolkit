@@ -330,11 +330,11 @@ def test_proposal_declines_degrade_and_keep_what_the_run_cannot_read(tmp_path: P
     assert kept == [] and held == [record]
 
 
-def test_a_record_for_an_item_no_longer_listed_is_dropped(
+def test_a_record_for_an_item_missing_from_the_listing_stays(
         tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     existing = _tracker(tmp_path)
     _run_context(tmp_path, "met")
     _decline_all(tmp_path, existing, capsys)
-    existing.write_text("[]", encoding="utf-8")
+    existing.write_text("[]", encoding="utf-8")  # a truncated or author-filtered listing
     assert _proposed(tmp_path, existing, capsys)["proposals"] == []
-    assert read_proposal_declines(tmp_path / ".assess") == []
+    assert len(read_proposal_declines(tmp_path / ".assess")) == 1
