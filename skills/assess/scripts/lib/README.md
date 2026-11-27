@@ -192,7 +192,7 @@ New code imports the new path.
   composite actions, compound and shell statements, masking and its exemptions, scripts a
   step calls, unsure lines, and the check, lint and type-check command classifier with its
   lint vocabulary. `ci_workflow` emits the gate workflow and moved with the `report` group.
-  Files: `__init__.py`, `agent_evals.py`, `check_command.py`, `ci_action_inputs.py`, `ci_build_follower.py`, `ci_check_state.py`, `ci_checks.py`, `ci_composite.py`, `ci_compound.py`, `ci_continuations.py`, `ci_exempt.py`, `ci_expressions.py`, `ci_include_items.py`, `ci_includes.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_masking.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_scripts.py`, `ci_shell_text.py`, `ci_statements.py`, `ci_step_follower.py`, `ci_step_paths.py`, `ci_triggers.py`, `ci_unsure.py`, `lint_vocabulary.py`, `merged_ci.py`, `review_automation.py`, `shared_tooling.py`.
+  Files: `__init__.py`, `agent_evals.py`, `check_command.py`, `ci_action_inputs.py`, `ci_build_follower.py`, `ci_check_state.py`, `ci_checks.py`, `ci_composite.py`, `ci_compound.py`, `ci_continuations.py`, `ci_exempt.py`, `ci_expressions.py`, `ci_include_items.py`, `ci_includes.py`, `ci_kept_types.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_masking.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_scripts.py`, `ci_shell_text.py`, `ci_statements.py`, `ci_step_follower.py`, `ci_step_paths.py`, `ci_triggers.py`, `ci_unsure.py`, `docs_kept_true.py`, `lint_vocabulary.py`, `merged_ci.py`, `review_automation.py`, `shared_tooling.py`.
 - **`complexity/`**: the complexity treemap renderer, `scc` coverage, the Dart scanner and
   the stats sidecar (its rows, cross-run diff and diff reliability), plus the generated- and
   raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`, `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`, `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
@@ -295,6 +295,7 @@ on one that is not linked.
 | `lib.ci.check_command` | [check_command.md](docs/check_command.md) | Whether a command line runs tests, lint or a type check |
 | `lib.ci.ci_includes` | [ci_includes.md](docs/ci_includes.md) | GitLab CI `include:` items, `extends:` parents and the merged configuration view |
 | `lib.ci.ci_model_jobs` | [ci_model_jobs.md](docs/ci_model_jobs.md) | CI jobs that call a model, and the block they produce |
+| `lib.ci.docs_kept_true` | [docs_kept_true.md](docs/docs_kept_true.md) | CI checks that keep docs and generated files true, and their limits |
 | `lib.docs.doc_graph` | [doc_graph.md](docs/doc_graph.md) | The doc link graph: orphans, reachability, entry points and link parents |
 | `lib.docs.doc_staleness` | [doc_staleness.md](docs/doc_staleness.md) | Doc ownership and churn, provenance, bulk commits, shallow clones and the summary counts |
 | `lib.keyhole.keyhole_signals` | [keyhole_signals.md](docs/keyhole_signals.md) | How the signal modules become the five run-context blocks and the named findings |

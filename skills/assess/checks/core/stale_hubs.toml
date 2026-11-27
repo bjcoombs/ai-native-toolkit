@@ -25,3 +25,5 @@ revision = 1
   "stale_hubs.provenance.method" = "token"
   "stale_hubs.provenance.sources" = "path"
   "stale_hubs.provenance.generated_by" = "drop"
+  "stale_hubs.kept_true_by.kind" = "token"
+  "stale_hubs.kept_true_by.path" = "path"

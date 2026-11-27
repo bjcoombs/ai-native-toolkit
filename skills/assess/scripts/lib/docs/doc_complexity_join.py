@@ -169,6 +169,10 @@ def _signed_freshness(doc: JsonDict) -> float:
     comparison was indeterminate (no usable timestamps), so we fall back to the
     churn ratio below.
 
+    A doc a CI check keeps true (``kept_true_by``, ``lib.ci.docs_kept_true``, #852) reads
+    +1.0 in place of the churn ratio; a newer declared source or a renamed child it still
+    names (below) keeps it stale, as neither check disproves those.
+
     A base doc that still names a direct child renamed after its last change
     (``renamed_children_named`` above 0, #822) reads -1.0: the path it gives
     no longer exists.
@@ -192,6 +196,8 @@ def _signed_freshness(doc: JsonDict) -> float:
             return 1.0
     if int(doc.get("renamed_children_named") or 0) > 0:
         return -1.0
+    if doc.get("kept_true_by"):
+        return 1.0   # a CI check keeps the doc's subtree true: overrides the churn ratio (#852)
     ratio = float(doc.get("ratio", 0.0) or 0.0)
     return round(_clamp((STALENESS_RATIO_THRESHOLD - ratio) / STALENESS_RATIO_THRESHOLD,
                         -1.0, 1.0), 3)
