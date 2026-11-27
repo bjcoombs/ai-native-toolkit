@@ -340,3 +340,15 @@ def test_a_gitlab_job_that_never_runs_on_its_own_is_not_a_run(tmp_path: Path, wh
     root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
                             ".gitlab-ci.yml": f"evals:\n  when: {when}\n  script:\n    - pytest evals/\n"})
     assert _block(root)["dirs"][0]["ci"] is False
+
+
+@pytest.mark.parametrize("ci", [
+    # An anchor on a nested key of a hidden job, used by an alias in the same file.
+    ".defaults:\n  script: &s\n    - pytest evals/\nevals:\n  script: *s\n",
+    # The same, under a hidden job whose own anchor nothing uses.
+    ".evals: &evals\n  script: &s\n    - pytest evals/\nevals:\n  script: *s\n",
+])
+def test_a_nested_anchor_an_alias_uses_is_a_run(tmp_path: Path, ci: str) -> None:
+    root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}", ".gitlab-ci.yml": ci})
+    block = _block(root)
+    assert (block["present"], block["dirs"][0]["ci"]) == (True, True)

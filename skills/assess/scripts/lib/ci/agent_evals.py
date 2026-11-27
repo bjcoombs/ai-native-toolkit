@@ -216,17 +216,19 @@ def hidden_references(texts: Iterable[str]) -> frozenset[tuple[str, str]]:
     return frozenset((m.group(1), m.group(2)) for text in texts for m in _REFERENCE.finditer(text))
 
 
-def _hidden_keep(tree: IndentTree, text: str, referenced: frozenset[tuple[str, str]]) -> dict[int, set[str] | None]:
-    """For each top-level GitLab hidden job, what of it may run: None for all of it (an anchor
-    that an alias in the same file uses; anchors do not cross files), else the keys a
-    ``!reference`` names (an empty set: nothing)."""
-    out: dict[int, set[str] | None] = {}
+def _hidden_keep(tree: IndentTree, text: str,
+                 referenced: frozenset[tuple[str, str]]) -> tuple[dict[int, set[str]], set[int]]:
+    """For each top-level GitLab hidden job, the keys a ``!reference`` names, and the lines,
+    at any depth, whose YAML anchor an alias in the same file uses (anchors do not cross
+    files): the subtree under such a line runs where the alias puts it."""
+    hidden = {i: {key for job, key in referenced if job == line.key} for i, line in enumerate(tree.lines)
+              if line.structural and line.key.startswith(".") and not tree.ancestors(i)}
+    aliased: set[int] = set()
     for i, line in enumerate(tree.lines):
-        if line.structural and line.key.startswith(".") and not tree.ancestors(i):
-            anchor = re.match(r"&([\w.-]+)", line.value)
-            used = anchor is not None and re.search(r"\*" + re.escape(anchor.group(1)) + r"(?![\w.-])", text)
-            out[i] = None if used else {key for job, key in referenced if job == line.key}
-    return out
+        anchor = re.match(r"&([\w.-]+)", line.value) if line.structural else None
+        if anchor and re.search(r"\*" + re.escape(anchor.group(1)) + r"(?![\w.-])", text):
+            aliased.add(i)
+    return hidden, aliased
 
 
 def _idle(tree: IndentTree) -> set[int]:
@@ -244,12 +246,12 @@ def run_texts(text: str, referenced: frozenset[tuple[str, str]] | None = None) -
     in ``NOT_RUNNERS``, the ``with:`` inputs of a GitHub ``actions/`` utility and a GitLab hidden
     job (``.evals:``, which runs only inside a job that extends it) run nothing; skip flags
     (``--ignore=evals``, ``-k ...``) are blanked. What a job can take from a hidden job without
-    ``extends:`` is kept: all of one whose YAML anchor (``.evals: &evals``) an alias in the same
-    file uses, and the key a ``!reference [.evals, script]`` in ``referenced`` (every CI text
+    ``extends:`` is kept: the subtree under any YAML anchor in it (``.evals: &evals``,
+    ``script: &s``) that an alias in the same file uses, and the key a ``!reference [.evals, script]`` in ``referenced`` (every CI text
     read) names. A GitLab job whose own ``when:`` is ``never`` or ``manual`` runs nothing."""
     tree = IndentTree(parse_lines(text.splitlines()))
     dead = _dead(tree)
-    hidden = _hidden_keep(tree, text, referenced if referenced is not None else hidden_references([text]))
+    hidden, aliased = _hidden_keep(tree, text, referenced if referenced is not None else hidden_references([text]))
     idle = _idle(tree)
     out: list[str] = []
     for i, line in enumerate(tree.lines):
@@ -258,8 +260,8 @@ def run_texts(text: str, referenced: frozenset[tuple[str, str]] | None = None) -
         up = tree.ancestors(i)
         if up and up[-1] in idle:
             continue
-        if up and up[-1] in hidden and (keep := hidden[up[-1]]) is not None and \
-                tree.lines[([i, *up])[-2]].key not in keep:
+        if up and up[-1] in hidden and tree.lines[([i, *up])[-2]].key not in hidden[up[-1]] and \
+                not aliased.intersection([i, *up]):
             continue
         parent = tree.ancestors(i)[:1]
         owner = tree.lines[parent[0]].key if parent else ""
