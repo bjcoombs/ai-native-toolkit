@@ -375,9 +375,16 @@ def test_valid_yaml_is_not_read_as_malformed(tmp_path: Path, ci: str, want: tupl
     assert _gl_untriaged(tmp_path, ci) == want
 
 
-def test_a_met_refinement_include_wins_over_an_unreadable_line(tmp_path: Path) -> None:
-    ci = f"include:\n  - remote: {REMOTE}\nx:\n\tscript: y\n"
-    assert _gl_untriaged(tmp_path, ci) == (True, None)
+@pytest.mark.parametrize(("ci", "want"), [
+    (f"include:\n  - remote: {REMOTE}\nx:\n\tscript: y\n", (None, "gitlab_ci_unreadable")),  # GitLab rejects it
+    (f"include:\n  - remote: {REMOTE}\nworkflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n"
+     "      when: never\n    - when: always\n", (False, None)),  # no scheduled pipeline
+    (f"include:\n  - remote: {REMOTE}\nworkflow:\n  rules:\n    - if: $REFINE\n", (None, "gitlab_ci_unsettled")),
+    (f"include:\n  - remote: {REMOTE}\nworkflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n",
+     (True, None)),
+])
+def test_the_refinement_include_needs_a_pipeline_that_runs_it(tmp_path: Path, ci: str, want: tuple[Any, Any]) -> None:
+    assert _gl_untriaged(tmp_path, ci) == want
 
 
 def test_a_tag_scheduled_refiner_and_a_workflow_any_schedule_meets(tmp_path: Path) -> None:

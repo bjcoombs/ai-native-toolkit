@@ -16,7 +16,8 @@ met by either:
 
 - the toolkit's refinement template as a top-level ``include:`` item, its exact ``remote:``
   raw URL (``templates/refine.yml`` of this repository at any ref); an include with ``rules:``
-  may be left out, so it is unsettled, never met;
+  may be left out, so it is unsettled, never met, and so is one under a ``workflow: rules:``
+  that creates only some scheduled pipelines or cannot be read;
 - a visible job that runs in a scheduled pipeline and whose ``script``, ``before_script`` or
   ``after_script`` adds an untriaged label: ``glab issue update|create --label`` / ``-l``, an
   ``add_labels`` API field, or a ``/label ~name`` quick action in a ``glab`` or ``curl`` call. A label is compared whole,
@@ -42,8 +43,7 @@ be settled: a merge the reader does not follow (an anchor merge, an unread ``ext
 a ``!reference``, a ``$VARIABLE`` label or a ``rules:`` outcome that reads unknown. An anchor
 merge is file-local, so a job with one is unsettled only when its file adds an untriaged label
 somewhere. **Unreadable** (``REASON_UNREADABLE``): the root ``.gitlab-ci.yml`` has a tab in a key
-line's indentation or a flow collection never closed, which GitLab rejects; a met refinement
-include is read first.
+line's indentation or a flow collection never closed, which GitLab rejects, so nothing it includes runs.
 
 Known limits: a vendored copy of the refinement template (a ``local:`` include) is read like any
 other file, and its jobs take the label from a variable, so it reads unsettled. A project CI
@@ -309,25 +309,26 @@ def _refine_include(text: str) -> JobState:
 def gitlab_untriaged(root: Path, text: str, labels: tuple[str, ...]) -> tuple[bool | None, str | None]:
     """Whether ``.gitlab-ci.yml`` (``text``) runs a refiner that labels new issues untriaged:
     the signal and its reason code (see the module doc). ``root`` is resolved."""
-    include = _refine_include(text)
-    if include == "met":
-        return True, None
     if malformed(text):
         return None, REASON_UNREADABLE
-    unsettled = include == "unsettled"
-    unread = [r for r in resolve_includes(root).includes
-              if r["status"] not in SETTLED and r["kind"] != "template"]
-    unsettled = unsettled or bool(unread)
     config = merged_config(root)
     if config is None:
         return None, REASON_UNREADABLE
     workflow = _workflow(config)
-    if workflow != "no":
-        for job in config.jobs.values():
-            if job.hidden:
-                continue
-            state = _job_state(config, job, labels, workflow)
-            if state == "met":
-                return True, None
-            unsettled = unsettled or state != "no"
+    if workflow == "no":
+        return False, None  # GitLab creates no scheduled pipeline, so no job or include runs on one
+    include = _refine_include(text)
+    if include == "met" and workflow == "yes":
+        return True, None  # the included jobs run in every scheduled pipeline the workflow creates
+    unsettled = include != "no"
+    unread = [r for r in resolve_includes(root).includes
+              if r["status"] not in SETTLED and r["kind"] != "template"]
+    unsettled = unsettled or bool(unread)
+    for job in config.jobs.values():
+        if job.hidden:
+            continue
+        state = _job_state(config, job, labels, workflow)
+        if state == "met":
+            return True, None
+        unsettled = unsettled or state != "no"
     return (None, REASON_UNSETTLED) if unsettled else (False, None)
