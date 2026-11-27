@@ -361,5 +361,7 @@ def test_decline_flags_without_record_declines_and_confirm_fail_at_parsing(
     with pytest.raises(SystemExit) as exc:
         render.main([str(tmp_path), "reconcile", "--existing", str(existing), *flags])
     assert exc.value.code == 2
-    assert "needs both --record-declines and --confirm" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "needs both --record-declines and --confirm" in err
+    assert "reconcile [-h]" in err  # the reconcile usage, not the root one
     assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()

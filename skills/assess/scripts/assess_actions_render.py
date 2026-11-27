@@ -527,14 +527,16 @@ def _parser() -> argparse.ArgumentParser:
     rc.add_argument("--declined-at", help="the date of the declines, for the record (date +%%Y-%%m-%%d)")
     rc.add_argument("--decline-reason", action="append", type=parse_reason, default=[], metavar="N=TEXT",
                     help="the user's reason for declining item N, for the record; repeat per item")
+    rc.set_defaults(subparser=rc)
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p
 
 
-def _check_decline_flags(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+def _check_decline_flags(args: argparse.Namespace) -> None:
     """Reject the decline flags unless ``--record-declines`` and ``--confirm`` are both given (#1533).
 
     Without both, ``reconcile`` records nothing, so a decline flag would be silently ignored.
+    The error prints the ``reconcile`` usage, not the root one.
     """
     if args.command != "reconcile":
         return
@@ -543,13 +545,13 @@ def _check_decline_flags(parser: argparse.ArgumentParser, args: argparse.Namespa
                                       ("--declined-at", args.declined_at is not None),
                                       ("--decline-reason", bool(args.decline_reason))) if value]
     if given and not (args.record_declines and args.confirm is not None):
+        parser: argparse.ArgumentParser = args.subparser
         parser.error(f"{', '.join(given)} needs both --record-declines and --confirm")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = _parser()
-    args = parser.parse_args(argv)
-    _check_decline_flags(parser, args)
+    args = _parser().parse_args(argv)
+    _check_decline_flags(args)
     assess_dir: Path = args.assess_dir or args.repo / ".assess"
     if args.command == "readiness":
         print(readiness(assess_dir))
