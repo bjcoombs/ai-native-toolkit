@@ -108,7 +108,7 @@ def test_a_ci_job_running_pytest_doctest_modules_meets(tmp_path: Path) -> None:
     root = _repo(tmp_path, {"src/pkg/mod.py": "def f():\n    '''>>> 1\n    1'''\n",
                             ".github/workflows/ci.yml": _workflow("uv run pytest --doctest-modules src/pkg")})
     block = _block(root)
-    assert block["checks"] == [{"path": ".github/workflows/ci.yml", "kind": "doc_tests", "covers": ["src/pkg"]}]
+    assert block["checks"] == [{"path": ".github/workflows/ci.yml", "kind": "doc_tests", "covers": []}]
     assert _state(root) == "met"
 
 
@@ -193,3 +193,39 @@ def test_a_subtree_ci_keeps_true_is_not_stale_and_names_the_check(tmp_path: Path
     assert is_stale(dict(by_path["docs/guide/intro.md"]))
     assert out["summary"]["stale_docs"] == 1
     assert out["kept_true"]["present"] is True
+
+
+def test_a_docstring_only_doctest_run_meets_but_covers_no_doc(tmp_path: Path) -> None:
+    """``--doctest-modules`` tests code docstrings: met, but a stale doc stays stale."""
+    _put(tmp_path, "docs/x.md", "x")
+    _put(tmp_path, ".github/workflows/ci.yml", _workflow("pytest --doctest-modules docs"))
+    kept = scan_docs_kept_true(tmp_path)
+    assert kept["present"] is True and kept["checks"][0]["covers"] == []
+    block = {"docs": [_staleness_row("docs/x.md", 5.0)], "history_truncated": False, "churn_degenerate": False}
+    out = apply_kept_true(block, kept)  # type: ignore[arg-type]
+    assert "kept_true_by" not in out["docs"][0] and is_stale(dict(out["docs"][0]))
+
+
+def test_a_later_commands_re_raise_does_not_unmask_a_passing_fallback(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"Makefile": "check:\n\tpython gen.py\n\tgit diff --exit-code docs || echo changed; make lint || exit 1\n",
+                            **DOCS, ".github/workflows/ci.yml": _workflow("make check")})
+    assert _block(root)["regen_diff"] == 0
+
+
+def test_a_reader_fault_reads_not_measured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.ci.docs_kept_true as dkt
+
+    def boom(_root: Path) -> None:
+        raise RuntimeError("x")
+    monkeypatch.setattr(dkt, "scan_docs_kept_true", boom)
+    kept = dkt.kept_true_or_unknown(tmp_path)
+    assert (kept["present"], kept["present_reason"], kept["checks"]) == (None, "scan_failed", [])
+
+
+def test_a_hub_ci_keeps_true_is_not_a_stale_hub() -> None:
+    from lib.run.context_blocks import build_stale_hubs
+
+    graph = {"available": True, "hubs": [{"path": "docs/a.md", "pagerank": 0.5}]}
+    row = {**_staleness_row("docs/a.md", 5.0), "last_commit_days": 9, "code_churn_in_window": 9,
+           "kept_true_by": {"kind": "regen_diff", "path": ".github/workflows/ci.yml"}}
+    assert build_stale_hubs(graph, {"available": True, "docs": [row]}) == []

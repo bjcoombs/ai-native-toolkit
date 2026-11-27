@@ -268,6 +268,7 @@ def build_stale_hubs(
     a denominator across every baseline entry - confidence on those is "low".
     The sort halves the priority of low-confidence entries so a precise-subject
     hub at half the raw priority of a baseline one still outranks it.
+    A doc a CI check keeps true (``kept_true_by``, #852) is never a stale hub.
     """
     if not doc_graph.get("available") or not doc_staleness.get("available"):
         return []
@@ -275,8 +276,8 @@ def build_stale_hubs(
     hubs: list[dict[str, Any]] = []
     for hub in doc_graph.get("hubs", []):
         s = staleness_by_path.get(hub["path"])
-        if s is None:
-            continue
+        if s is None or s.get("kept_true_by"):
+            continue   # a doc a CI check keeps true is not a stale hub (#852)
         priority = round(hub["pagerank"] * s["ratio"], 3)
         renamed = int(s.get("renamed_children_named") or 0)
         if renamed:  # names a path that no longer exists: stale at any ratio (#822)

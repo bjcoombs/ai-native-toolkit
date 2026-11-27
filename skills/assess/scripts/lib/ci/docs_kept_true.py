@@ -19,17 +19,21 @@ script, a ``make`` recipe, up to ``_MAX_FOLLOW`` levels). Nothing is executed. I
   ``phmdoctest`` or ``byexample`` run; or a CI step runs ``pytest`` and the root
   ``pyproject.toml``, ``pytest.ini``, ``setup.cfg`` or ``tox.ini`` (read by name) adds a
   ``--doctest-`` flag. A doctest flag in configuration that no CI step runs does not count.
-  ``covers`` is the command's literal path arguments that name a tracked file or folder.
+  ``covers`` is the command's literal path arguments that name a tracked file or folder, for
+  a run that executes doc files only (``--doctest-glob``, ``--markdown-docs``, ``python -m
+  doctest``, Sphinx, the mdtest-style runners): ``--doctest-modules``, ``cargo test --doc`` and
+  the configuration-only case test code docstrings, so they meet the condition with no subtree.
 
 Masking (#775, ``lib.ci.ci_masking.mask_lines``): a CI file is read through its unmasked
 lines, so ``continue-on-error``, ``|| true`` and the not-measured forms (``git diff
 --exit-code || echo changed``) never count. A followed script or recipe line is not
 YAML: there a command followed by ``||`` counts only when the fallback re-raises
-(``exit 1``, ``exit $rc``, ``false``).
+(``exit 1``, ``exit $rc``, ``false``) before the next ``;`` or ``&&``.
 
 ``present`` is true when any check is found. With none found and a tracked CI file of a
 system this reader does not parse (``lib.unread_ci``: Jenkins, Prow, Buildkite ...), it is
-null with ``present_reason`` ``ci_not_read``, never false.
+null with ``present_reason`` ``ci_not_read``, never false. ``kept_true_or_unknown`` is the
+scan the staleness collector calls: a reader fault reads null (``scan_failed``) there.
 
 ``apply_kept_true(block, kept)`` joins the reading to doc staleness (#1389): a doc whose
 path lies in a subtree a check ``covers`` gets ``kept_true_by`` (the check's ``kind`` and CI
@@ -59,6 +63,7 @@ from lib.instructions.command_resolver import command_words
 from lib.unread_ci import unread_ci_paths
 
 REASON_CI_NOT_READ = "ci_not_read"
+REASON_SCAN_FAILED = "scan_failed"
 PYTEST_CONFIGS = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
 _MAX_FOLLOW = 3
 _OPERATOR = re.compile(r"(&&|\|\||;|\|)")
@@ -84,8 +89,20 @@ def _commands(text: str) -> Iterator[_Cmd]:
         if not words:
             continue
         rest = parts[i + 1:]
-        masked = bool(rest) and rest[0] == "||" and not _RERAISE.search(" ".join(rest[1:]) + " ")
+        masked = bool(rest) and rest[0] == "||" and not _RERAISE.search(_fallback(rest[1:]) + " ")
         yield _Cmd(words=words, masked=masked)
+
+
+def _fallback(rest: list[str]) -> str:
+    """The ``||`` fallback's text: up to the next ``;`` or ``&&``, braces kept together."""
+    out: list[str] = []
+    depth = 0
+    for part in rest:
+        if part in (";", "&&") and depth <= 0:
+            break
+        depth += part.count("{") + part.count("(") - part.count("}") - part.count(")")
+        out.append(part)
+    return " ".join(out)
 
 
 def _program(words: list[str]) -> list[str]:
@@ -123,6 +140,17 @@ def _doc_test(words: list[str]) -> bool:
             or ("-b", "doctest") in pairs or ("-M", "doctest") in pairs
             or (head == "cargo" and "test" in prog and "--doc" in prog)
             or head in _DOCTEST_RUNNERS)
+
+
+def _runs_doc_files(words: list[str]) -> bool:
+    """Whether the doc-test run executes doc files (markdown, reST), not code docstrings only:
+    only such a run gives its paths to ``covers``."""
+    prog = _program(words)
+    head = posixpath.basename(prog[0]) if prog else ""
+    pairs = set(zip(prog, prog[1:]))
+    return (any(w.startswith(("--doctest-glob", "--markdown-docs")) for w in prog)
+            or ("-m", "doctest") in set(zip(words, words[1:]))
+            or ("-b", "doctest") in pairs or ("-M", "doctest") in pairs or head in _DOCTEST_RUNNERS)
 
 
 def _runs_pytest(words: list[str]) -> bool:
@@ -172,7 +200,8 @@ class _Reader:
             args = words[words.index("--") + 1:] if "--" in words else words[2:]
             found.append(("regen_diff", _named_paths(args, self.tracked)))
         elif _doc_test(words) or (self.doctest_config and _runs_pytest(words)):
-            found.append(("doc_tests", _named_paths(_program(words)[1:], self.tracked)))
+            runs_docs = _runs_doc_files(words)
+            found.append(("doc_tests", _named_paths(_program(words)[1:], self.tracked) if runs_docs else []))
         script = script_path(" ".join(words))
         match = _VERIFY.match(script) if script else None
         if match and script in self.tracked:
@@ -223,6 +252,16 @@ def scan_docs_kept_true(repo_root: Path) -> DocsKeptTrueBlock:
         block["present"] = None
         block["present_reason"] = REASON_CI_NOT_READ
     return block
+
+
+def kept_true_or_unknown(repo_root: Path) -> DocsKeptTrueBlock:
+    """``scan_docs_kept_true``, or a not-measured block (``scan_failed``) when the reader
+    raises, so a failure here never drops the doc staleness block it joins."""
+    try:
+        return scan_docs_kept_true(repo_root)
+    except Exception:   # noqa: BLE001 - any reader fault reads not measured, never false
+        return DocsKeptTrueBlock(files_read=0, regen_diff=0, verify_pair=0, doc_tests=0,
+                                 present=None, present_reason=REASON_SCAN_FAILED, checks=[])
 
 
 def covering_check(doc: str, kept: DocsKeptTrueBlock) -> KeptTrueBy | None:

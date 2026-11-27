@@ -23,6 +23,7 @@ shapes = [
 revision = 3
 unknown_reasons = [
   { code = "ci_not_read", block = "doc_staleness", means = "No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. That system may run one.", next_step = "Nothing to change: this reads as not measured until that system's configuration can be read." },
+  { code = "scan_failed", block = "doc_staleness", means = "The reader of CI checks that keep docs true raised an error. The doc staleness block is kept, and this one condition reads not measured.", next_step = "Nothing to change in the repository: report the error so the reader can be fixed." },
 ]
   [entries.privacy]
   "doc_staleness.churn_window" = "drop"

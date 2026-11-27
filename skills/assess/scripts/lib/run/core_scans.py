@@ -56,7 +56,7 @@ from lib.run.run_scope import ResolvedScope, Scope
 from lib.run.decline_markers import build_decline_block
 from lib.docs.doc_complexity_join import analyze_doc_complexity_join
 from lib.docs.doc_graph import build_doc_graph
-from lib.ci.docs_kept_true import apply_kept_true, scan_docs_kept_true
+from lib.ci.docs_kept_true import apply_kept_true, kept_true_or_unknown
 from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.report.gap_actions import build_gap_actions
 from lib.instructions.instruction_files import (
@@ -137,7 +137,7 @@ def doc_staleness(
     return apply_kept_true(analyze_doc_staleness(
         repo_root, doc_to_code_edges=doc_to_code_edges(doc_graph_block),
         extra_exclude_dirs=dirs, extra_exclude_patterns=patterns, scope=scope,
-    ), scan_docs_kept_true(repo_root))   # docs CI keeps true read fresh (#852)
+    ), kept_true_or_unknown(repo_root))   # docs CI keeps true read fresh (#852)
 
 
 def stale_hubs(doc_graph_block: dict[str, Any], staleness: Any) -> list[dict[str, Any]]:
