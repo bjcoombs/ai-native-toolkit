@@ -279,4 +279,14 @@ def test_scope_filters_the_lock_files_and_hashed_manifests(tmp_path: Path) -> No
     assert block["hashed_manifests"] == ["packages/web/.claude-plugin/plugin.json"]
 
 
+
+def test_a_scope_outside_the_repository_reads_no_root_evidence(tmp_path: Path) -> None:
+    manifest = '{"plugins": [{"name": "p", "sha256": "0123456789abcdef0123"}]}\n'
+    root = _git(tmp_path / "repo", {"skills/a/SKILL.md": _skill("a"), "skills-lock.json": "{}\n",
+                                    ".claude-plugin/marketplace.json": manifest})
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    block = scan_skill_library(root, Scope.of(tmp_path, Path("elsewhere")))
+    assert (block["skills_counted"], block["lock_files"], block["hashed_manifests"]) == (0, [], [])
+
 SKILL_NAME = "SKILL.md"

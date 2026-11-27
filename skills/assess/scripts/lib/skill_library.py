@@ -294,7 +294,8 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
     scope_rels = None if scope is None else [r for r in (_inside(repo, f) for f in scope.folders) if r is not None]
     link_oids = {oid for mode, oid in tracked.values() if mode == _SYMLINK_MODE}
     # The manifests read as evidence: at the root, or under --scope at each scope folder.
-    manifests = {f"{base}/{m}" if base else m for base in (scope_rels or [""]) for m in MANIFEST_NAMES}
+    manifests = {f"{base}/{m}" if base else m for base in ([""] if scope_rels is None else scope_rels)
+                 for m in MANIFEST_NAMES}
     names = {r for r in tracked if PurePosixPath(r).name == SKILL_FILE or r in manifests}
     blobs = _blobs(repo, link_oids | {tracked[r][1] for r in names})
     raw = {r: blobs.get(oid, b"").decode("utf-8", "surrogateescape").strip()
