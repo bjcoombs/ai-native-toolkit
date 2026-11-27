@@ -97,6 +97,18 @@ The fields are written in that order, one space apart; a character outside `A-Z 
 
 Outside that case a marked item is never matched by title. An item taken by title, or by a positional key, is taken by one rendered item per run. The format and rules live in `scripts/lib/report/backlog_items.py`.
 
+## Open-item limit on filed items (#812)
+
+`plan` also gives each item a `wip` step, `{decision, tier}`. At most `[backlog] wip` backlog items are open at once (`.assess/config.toml`, default 3; `--wip N` overrides it). Open items that carry a condition marker or the label count, and so does any open item a `filing` step reuses.
+
+| `decision` | Meaning |
+|------------|---------|
+| `open` | The step reuses an item that is already open: no new slot. |
+| `file` | Create the item, or reopen the closed item the step names, within the limit. |
+| `next_up` | The limit is reached: not filed. `next-up --existing <file>` lists it for the report. |
+
+Items that need a slot are taken by `tier`, the next-unlock ranking: `next_unlock` (the item's condition is in `level.next_step.blockers[].condition`), then `recovery` (the step reopens a closed item), then `gain`. The Top 3 order stands within a tier. Two items that reopen the same closed item take one slot. The rules live in `scripts/lib/report/backlog_wip.py`.
+
 ## `status` lifecycle
 
 | Status | Meaning |

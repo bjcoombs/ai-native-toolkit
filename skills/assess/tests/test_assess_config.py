@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.assess_config import load_working_notes_config
+from lib.assess_config import load_backlog_wip, load_working_notes_config
 from lib.docs.doc_graph import build_doc_graph
 
 
@@ -147,3 +147,15 @@ def test_working_notes_ignore_leaves_no_rump_tree(tmp_path: Path) -> None:
     d = _graph(tmp_path)
     assert d["excluded_working_notes_trees"] == []
     assert d["doc_count"] == 22
+
+
+def test_backlog_wip_defaults_to_three_and_reads_the_set_value(tmp_path: Path) -> None:
+    """``[backlog] wip`` (#812): 3 when absent, the set value when present."""
+    assert load_backlog_wip(tmp_path) == 3
+    _config(tmp_path, "[backlog]\nwip = 5\n")
+    assert load_backlog_wip(tmp_path) == 5
+    _config(tmp_path, "[backlog]\nwip = 0\n")
+    assert load_backlog_wip(tmp_path) == 0
+    for bad in ("wip = 5", "[backlog]\nwip = true", "[backlog]\nwip = -1", "[backlog]\nwip = \"4\""):
+        _config(tmp_path, bad + "\n")
+        assert load_backlog_wip(tmp_path) == 3

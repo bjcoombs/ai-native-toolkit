@@ -34,7 +34,13 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   the ``marked_body`` to write back), matched against the tracker's items in ``FILE``
   (``gh issue list --state all --json number,title,body,state,labels``): by marker first,
   then label plus title for an item filed before the marker existed. ``--label ""`` drops
-  the label check (filing upstream without triage access).
+  the label check (filing upstream without triage access). Each item also carries a ``wip``
+  step (#812): ``open`` (reuses an open item), ``file`` or ``next_up``, under the open-item
+  limit ``--wip N`` or ``.assess/config.toml`` ``[backlog] wip`` (default 3), the items that
+  need a slot taken in the next-unlock order (``next_unlock``, ``recovery``, ``gain``) read
+  from ``run-context.json`` ``level``; rules: ``lib/report/backlog_wip.py``.
+- ``next-up --existing FILE [--label NAME] [--wip N]`` prints the report's "Next up" block,
+  the items ``plan`` holds back as ``next_up``, in ranked order; nothing when none are.
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
   ``run-context.json`` joined with `` / ``; the ``badge.json`` ``message`` when the run
   context has no headline lines; ``not known`` when neither file has one.
@@ -67,7 +73,9 @@ from typing import NotRequired, TypedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.assess_config import load_backlog_wip  # noqa: E402
 from lib.report.backlog_items import DEFAULT_LABEL, FilingStep, condition_marker, plan_filing  # noqa: E402
+from lib.report.backlog_wip import WipStep, apply_wip, next_up_markdown  # noqa: E402
 
 REQUIRED_KEYS = ("rank", "action", "done_when", "scope_fence")
 SUB_ITEM_KEYS = ("label", "action", "done_when")
@@ -95,6 +103,7 @@ class TrackerItem(TypedDict):
     label: NotRequired[str]
     marker: NotRequired[str]
     filing: NotRequired[FilingStep]
+    wip: NotRequired[WipStep]
 
 
 class RenderError(Exception):
@@ -327,13 +336,28 @@ def model_version(assess_dir: Path) -> str | None:
     return version if isinstance(version, str) and version else None
 
 
-def plan_items(items: Sequence[TrackerItem], existing: object, label: str = DEFAULT_LABEL) -> list[TrackerItem]:
-    """``items`` with a ``filing`` step each, matched against the tracker's ``existing`` items (#810)."""
+def plan_items(items: Sequence[TrackerItem], existing: object, label: str = DEFAULT_LABEL,
+               level: object = None, wip: int | None = None) -> list[TrackerItem]:
+    """``items`` with a ``filing`` step each, matched against the tracker's ``existing`` items (#810).
+
+    With ``wip`` set, each item also carries a ``wip`` step (#812): ``open``, ``file`` or
+    ``next_up`` under the limit, ranked by the run's ``level`` (``lib/report/backlog_wip.py``).
+    """
     if not isinstance(existing, list):
         raise RenderError("--existing must hold a JSON array of tracker items")
     known = [x for x in existing if isinstance(x, dict)]
     steps = plan_filing(items, known, label=label)
-    return [TrackerItem(**item, filing=step) for item, step in zip(items, steps, strict=True)]
+    planned = [TrackerItem(**item, filing=step) for item, step in zip(items, steps, strict=True)]
+    if wip is not None:
+        for item, w in zip(planned, apply_wip(items, steps, known, level, wip=wip, label=label), strict=True):
+            item["wip"] = w
+    return planned
+
+
+def run_level(assess_dir: Path) -> object:
+    """``run-context.json`` ``level``: the next Step's blockers rank the items (#812); None without one."""
+    context = _read_json(assess_dir / "run-context.json")
+    return context.get("level") if isinstance(context, dict) else None
 
 
 def _read_json(path: Path) -> object:
@@ -377,6 +401,11 @@ def _parser() -> argparse.ArgumentParser:
                     help="JSON array of the tracker's items (gh issue list --json number,title,body,state,labels)")
     pl.add_argument("--label", default=DEFAULT_LABEL, help="label an unmarked item must carry; '' for none")
     pl.add_argument("--report-link", help="full-report link for each item's Context block")
+    nu = sub.add_parser("next-up", help="the report's Next up block: the items over the [backlog] wip limit")
+    nu.add_argument("--existing", type=Path, required=True, help="the same file as plan --existing")
+    nu.add_argument("--label", default=DEFAULT_LABEL, help="as for plan")
+    for sp in (pl, nu):
+        sp.add_argument("--wip", type=int, help="open-item limit (default: .assess/config.toml [backlog] wip, else 3)")
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p
 
@@ -395,13 +424,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "table":
         sys.stdout.write(render_table(entries, dict(args.issue)))
         return 0
-    items = render_items(entries, args.report_link, model_version(assess_dir))
-    if args.command == "plan":
+    items = render_items(entries, getattr(args, "report_link", None), model_version(assess_dir))
+    if args.command in ("plan", "next-up"):
+        wip = args.wip if args.wip is not None and args.wip >= 0 else load_backlog_wip(args.repo)
         try:
-            items = plan_items(items, _read_json(args.existing), args.label)
+            items = plan_items(items, _read_json(args.existing), args.label, run_level(assess_dir), wip)
         except RenderError as exc:
             print(f"assess_actions_render: {exc}", file=sys.stderr)
             return 1
+        if args.command == "next-up":
+            sys.stdout.write(next_up_markdown(items, [i["wip"] for i in items if "wip" in i], wip))
+            return 0
     print(json.dumps(items, indent=2, ensure_ascii=False))
     return 0
 
