@@ -79,7 +79,8 @@ repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into
 `structure_drift` run-context block. Co-changes with `ownership_parser.py` (its parse foundation),
 `structure_graph.py` and `change_coupling.py` (the static and historical lenses it consumes),
 `keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its tests
-`tests/test_structure_drift.py` and `tests/test_structure_drift_boundaries.py`.
+`tests/test_structure_drift.py` (Tier 0), `tests/test_structure_drift_tier1.py` and
+`tests/test_structure_drift_boundaries.py`. Doc-relative links resolve from their doc (#1231).
 """
 from __future__ import annotations
 
@@ -92,7 +93,7 @@ from lib.docs.ownership_parser import (
     _extract_path_refs,
     _FENCE_RE,
     _HEADER_RE,
-    _resolve_ref,
+    _resolve_doc_ref,
     _tracked_rel_paths,
     architecture_boundaries,
     find_empty_globs,
@@ -225,7 +226,7 @@ def _empty_refs_in_doc(
         # Sort the references so a section's empty rows emit in a stable order
         # regardless of set iteration; the caller sorts the whole list again.
         for ref in sorted(_extract_path_refs(segment)):
-            if not _resolve_ref(ref, repo_root, rel_paths):
+            if not _resolve_doc_ref(ref, doc_rel, repo_root, rel_paths):
                 rows.append({
                     "pattern": ref, "declared_in": boundary, "owners": [],
                 })
@@ -266,7 +267,7 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
                 text = doc.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
-            d, m, b = _declared_refs_in_doc(text, repo_root, rel_paths)
+            d, m, b = _declared_refs_in_doc(text, doc, repo_root, rel_paths)
             declared += d
             matched += m
             refs += b
@@ -274,7 +275,7 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
 
 
 def _declared_refs_in_doc(
-    text: str, repo_root: Path, rel_paths: set[str],
+    text: str, doc: Path, repo_root: Path, rel_paths: set[str],
 ) -> tuple[int, int, list[str]]:
     """(declared, matched, boundary refs) for one architecture doc.
 
@@ -284,7 +285,7 @@ def _declared_refs_in_doc(
     boundary name is irrelevant to a count, so sectioning here only flushes the
     buffer at each header rather than tracking the current boundary key.
     """
-    body = _FENCE_RE.sub("\n", text)
+    body, doc_rel = _FENCE_RE.sub("\n", text), doc.relative_to(repo_root).as_posix()
     buffer: list[str] = []
     declared = 0
     matched = 0
@@ -297,7 +298,7 @@ def _declared_refs_in_doc(
         segment = "\n".join(lines)
         for ref in _extract_path_refs(segment):
             declared += 1
-            files = _resolve_ref(ref, repo_root, rel_paths)
+            files = _resolve_doc_ref(ref, doc_rel, repo_root, rel_paths)
             if files:
                 matched += 1
             if is_boundary_pattern(ref, files):

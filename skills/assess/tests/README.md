@@ -155,6 +155,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_sibling_tests.py` | `lib/testing/sibling_tests.py` - the one sibling-test resolver |
 | `test_import_credit.py` | `lib/testing/import_credit.py` - the import tier of the sibling-test probe |
 | `test_structure_drift.py` | `lib/keyhole/structure_drift.py` - Tier 0 path-existence structure-drift signal |
+| `test_structure_drift_tier1.py` | `lib/keyhole/structure_drift.py` - Tier 1 grouping-disagreement structure-drift signal |
 | `test_test_focus.py` | `lib/testing/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/docs/vault_queries.py` - vault-native navigation query parser |
 | `test_wiki_state.py` | `lib/report/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
@@ -259,7 +260,7 @@ numpy, lizard, matplotlib or squarify in `sys.modules` (#831); install stand-ins
 | `prior_stats.json`, `current_stats.json` | `test_stats_diff.py` |
 | `maven_project/` | `test_jvm_capabilities.py` |
 | `claude_config_plugin/` | `test_claude_config.py` - a plugin repo whose manifest overrides the skills, commands and agents paths |
-| `structure_drift/` | `test_structure_drift.py` |
+| `structure_drift/` | `test_structure_drift_tier1.py` |
 
 ## Markers
 
