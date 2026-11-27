@@ -178,10 +178,10 @@ class StepFollower:
                     unknown.append(value)
                 elif key == "run":
                     commands += _run_commands(tree, lines, k)
-                elif key == "uses" and tree.lines[k].value.strip("\"'").startswith("./"):
-                    inner = self.uses(tree.lines[k].value.strip("\"'"), (*path, rel))
+                elif key == "uses" and value.startswith("./"):
+                    inner = self.uses(value, (*path, rel))
                     if inner is None:
-                        unknown.append(tree.lines[k].value.strip("\"'"))
+                        unknown.append(value)
                         continue
                     commands += inner.commands
                     read += [p for p in inner.paths if p not in read]

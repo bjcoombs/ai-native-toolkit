@@ -29,11 +29,11 @@ is executed and no model or build tool is run: the build files are read as text.
   ``japicmp`` task). An ``apply from:`` script is not read and lands in ``unknown``.
 - **Maven** (``mvn``, ``./mvnw``). The root ``pom.xml`` (or the one ``-f`` names) and the
   closure of its ``<modules>`` are read, so a pom no module names (a test fixture) never is;
-  A phase or goal given as a property (``${goals}``, ``$GOALS``) and a phase outside the
-  default and clean lifecycles (``site``) land in ``unknown`` as ``phase: <word>``.
   ``-pl`` keeps the modules it names (by path or ``:artifactId``) and the root pom, and an entry
   it cannot settle, ``-rf``, ``-am`` / ``-amd`` and a ``-D`` property that skips a goal
-  (``-DskipTests``, ``-Dcheckstyle.skip``) land in ``unknown``; ``-N`` reads the root pom alone. A plugin declared with no
+  (``-DskipTests``, ``-Dcheckstyle.skip``) land in ``unknown``; ``-N`` reads the root pom alone. A phase or goal given as a
+  property (``${goals}``, ``$GOALS``) and a phase outside the default and clean lifecycles
+  (``site``) land in ``unknown`` as ``phase: <word>``. A plugin declared with no
   executions takes those a ``<pluginManagement>`` in the poms read gives it.
   A phase resolves to every plugin execution bound to that phase or an earlier one of its
   lifecycle: an execution's ``<phase>``, else the goal's default phase from
