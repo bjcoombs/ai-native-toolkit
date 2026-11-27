@@ -610,3 +610,50 @@ jobs:
     assert summary["agent_jobs_least_privilege"] is None
     assert summary["agent_job_write_access"] is None
     assert summary["agent_job_write_access_reason"] == "agent_workflows_unread"
+
+
+def test_a_read_only_follower_job_is_no_split(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/fix.yml": WRITE_AGENT + """  notify:
+    needs: agent
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo done
+"""})
+    assert _jobs(repo)[0]["split"] is False
+    assert _summary(repo)["agent_job_write_access"] == 1
+
+
+def test_a_called_workflow_lowers_its_callers_write_scope(git_repo) -> None:
+    called = "on: workflow_call\njobs:\n  agent:\n    permissions:\n      contents: read\n" + \
+        AGENT_STEPS.split("  agent:\n", 1)[1]
+    repo = _repo(git_repo, {
+        ".github/workflows/agent.yml": called,
+        ".github/workflows/caller.yml": ON_ISSUES + """jobs:
+  call:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/agent.yml
+"""})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("call", "read_only")]
+    # the callee cannot raise the caller's token: a write callee under a read caller stays read
+    repo2 = _repo(git_repo, {".github/workflows/agent.yml": called.replace("contents: read", "contents: write"),
+                             ".github/workflows/caller.yml": ON_ISSUES + """jobs:
+  call:
+    permissions:
+      issues: write
+    uses: ./.github/workflows/agent.yml
+"""})
+    assert [(j["scope"], j["write_scopes"]) for j in _jobs(repo2)] == [("read_only", [])]
+
+
+def test_a_push_only_remote_agent_workflow_leaves_the_scope_not_measured(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/x.yml": """on: push
+jobs:
+  agent:
+    uses: some-org/shared/.github/workflows/agent.yml@v1
+"""})
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege_reason"] == "agent_workflows_unread"
+    assert summary["agent_job_write_access_reason"] == "agent_workflows_unread"

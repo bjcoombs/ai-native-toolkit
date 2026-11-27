@@ -319,7 +319,8 @@
 #   recorded, never counted. Its hazard, agent-job-write-access (polarity hazard, never
 #   counted), reads agent_ops.summary.agent_job_write_access: an agent job with a write scope
 #   and no split, where a split is gh-aw safe-outputs or another job that needs the agent
-#   job. With no agent job both are unknown (no_agent_jobs); a scope that cannot be read and
+#   job and can write. A job calling a local reusable workflow takes the called agent jobs'
+#   scope, capped by its own. With no agent job both are unknown (no_agent_jobs); a scope that cannot be read and
 #   settles nothing is unknown (agent_job_scope_unread), never met. They gate no Step.
 #   Graded measured (head_structure), read from the committed workflow files.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence

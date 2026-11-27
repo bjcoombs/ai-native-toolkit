@@ -374,14 +374,16 @@ def _runs_agent(signs: _Signs, rel: str, body: str) -> bool:
     return bool(signs.workflow(rel, body, frozenset({rel}))[0])
 
 
-def scan_agent_jobs(repo_root: Path) -> list[AgentJob]:
+def scan_agent_jobs(repo_root: Path) -> tuple[list[AgentJob], int]:
     """Every committed job that runs an agent, with its effective token scope (#849,
-    ``lib.agents.agent_job_scope``). Any trigger counts; a workflow whose only event is
-    ``workflow_call`` is read through its caller's job instead."""
+    ``lib.agents.agent_job_scope``), and the count of workflows with no agent job found that call
+    an agent-named reusable workflow in another repository (not read). Any trigger counts; a
+    workflow whose only event is ``workflow_call`` is read through its caller's job instead."""
     repo = repo_root.resolve()
     files = repo_files(repo)
     signs = _Signs(repo, files)
     jobs: list[AgentJob] = []
+    unread = 0
     sources: set[str] = set()
     for rel in sorted(f for f in files if f.startswith(_WORKFLOWS) and f.endswith(".md")
                       and "/" not in f[len(_WORKFLOWS):]):
@@ -395,8 +397,10 @@ def scan_agent_jobs(repo_root: Path) -> list[AgentJob]:
         text = read_config(repo, rel)
         if set(workflow_events(text) or []) == {"workflow_call"}:
             continue
-        jobs += workflow_jobs(rel, text, partial(_runs_agent, signs, rel))
-    return sorted(jobs, key=lambda j: (j["path"], j["job"]))
+        found = workflow_jobs(rel, text, partial(_runs_agent, signs, rel), signs.read)
+        jobs += found
+        unread += not found and signs.workflow(rel, text, frozenset({rel}))[2]
+    return sorted(jobs, key=lambda j: (j["path"], j["job"])), unread
 
 
 def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str, Any]:
@@ -457,8 +461,8 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
         "event_agent_workflows": triggered,
         "agent_work_present": agent_work,
     }
-    agent_jobs = scan_agent_jobs(repo_root)
-    summary.update(summarize(agent_jobs, unread))
+    agent_jobs, jobs_unread = scan_agent_jobs(repo_root)
+    summary.update(summarize(agent_jobs, jobs_unread))
     if not agent_work and unread:
         summary["agent_work_present"] = None
         summary["agent_work_present_reason"] = UNREAD_WORKFLOWS

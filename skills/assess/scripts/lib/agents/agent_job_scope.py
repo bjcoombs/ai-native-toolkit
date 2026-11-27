@@ -20,7 +20,11 @@ read-only and moves writes into a separate job that acts on the agent's output.
   grants nothing on the repository. A value this reader cannot parse (an expression, a flow
   map left open) reads ``unread``.
 - **Split.** Writes go through another job: a gh-aw source with ``safe-outputs:``, or another
-  job in the same workflow whose ``needs:`` names the agent job.
+  job in the same workflow whose ``needs:`` names the agent job and whose own scope can write
+  (``write`` or ``undeclared``). A read-only follower writes nothing, so it is no split.
+- **Called workflows.** A job that calls a local reusable workflow takes the worst scope of the
+  called workflow's agent jobs, each capped by the caller's: a called workflow can only lower
+  the token it is given (``capped``).
 - **Spend cap.** ``max-turns`` / ``max_turns`` or a budget limit in the job: recorded as
   supporting evidence only, never counted.
 
@@ -117,16 +121,52 @@ def _spend_cap(lines: list[str]) -> bool:
     return any(_SPEND_CAP.search(strip_comment(line)) for line in lines)
 
 
-def workflow_jobs(rel: str, text: str, signs_of: SignsOf) -> list[AgentJob]:
+Scope = tuple[str, list[str]]
+ReadLocal = Callable[[str], "str | None"]
+_LOCAL_WORKFLOW = re.compile(r"""^["']?\./(\.github/workflows/[\w.-]+\.ya?ml)""")
+_RANK = (READ_ONLY, UNDECLARED, UNREAD, WRITE)
+
+
+def capped(caller: Scope, callee: Scope) -> Scope:
+    """A called workflow's scope under its caller's: a callee can only lower the caller's token."""
+    if READ_ONLY in (caller[0], callee[0]):
+        return READ_ONLY, []
+    if callee[0] == UNDECLARED:
+        return caller
+    if callee[0] == UNREAD or caller[0] in (UNREAD, UNDECLARED) or "write-all" in caller[1]:
+        return callee
+    writes = [w for w in callee[1] if w in caller[1] or w == "write-all"]
+    writes = caller[1] if writes == ["write-all"] else writes
+    return (WRITE, writes) if writes else (READ_ONLY, [])
+
+
+def _worst(scopes: list[Scope]) -> Scope:
+    state = max((s for s, _ in scopes), key=_RANK.index)
+    return state, sorted({w for s, ws in scopes if s == state for w in ws})
+
+
+def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal | None = None,
+                  inherited: Scope | None = None, seen: frozenset[str] = frozenset()) -> list[AgentJob]:
     """The agent jobs of one GitHub Actions workflow; ``signs_of`` says whether a job's text
-    runs an agent (``lib.agents.agent_ops`` follows local actions and reusable workflows)."""
+    runs an agent (``lib.agents.agent_ops`` follows local actions and reusable workflows).
+
+    A job that calls a local reusable workflow (``uses: ./.github/workflows/x.yml``, read through
+    ``read_local``) takes the worst scope of that workflow's agent jobs, each capped by the
+    caller's (``capped``); ``inherited`` is the caller's scope while reading a called workflow."""
     lines = text.splitlines()
     tree = _tree(text)
     top = _top(tree)
     default = scope_of(tree, top["permissions"]) if "permissions" in top else (UNDECLARED, [])
+    if inherited is not None:
+        default = capped(inherited, default)
     jobs_key = top.get("jobs")
     jobs = [k for k in tree.children(jobs_key) if tree.lines[k].key] if jobs_key is not None else []
     needs = {job: _needs(tree, job) for job in jobs}
+    scopes: dict[int, Scope] = {}
+    for job in jobs:
+        key = _child(tree, job, "permissions")
+        own = scope_of(tree, key) if key is not None else None
+        scopes[job] = default if own is None else capped(inherited, own) if inherited else own
     found: list[AgentJob] = []
     for job in jobs:
         span = tree.subtree(job)
@@ -134,9 +174,18 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf) -> list[AgentJob]:
         if not signs_of("\n".join(body)):
             continue
         name = tree.lines[job].key
-        key = _child(tree, job, "permissions")
-        scope, writes = scope_of(tree, key) if key is not None else default
-        split = any(name in needs[other] for other in jobs if other != job)
+        scope, writes = scopes[job]
+        uses = _child(tree, job, "uses")
+        local = _LOCAL_WORKFLOW.match(tree.lines[uses].value) if uses is not None else None
+        called = read_local(local.group(1)) if local and read_local and local.group(1) not in seen else None
+        if called is not None and local is not None:
+            inner = workflow_jobs(local.group(1), called, signs_of, read_local, (scope, writes),
+                                  seen | {rel})
+            if inner:
+                scope, writes = _worst([(j["scope"], j["write_scopes"]) for j in inner])
+        # a split needs a job after this one that can write: a read-only follower writes nothing
+        split = any(name in needs[other] and scopes[other][0] in (WRITE, UNDECLARED)
+                    for other in jobs if other != job)
         found.append(AgentJob(path=rel, job=name, scope=scope, write_scopes=writes, split=split,
                               spend_cap=_spend_cap(body)))
     if not found and signs_of(text):
