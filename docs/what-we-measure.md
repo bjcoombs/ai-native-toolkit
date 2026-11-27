@@ -304,7 +304,7 @@ Committed permission allowlists, hooks, sandbox rules and routines. A routine is
 - Used by: row `agent-job-write-access`, row `agent-least-privilege`, row `layer-8-agent-ops`.
 - Evidence: `agent_ops.summary.agent_job_write_access` head_structure (measured), `agent_ops.summary.agent_jobs_least_privilege` head_structure (measured), `agent_ops.summary.agent_work_present` head_text (declared), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.permissions_encoded` config_text (config_only).
 - Not measured when:
-  - `agent_workflows_unread`: A scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent. With no local routine or agent workflow, agent work is not measured. With no local agent job that settles it, the agent job scope is not measured either. Nothing to change: this reads as not measured until that workflow can be read.
+  - `agent_workflows_unread`: A workflow calls an unread reusable workflow in another repository whose path names an agent. Agent work: a scheduled or event-triggered caller, and no local agent workflow. Job scope: a caller on any trigger without a read-only scope, and no local agent job that settles it. Nothing to change: this reads as not measured until that workflow can be read.
   - `no_agent_jobs`: With agent_job_count at 0, no committed workflow job runs an agent, so there is no agent job scope to read. Nothing to change.
   - `agent_job_scope_unread`: An agent job's permissions could not be read. They may be an expression or an unknown value, or the agent sign sits outside every job. No other agent job settles the reading. Write the agent job's permissions as a plain map, such as contents: read, so the scan can read it.
 
