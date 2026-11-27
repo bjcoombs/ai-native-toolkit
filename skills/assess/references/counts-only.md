@@ -381,6 +381,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_graph.missing_xrefs.to` | path (hashed when hashing is on) |
 | `doc_graph.link_parents.link_parent` | path (hashed when hashing is on) |
 | `doc_graph.link_parents.link_entry` | path (hashed when hashing is on) |
+| `doc_graph.unparsed_doc_formats` | token |
 
 ## doc_staleness
 

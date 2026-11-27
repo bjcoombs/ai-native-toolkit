@@ -108,7 +108,8 @@ def test_items_one_per_entry_with_the_contract_fields(tmp_path: Path, capsys: py
                  "- Effort: small", "- Full report: https://example.test/pr/7"):
         assert part in body
     assert body.index("**Finding:**") < body.index("### First step") < body.index("### Done when")
-    assert body.rstrip().endswith("https://github.com/bjcoombs/ai-native-toolkit")
+    assert body.rstrip().splitlines()[-3].endswith("https://github.com/bjcoombs/ai-native-toolkit")
+    assert body.rstrip().splitlines()[-1].startswith("<!-- assess:condition=")  # the marker, #810
     sparse = items[1]["body"]
     assert sparse.startswith("### Done when")  # no finding, condition or files: no lead line
     assert "not recorded" not in sparse
@@ -317,3 +318,25 @@ def test_only_the_letters_of_a_label_are_kept(label: str) -> None:
     entry = {"rank": 2, "action": "p", "done_when": "d", "scope_fence": "s",
              "sub_items": [{"label": label, "action": "x", "done_when": "d"}]}
     assert render.render_items([entry])[1]["title"] == "2a. x"
+
+
+def test_every_item_body_carries_its_condition_marker(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # #810: the marker names the row id, the level and the maturity model version, on a sub-item too.
+    payload = {"schema": 2, "actions": [
+        {"rank": 1, "action": "Gate merges on CI", "condition": "layer-5-ci.1", "done_when": "d", "scope_fence": "s",
+         "sub_items": [{"label": "a", "action": "Require the check", "done_when": "e"}]},
+        {"rank": 2, "action": "Pin the linter", "condition": "layer-3-linters.2", "done_when": "d", "scope_fence": "s"},
+    ]}
+    assess = tmp_path / ".assess"
+    assess.mkdir()
+    (assess / "actions.json").write_text(json.dumps(payload), encoding="utf-8")
+    (assess / "run-context.json").write_text(json.dumps({"level": {"levels_version": "default-2026.11.24"}}),
+                                             encoding="utf-8")
+    items = json.loads(_run(tmp_path, "items", capsys=capsys))
+    expected = [
+        "<!-- assess:condition=layer-5-ci@1 model=default-2026.11.24 -->",
+        "<!-- assess:condition=layer-5-ci@1 sub=a model=default-2026.11.24 -->",
+        "<!-- assess:condition=layer-3-linters@2 model=default-2026.11.24 -->",
+    ]
+    assert [i["marker"] for i in items] == expected
+    assert [i["body"].rstrip().splitlines()[-1] for i in items] == expected

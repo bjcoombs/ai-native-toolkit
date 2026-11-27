@@ -592,7 +592,7 @@ An agent finds docs by following links from README, AGENTS.md or an index; a doc
 - Collector: `core.doc_graph`, reading `repo_root`, `excludes`, `scope`, `working_notes`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_graph.broken_links.from` path, `doc_graph.broken_links.kind` token, `doc_graph.broken_links.target` path, `doc_graph.doc_to_code_edges.code` path, `doc_graph.doc_to_code_edges.doc` path, `doc_graph.entry_points` path, `doc_graph.link_parents.link_entry` path, `doc_graph.link_parents.link_parent` path, `doc_graph.missing_xrefs.from` path, `doc_graph.missing_xrefs.to` path, `doc_graph.moc_named_but_not_wired` path, `doc_graph.orphans` path, `doc_graph.reason` drop, `doc_graph.unreachable` path.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_graph.broken_links.from` path, `doc_graph.broken_links.kind` token, `doc_graph.broken_links.target` path, `doc_graph.doc_to_code_edges.code` path, `doc_graph.doc_to_code_edges.doc` path, `doc_graph.entry_points` path, `doc_graph.link_parents.link_entry` path, `doc_graph.link_parents.link_parent` path, `doc_graph.missing_xrefs.from` path, `doc_graph.missing_xrefs.to` path, `doc_graph.moc_named_but_not_wired` path, `doc_graph.orphans` path, `doc_graph.reason` drop, `doc_graph.unparsed_doc_formats` token, `doc_graph.unreachable` path.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.

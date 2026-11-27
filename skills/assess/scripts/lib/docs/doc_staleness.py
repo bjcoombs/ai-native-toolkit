@@ -35,7 +35,8 @@ which is the one route left by which a just-corrected doc can be re-flagged.
 
 A base doc is measured against its direct-child code only, and below `MIN_MEASURED_DOCS` the
 stale share is null with its reason (#822, `lib.docs.doc_staleness_scale`). Ownership, churn,
-provenance, bulk commits and the summary are covered in the full reference.
+provenance, bulk commits and the summary are covered in the full reference. Docs
+are the doc graph's set, reST and Sphinx `.txt` sources included (#840).
 Full reference: lib/docs/doc_staleness.md.
 """
 from __future__ import annotations
@@ -50,7 +51,7 @@ from lib.docs.doc_complexity_join import is_stale
 from lib.docs.doc_directives import is_directive_only
 from lib.docs.doc_graph import (
     CODE_EXTENSIONS,
-    DOC_EXTENSIONS,
+    discover_doc_files as _graph_doc_files,
     is_excluded_path,
     is_repo_file,
 )
@@ -341,12 +342,8 @@ def discover_doc_files(repo_root: Path,
                        extra_exclude_patterns: list[str] | None = None,
                        scope: Scope | None = None,
                        ) -> list[Path]:
-    return _discover(
-        repo_root, DOC_EXTENSIONS,
-        extra_exclude_dirs=extra_exclude_dirs,
-        extra_exclude_patterns=extra_exclude_patterns,
-        scope=scope,
-    )
+    """The doc graph's doc set: markdown, and reST/Sphinx docs (#840)."""
+    return _graph_doc_files(repo_root, extra_exclude_dirs, extra_exclude_patterns, scope)
 
 
 def content_clock(repo_root: Path) -> ContentClock:

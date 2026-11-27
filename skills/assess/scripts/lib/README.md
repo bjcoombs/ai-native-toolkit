@@ -205,7 +205,7 @@ New code imports the new path.
   vault queries. `doc_graph` imports `ownership_parser` inside a function, because
   `ownership_parser` imports `doc_graph`. The folder holds two kinds of file: the doc-scan
   modules (`.py`) and every group's long module references (`.md`, one per module, #981).
-  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`, `doc_graph.py`, `doc_graph_layout.py`, `doc_links.py`, `doc_ownership.py`, `doc_provenance.py`, `doc_staleness.py`, `doc_staleness_scale.py`, `ownership_parser.py`, `parallel_docs.py`, `vault_queries.py`.
+  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`, `doc_graph.py`, `doc_graph_layout.py`, `doc_graph_rows.py`, `doc_links.py`, `doc_ownership.py`, `doc_provenance.py`, `doc_rst.py`, `doc_staleness.py`, `doc_staleness_scale.py`, `ownership_parser.py`, `parallel_docs.py`, `vault_queries.py`.
 - **`fleet/`** ([README](fleet/README.md)): the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 5.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
@@ -250,7 +250,7 @@ New code imports the new path.
   Actions cost estimate, and the measures catalog with its Markdown, HTML, configure and
   truth-tag views. `wiki_writer` and `ci_workflow` locate `templates/` from their own path
   (`parents[3]`). `evidence_check` also runs as a script: run the moved file,
-  `python scripts/lib/report/evidence_check.py`. Files: `__init__.py`, `anomaly_detector.py`, `badge.py`, `catalog.py`, `catalog_configure.py`, `catalog_html.py`, `catalog_md.py`, `catalog_tags.py`, `ci_workflow.py`, `evidence_check.py`, `findings_snapshot.py`, `gap_actions.py`, `gate_cost.py`, `measured_appendix.py`, `reviewed_findings.py`, `run_wiki.py`, `wiki_state.py`, `wiki_writer.py`.
+  `python scripts/lib/report/evidence_check.py`. Files: `__init__.py`, `anomaly_detector.py`, `backlog_items.py`, `badge.py`, `catalog.py`, `catalog_configure.py`, `catalog_html.py`, `catalog_md.py`, `catalog_tags.py`, `ci_workflow.py`, `evidence_check.py`, `findings_snapshot.py`, `gap_actions.py`, `gate_cost.py`, `measured_appendix.py`, `reviewed_findings.py`, `run_wiki.py`, `wiki_state.py`, `wiki_writer.py`.
 - **`run/`**: the scan table and the run around it, the `run` group (#1398): the declared
   scan registry, the scan plan a `--profile` or `--levels` run executes, the bounded scan
   pool and the per-scan timings, the setup and read-side adapters and the publish step, the

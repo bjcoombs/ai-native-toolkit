@@ -358,6 +358,7 @@ XREF_SKIP_NAMES = {
     "readme.md", "index.md", "_index.md", "license.md", "changelog.md",
     "contributing.md", "code_of_conduct.md", "security.md", "agents.md",
     "claude.md", "gemini.md", "home.md", "notes.md",
+    "readme.rst", "index.rst", "index.txt",
 }
 
 
