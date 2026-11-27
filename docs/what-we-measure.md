@@ -50,6 +50,8 @@ That the code's behaviour is checked by something that runs on every change, not
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
+| `ci-skip-label.1` A label skips every CI check on pull requests | `ci_hazards` | Pull request labels that skip every CI check: is above 0 (`ci_hazards.skip_labels gt 0`) | `measured` | no, listed | held while met: `ci_runs_tests` | hazard | - | - | A label that skips every check lets any pull request merge on a green that no test produced. An agent, or a person in a hurry, needs only to add the label. | Drop the label condition from the jobs' if: lines, or limit it to jobs that check nothing, such as docs previews. If a skip is needed, scope it with a paths filter so the checks still run on code changes. |
+| `ci-test-failures-ignored.1` CI ignores test failures | `ci_hazards` | Committed files that set Maven to ignore test failures: is above 0 (`ci_hazards.test_failures_ignored gt 0`) | `measured` | no, listed | held while met: `ci_runs_tests` | hazard | - | - | With broken tests ignored, the build passes whatever the tests report, so a green run says nothing about the change. A test an agent broke reaches the main branch unseen. | Remove -Dmaven.test.failure.ignore=true and testFailureIgnore from the CI command, the Jenkinsfile and the poms listed. Quarantine a flaky test by name instead of ignoring every failure. |
 | `layer-5-ci.1` CI runs your tests or linters, and an error stops the job | `ci_checks` | A CI check runs on ordinary changes and can stop its job: is true (`ci_checks.enforced_check_runs eq true`) | `verified` | yes | `ci_runs_tests` | positive | - | - | This turns "the agent says it works" into "CI says it works": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it. | Add a CI step that runs your test or lint command on pull requests, without \|\| true, continue-on-error or allow_failure. |
 | `layer-6-coverage.1` CI runs a coverage gate of at least 50 percent | `coverage_gate` | CI runs a coverage gate of at least 50 percent: is true (`coverage_gate.enforced_meets_minimum eq true`) | `verified` | yes | `coverage_gate` | positive | - | - | An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly. | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage. Run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without \|\| true or continue-on-error. Then CI keeps coverage at the level you have reached. |
 | `layer-6-coverage.2` A mutation run has completed | `test_pressure` | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | - | positive | requires `layer-5-ci.1` | - | Coverage shows tests run the code; a mutation run shows whether they notice it changing. A completed run names the surviving mutants, which are the tests an agent cannot yet rely on. | Run the opt-in mutation pass to see which tests pin behaviour. |
@@ -204,6 +206,8 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `agent-evals` | Agent eval suites run in CI with a baseline | team | `min` | `agent-evals.1` |
 | `agent-job-write-access` | Agent job write access | team | `min` | `agent-job-write-access.1` |
 | `agent-least-privilege` | Agent jobs run with least privilege | team | `min` | `agent-least-privilege.1` |
+| `ci-skip-label` | A label skips every CI check | team | `min` | `ci-skip-label.1` |
+| `ci-test-failures-ignored` | CI ignores test failures | team | `min` | `ci-test-failures-ignored.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
 | `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
 | `docs-kept-true` | Docs and generated files kept true by CI | team | `min` | `docs-kept-true.1` |
@@ -454,6 +458,27 @@ Why the signals named here matter:
 
 - `ci_checks.lint_runs` feeds `layer-3-linters.1:ci_checks.lint_runs`: A linter or type checker in CI catches mechanical mistakes in every change, an agent's included, before a reviewer spends time on them.
 - `ci_checks.enforced_check_runs` feeds `layer-5-ci.1:ci_checks.enforced_check_runs`: This turns "the agent says it works" into "CI says it works": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it.
+
+### `ci_hazards`: CI that can be told not to fail
+
+A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it.
+
+Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to.
+
+- Collector: `core.ci_hazards`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_hazards.ci_hazard_files` path, `ci_hazards.skip_labels_reason` token, `ci_hazards.test_failures_ignored_reason` token.
+- Used by: row `ci-skip-label`, row `ci-test-failures-ignored`.
+- Evidence: `ci_hazards.skip_labels` head_structure (measured), `ci_hazards.test_failures_ignored` head_structure (measured).
+- Not measured when:
+  - `no_pr_checks`: No GitHub Actions workflow runs a test or lint command on pull requests. So this reader sees no check a label could skip. Nothing to change: this reads as not measured until a workflow runs a check on pull requests.
+  - `no_ci_files`: The tree tracks no GitHub Actions workflow, .gitlab-ci.yml, Jenkinsfile or root pom.xml, so there is no build setting to read. Nothing to change: this reads as not measured until a CI file or a root pom is committed.
+
+Why the signals named here matter:
+
+- `ci_hazards.skip_labels` feeds `ci-skip-label.1:ci_hazards.skip_labels`: A label that skips every check lets any pull request merge on a green that no test produced. An agent, or a person in a hurry, needs only to add the label.
+- `ci_hazards.test_failures_ignored` feeds `ci-test-failures-ignored.1:ci_hazards.test_failures_ignored`: With broken tests ignored, the build passes whatever the tests report, so a green run says nothing about the change. A test an agent broke reaches the main branch unseen.
 
 ### `ci_model_jobs`: Model-backed CI jobs
 
@@ -1205,6 +1230,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `broken_instruction_refs` | Broken instruction references | `doc_graph`, `instruction_grading` | `broken_instruction_refs` | no |
 | `churn_degenerate` | Degenerate churn history | `doc_staleness` | `churn_degenerate` | no |
 | `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`, `gitlab_include_renames` | `ci_checks` | no |
+| `ci_hazards` | CI that can be told not to fail | `repo_root` | `ci_hazards` | no |
 | `ci_model_jobs` | Model-backed CI jobs | `repo_root`, `ghsync_root` | `ci_model_jobs` | no |
 | `claude_config` | Claude Code configuration | `repo_root`, `scope`, `excludes` | `claude_config` | no |
 | `concurrency` | Concurrency readiness | `repo_root`, `scope`, `history_window` | `concurrency` | no |
@@ -1247,7 +1273,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
 | `keyhole_blocks` | Keyhole blocks | `keyhole`, `run_scope` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
 | `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
 | `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
 | `measured_commit` | Measured commit | `repo_root` | private input | no |
@@ -1289,7 +1315,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `test_pressure_scan` | Test pressure scan | `repo_root`, `current`, `coverage_data` | private input | no |
 | `unfinalized` | Unfinalized exclusions | `assess_dir`, `superseded`, `first_flagged`, `current`, `diff`, `excludes` | private input | no |
 | `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |
 | `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |

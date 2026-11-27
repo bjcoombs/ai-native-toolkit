@@ -60,6 +60,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -98,6 +99,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -143,6 +145,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -188,6 +191,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": false,
           "criteria": [
@@ -233,6 +237,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -260,6 +265,96 @@
       ]
     },
     {
+      "id": "ci-skip-label",
+      "title": "A label skips every CI check",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "ci-skip-label.1",
+          "truth": [
+            "behaviour"
+          ],
+          "polarity": "hazard",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": "ci_runs_tests",
+          "grade": "measured",
+          "counts": false,
+          "criteria": [
+            {
+              "key": "ci-skip-label.1:ci_hazards.skip_labels",
+              "signal": "ci_hazards.skip_labels",
+              "producer": {
+                "scan": "ci_hazards",
+                "collector": "core.ci_hazards"
+              },
+              "op": "gt",
+              "value": 0,
+              "eq_signal": null,
+              "text": "Pull request labels that skip every CI check: is above 0",
+              "title": "A label skips every CI check on pull requests",
+              "fix": "Drop the label condition from the jobs' if: lines, or limit it to jobs that check nothing, such as docs previews. If a skip is needed, scope it with a paths filter so the checks still run on code changes.",
+              "why": "A label that skips every check lets any pull request merge on a green that no test produced. An agent, or a person in a hurry, needs only to add the label.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ci-test-failures-ignored",
+      "title": "CI ignores test failures",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "ci-test-failures-ignored.1",
+          "truth": [
+            "behaviour"
+          ],
+          "polarity": "hazard",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": "ci_runs_tests",
+          "grade": "measured",
+          "counts": false,
+          "criteria": [
+            {
+              "key": "ci-test-failures-ignored.1:ci_hazards.test_failures_ignored",
+              "signal": "ci_hazards.test_failures_ignored",
+              "producer": {
+                "scan": "ci_hazards",
+                "collector": "core.ci_hazards"
+              },
+              "op": "gt",
+              "value": 0,
+              "eq_signal": null,
+              "text": "Committed files that set Maven to ignore test failures: is above 0",
+              "title": "CI ignores test failures",
+              "fix": "Remove -Dmaven.test.failure.ignore=true and testFailureIgnore from the CI command, the Jenkinsfile and the poms listed. Quarantine a flaky test by name instead of ignoring every failure.",
+              "why": "With broken tests ignored, the build passes whatever the tests report, so a green run says nothing about the change. A test an agent broke reaches the main branch unseen.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": false
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "contributor-files",
       "title": "Contributor files",
       "scope": "team",
@@ -277,6 +372,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -340,6 +436,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -376,6 +473,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -421,6 +519,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -465,6 +564,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -503,6 +603,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -549,6 +650,7 @@
           "step_gates": [
             "instructions"
           ],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -586,6 +688,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -668,6 +771,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -704,6 +808,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -748,6 +853,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -786,6 +892,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -849,6 +956,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "verified",
           "counts": true,
           "criteria": [
@@ -887,6 +995,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -950,6 +1059,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "config_only",
           "counts": false,
           "criteria": [
@@ -988,6 +1098,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1034,6 +1145,7 @@
           "step_gates": [
             "ci_runs_tests"
           ],
+          "blocks": null,
           "grade": "verified",
           "counts": true,
           "criteria": [
@@ -1071,6 +1183,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -1117,6 +1230,7 @@
           "step_gates": [
             "coverage_gate"
           ],
+          "blocks": null,
           "grade": "verified",
           "counts": true,
           "criteria": [
@@ -1155,6 +1269,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1199,6 +1314,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -1237,6 +1353,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "verified",
           "counts": true,
           "criteria": [
@@ -1300,6 +1417,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "config_only",
           "counts": false,
           "criteria": [
@@ -1336,6 +1454,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "config_only",
           "counts": false,
           "criteria": [
@@ -1399,6 +1518,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1443,6 +1563,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "config_only",
           "counts": false,
           "criteria": [
@@ -1479,6 +1600,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1523,6 +1645,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1567,6 +1690,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1611,6 +1735,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1655,6 +1780,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1688,12 +1814,16 @@
       "title": "Behaviour",
       "conditions": [
         "agent-evals.1",
+        "ci-skip-label.1",
+        "ci-test-failures-ignored.1",
         "layer-5-ci.1",
         "layer-6-coverage.1",
         "layer-6-coverage.2",
         "skill-script-tests.1"
       ],
       "listed": [
+        "ci-skip-label.1",
+        "ci-test-failures-ignored.1",
         "layer-5-ci.1",
         "layer-6-coverage.1",
         "layer-6-coverage.2",
@@ -2931,6 +3061,67 @@
         "verified"
       ],
       "why": "It reads whether CI runs tests or linters on ordinary changes in a way that can stop the job, so \"it passed\" means a check ran and could have said no.",
+      "why_source": ""
+    },
+    {
+      "name": "ci_hazards",
+      "title": "CI that can be told not to fail",
+      "summary": "Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to.",
+      "collector": "core.ci_hazards",
+      "reads": [
+        "repo_root"
+      ],
+      "headless_reads": null,
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "ci_hazards.ci_hazard_files": "path",
+          "ci_hazards.skip_labels_reason": "token",
+          "ci_hazards.test_failures_ignored_reason": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "ci-skip-label",
+          "ci-test-failures-ignored"
+        ],
+        "conditions": [
+          "ci-skip-label.1:ci_hazards.skip_labels",
+          "ci-test-failures-ignored.1:ci_hazards.test_failures_ignored"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "no_pr_checks",
+          "means": "No GitHub Actions workflow runs a test or lint command on pull requests. So this reader sees no check a label could skip.",
+          "next_step": "Nothing to change: this reads as not measured until a workflow runs a check on pull requests."
+        },
+        {
+          "code": "no_ci_files",
+          "means": "The tree tracks no GitHub Actions workflow, .gitlab-ci.yml, Jenkinsfile or root pom.xml, so there is no build setting to read.",
+          "next_step": "Nothing to change: this reads as not measured until a CI file or a root pom is committed."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "ci_hazards.skip_labels",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
+        {
+          "signal": "ci_hazards.test_failures_ignored",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it.",
       "why_source": ""
     },
     {
@@ -5568,6 +5759,18 @@
       "private": false
     },
     {
+      "name": "ci_hazards",
+      "title": "CI that can be told not to fail",
+      "publishes": [
+        "ci_hazards"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "ci_model_jobs",
       "title": "Model-backed CI jobs",
       "publishes": [
@@ -6128,6 +6331,7 @@
         "agent_environment",
         "agent_ops",
         "ci_checks",
+        "ci_hazards",
         "ci_model_jobs",
         "contributor_files",
         "coverage_gate",
@@ -6718,6 +6922,7 @@
         "agent_environment",
         "agent_ops",
         "ci_checks",
+        "ci_hazards",
         "ci_model_jobs",
         "contributor_files",
         "coverage_gate",
@@ -7008,6 +7213,24 @@
       "input_class": "ci_executed",
       "grade": "verified",
       "null_means": "included_jobs, merged_config_partial: an include may; unknown_trigger: unsettled; check_may_pass: may pass; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI; external_ci(_marker): CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
+    },
+    {
+      "path": "ci_hazards.skip_labels",
+      "title": "Pull request labels that skip every CI check",
+      "type": "number",
+      "collector": "core.ci_hazards",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_pr_checks: no GitHub Actions workflow runs a check on pull requests"
+    },
+    {
+      "path": "ci_hazards.test_failures_ignored",
+      "title": "Committed files that set Maven to ignore test failures",
+      "type": "number",
+      "collector": "core.ci_hazards",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_ci_files: no CI file, Jenkinsfile or root pom.xml is tracked"
     },
     {
       "path": "ci_model_jobs.agent_evals.present",

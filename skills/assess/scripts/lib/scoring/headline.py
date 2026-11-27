@@ -126,6 +126,8 @@ REASON_WORDS = {
     "fewer_than_two_systems": "fewer than two agent systems",
     "no_configured_gates": "no configured gate",
     "no_complexity_stats": "no complexity stats written",
+    "no_pr_checks": "no CI check on pull requests",
+    "no_ci_files": "no CI file or root pom",
 }
 # Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.
 _SUPPORTIVE = (("failed", "did not complete"), ("missing", "not found"))

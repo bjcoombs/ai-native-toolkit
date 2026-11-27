@@ -63,7 +63,7 @@ fragments), the default maturity model and `level_signals.INPUT_GRADES` into one
 grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
 row's levels, each one condition with its `id`, `truth`, `polarity`, `requires`, `guarded_by`,
 `predicted`, `review` (#1086),
-`step_gates`, `grade` and `counts`, and its criteria with the condition `key`, `producer`, `eq_signal`, plain-words `text`, `title` and `fix` from
+`step_gates`, a hazard's `blocks` (the gate it holds while met, #828), `grade` and `counts`, and its criteria with the condition `key`, `producer`, `eq_signal`, plain-words `text`, `title` and `fix` from
 the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known_scans()` name:
 `collector`, `reads`, `headless_reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
 `unregistered` or `platform_only`), `privacy` (`written`, `strings_kept`: the collector's
@@ -191,6 +191,7 @@ class CatalogLevel(TypedDict):
     predicted: str | None  # the exit rule's predicted direction (lib/scoring/levels_fields.py, #1086)
     review: str | None  # its review date, ISO; None when the condition has none
     step_gates: list[str]  # the gate ids that cover this condition, in Step order
+    blocks: str | None  # a hazard's Step gate, held while the hazard is met (#828); None otherwise
     grade: str
     counts: bool
     criteria: list[CatalogCriterion]
@@ -348,7 +349,7 @@ def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
                 level=level["level"], id=cid, truth=list(level["truth"]),
                 polarity="hazard" if hazard else DEFAULT_POLARITY, requires=list(level.get("requires", [])),
                 guarded_by=level.get("guarded_by"), predicted=level.get("predicted"),
-                review=level.get("review"), step_gates=[g for g, _ in gated.get(cid, [])],
+                review=level.get("review"), step_gates=[g for g, _ in gated.get(cid, [])], blocks=level.get("blocks"),
                 grade=grade, counts=counts(grade) and not hazard, criteria=criteria))
         agg = row["aggregation"]
         rows.append(CatalogRow(id=row["id"], title=row["title"], scope=row["scope"],

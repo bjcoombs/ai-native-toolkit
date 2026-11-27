@@ -186,6 +186,8 @@ def card(row: CatalogRow, level: CatalogLevel, scans: dict[str, CatalogScan]) ->
     hazard = level["polarity"] == "hazard"
     chips = [_chip(f"level {level['level']}")]
     chips += [_chip(f"gate: {g}", "gate", "Step gate") for g in level["step_gates"]]
+    if level["blocks"] is not None:  # #828: a hazard holds this gate while it is met
+        chips.append(_chip(f"holds gate: {level['blocks']}", "hazard", "Step gate it holds"))
     counted = level["grade"] if level["counts"] else f"{level['grade']} · not counted"
     chips.append(_chip(counted, "" if level["counts"] else "dim", "Evidence grade"))
     if hazard:

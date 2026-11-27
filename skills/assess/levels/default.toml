@@ -352,6 +352,17 @@
 #   scope, capped by its own. With no agent job both are unknown (no_agent_jobs); a scope that cannot be read and
 #   settles nothing is unknown (agent_job_scope_unread), never met. They gate no Step.
 #   Graded measured (head_structure), read from the committed workflow files.
+# - CI hazards (lib/ci/ci_hazards.py, #828): two hazards (polarity hazard, never counted) that
+#   name blocks = "ci_runs_tests", so while either is met the ci_runs_tests gate does not hold
+#   and Step 3 stays out of reach; the tally does not move. ci-skip-label reads
+#   ci_hazards.skip_labels: a pull request label that skips every check job of every GitHub Actions
+#   workflow running a check on pull requests (a job's if: !contains(...labels..., '<label>')
+#   with no ||, or a needs: on such a job). With no such workflow it is unknown (no_pr_checks).
+#   ci-test-failures-ignored reads ci_hazards.test_failures_ignored: a committed file sets
+#   maven.test.failure.ignore or testFailureIgnore to true (a CI file, a Jenkinsfile,
+#   .mvn/maven.config, a reactor pom, or a script, recipe, action or pom a CI step leads to,
+#   through the shared CI-step follower). With no CI file and no root pom it is unknown
+#   (no_ci_files). Both graded measured (head_structure), read from the committed files.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does
@@ -715,6 +726,32 @@ aggregation = "min"
   truth = ["agent_runtime", "governance"]
   polarity = "hazard"
   criteria = [{ signal = "agent_ops.summary.agent_job_write_access", op = "gt", value = 0 }]
+
+[[rows]]
+id = "ci-skip-label"
+title = "A label skips every CI check"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["behaviour"]
+  polarity = "hazard"
+  blocks = "ci_runs_tests"
+  criteria = [{ signal = "ci_hazards.skip_labels", op = "gt", value = 0 }]
+
+[[rows]]
+id = "ci-test-failures-ignored"
+title = "CI ignores test failures"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["behaviour"]
+  polarity = "hazard"
+  blocks = "ci_runs_tests"
+  criteria = [{ signal = "ci_hazards.test_failures_ignored", op = "gt", value = 0 }]
 
 [[rows]]
 id = "contributor-files"

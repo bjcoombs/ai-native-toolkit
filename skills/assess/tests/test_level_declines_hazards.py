@@ -123,8 +123,8 @@ def test_the_default_scope_is_the_positive_agent_conditions_and_never_a_hazard()
 
 
 def test_a_listed_scope_declines_only_those_conditions() -> None:
-    result = lt.level_result(lt.default_model(), HELD, declines=[_record(conditions=["layer-5-ci.1", "nope.9"])])
-    assert result["declined"] == [{"id": "layer-5-ci.1", "source": AGENTS_MARKER}]
+    result = lt.level_result(lt.default_model(), HELD, declines=[_record(source="detector", conditions=["layer-5-ci.1", "nope.9"])])
+    assert result["declined"] == [{"id": "layer-5-ci.1", "source": "detector"}]
     assert _cond(result, INSTRUCTIONS)["state"] == "met" and result["step"] == 2
 
 
@@ -142,10 +142,10 @@ def test_a_condition_that_requires_a_declined_one_reads_declined() -> None:
          "levels": [{"level": 1, "truth": ["docs"], "requires": ["a.1"],
                      "criteria": [{"signal": DOC, "op": "lte", "value": 50}]}]}]})
     result = lt.level_result(model, {"doc_staleness": {"summary": {"stale_pct": 0}}},
-                             declines=[_record(conditions=["a.1"])])
+                             declines=[_record(source="detector", conditions=["a.1"])])
     assert (_cond(result, "b.1")["state"], _cond(result, "b.1")["reason"]) == ("declined", "requires:a.1")
     assert _cond(result, "b.1")["counted"] is False
-    assert result["tally"]["met"] == 0 and result["declined"] == [{"id": "a.1", "source": AGENTS_MARKER}]
+    assert result["tally"]["met"] == 0 and result["declined"] == [{"id": "a.1", "source": "detector"}]
 
 
 def test_declines_are_read_from_the_run_context_when_not_passed() -> None:
@@ -315,3 +315,18 @@ def test_a_gate_lost_to_a_decline_or_a_hazard_is_a_measured_loss() -> None:
                                        "state": "met", "polarity": "hazard", "blocks": "ci_runs_tests"})
     lost = {"available": True, "gates_lost": ["ci_runs_tests"]}
     assert split_lost({"level": hazard_level, "since_last_run": lost}) == (["ci_runs_tests"], [])
+
+
+def test_the_agents_marker_never_takes_a_listed_non_agent_condition_out_of_the_denominator() -> None:
+    """A listed coverage condition stays measured under the agents marker; a detector's record may list it."""
+    data = {**HELD, "coverage_gate": {"available": True, "enforced_meets_minimum": True}}
+    before = lt.level_result(lt.default_model(), data)
+    marker = lt.level_result(lt.default_model(), data,
+                             declines=[_record(conditions=["layer-6-coverage.1", INSTRUCTIONS])])
+    assert _cond(marker, "layer-6-coverage.1")["state"] == "met"
+    assert marker["declined"] == [{"id": INSTRUCTIONS, "source": AGENTS_MARKER}]
+    assert marker["tally"]["measured"] == before["tally"]["measured"] - (1 if _cond(before, INSTRUCTIONS)["counted"] else 0)
+    detector = lt.level_result(lt.default_model(), data,
+                               declines=[_record(source="detector", conditions=["layer-6-coverage.1"])])
+    assert _cond(detector, "layer-6-coverage.1")["state"] == "declined"
+    assert lt.AGENTS_MARKER == AGENTS_MARKER

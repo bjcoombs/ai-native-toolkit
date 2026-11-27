@@ -106,6 +106,7 @@ fragments = [
   "skill_personal_data",
   "skill_library",
   "ci_model_jobs",
+  "ci_hazards",
   "org_security_policy",
   "github_secret_scanning",
   "contributor_files",

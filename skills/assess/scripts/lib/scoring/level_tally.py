@@ -39,7 +39,8 @@ only when its own check is under test, and what is counted does not change.
 **Declines** (#828). A ``DeclineRecord`` (``level_result_types.py``) is a declared opt-out: the
 agent-level marker ``.assess/agents-declined.json`` (``lib/run/decline_markers.py``), carried in
 the ``owner_exclusions`` block's ``declines``; ``level_result`` reads them from ``data`` unless
-the caller passes its own. A record covers the condition ids it lists, or, with ``conditions``
+the caller passes its own. A record covers the condition ids it lists (for the agent-level
+marker, only those tagged ``agent_context`` or ``agent_runtime``), or, with ``conditions``
 None, every positive condition tagged ``agent_context`` or ``agent_runtime`` (``declined_ids``); a
 hazard is never declined, and a hazard's ``requires`` never passes ``declined`` on to it. A covered condition reads ``declined`` whatever its criteria say: never met,
 never counted, out of the denominator, and never holding a Step gate, so the Step it gates stays
@@ -186,7 +187,8 @@ holding a gate:
   `why` is the condition at `level`'s why. Only counted, met conditions make a row `top`: a row
   with a condition not measured, excluded, unmet or only listed (config-only, declared, demoted)
   is never `top`, so a blind run lists nothing it did not read and the badge's "fully in place"
-  count is measured evidence only. A hazard holds when it reads unmet at a counted grade. The
+  count is measured evidence only. A hazard holds when it reads unmet at a counted grade, but a
+  row of hazards only is never `top` (#828): an absent harm is not a practice in place. The
   strengths-first blocks of the deterministic report, the badge summary and the fleet pages read it.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
@@ -241,6 +243,8 @@ NOT_APPLICABLE_REASONS = frozenset({"fewer_than_two_systems", "no_configured_gat
 DEMOTED = "demoted_by_exit_rule"
 # The truth tags a decline record listing no condition covers (#828): the agent-level opt-out.
 AGENT_TAGS = frozenset({"agent_context", "agent_runtime"})
+# The agent-level marker's source (lib.run.decline_markers.AGENTS_MARKER): its listed ids must be agent conditions.
+AGENTS_MARKER = "agents_marker"
 
 
 def scan_not_applicable(cond: Mapping[str, Any], by_id: Mapping[str, Mapping[str, Any]]) -> str | None:
@@ -499,7 +503,8 @@ def in_place(model: MaturityModel, step: int | None, conditions: Sequence[Condit
     those gate ids and the why of the condition at the listed level. Only counted, met conditions
     make a row ``top``: a row with a condition not measured, excluded, unmet or only listed
     (config-only, declared, demoted by the exit rule) is listed only for a held gate, whose
-    conditions are met by definition, whatever their grade."""
+    conditions are met by definition, whatever their grade. A row of hazards only is never
+    ``top`` (#828): a harm that is absent is not a practice in place."""
     by_row: dict[str, list[ConditionResult]] = {}
     for cond in conditions:
         by_row.setdefault(cond["row"], []).append(cond)
@@ -513,7 +518,8 @@ def in_place(model: MaturityModel, step: int | None, conditions: Sequence[Condit
     out: list[InPlace] = []
     for row in model["rows"]:
         conds = by_row.get(row["id"], [])
-        top = bool(conds) and all(_holds(c) for c in conds)
+        # a row of hazards only is a harm absent, never a practice in place (#828)
+        top = any(c.get("polarity") != "hazard" for c in conds) and all(_holds(c) for c in conds)
         held = gates.get(row["id"], {})
         if not top and not held:
             continue
@@ -552,17 +558,20 @@ def declined_ids(model: MaturityModel, declines: Sequence[Mapping[str, Any]]) ->
     """The condition ids the decline records cover (#828), each with the first covering record's
     ``source``, in model order. A record covers the ids it lists that the model defines, or, with
     ``conditions`` None, every positive condition tagged ``AGENT_TAGS``; an empty list covers
-    nothing. A hazard is never covered."""
+    nothing. The agent-level marker (``source`` ``agents_marker``) covers a listed id only when its
+    condition carries an ``AGENT_TAGS`` tag, so it never takes a non-agent condition out of the
+    denominator; another record's listed ids are taken as written. A hazard is never covered."""
     out: dict[str, str] = {}
     for row in model["rows"]:
         for level in row["levels"]:
             cid = condition_id(row["id"], level["level"])
             if level.get("polarity") == "hazard":
                 continue
+            agent = bool(AGENT_TAGS & set(level.get("truth", [])))
             for record in declines:
                 listed = record.get("conditions")
-                covered = (bool(AGENT_TAGS & set(level.get("truth", []))) if listed is None
-                           else isinstance(listed, list) and cid in listed)
+                covered = (agent if listed is None else isinstance(listed, list) and cid in listed
+                           and (agent or record.get("source") != AGENTS_MARKER))
                 if covered:
                     out.setdefault(cid, str(record.get("source") or "declared"))
     return out

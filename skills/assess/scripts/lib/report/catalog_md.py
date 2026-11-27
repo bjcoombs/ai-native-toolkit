@@ -159,7 +159,8 @@ CONDITION_COLUMNS: tuple[tuple[str, Callable[[Line], str]], ...] = (
     # Grade and Counts are the whole condition's, as lib.scoring.level_tally scores it: its weakest signal.
     ("Grade", lambda line: f"`{line.level['grade']}`"),
     ("Counts", lambda line: "yes" if line.level["counts"] else "no, listed"),
-    ("Step gate", lambda line: _codes(line.level["step_gates"])),
+    ("Step gate", lambda line: (f"held while met: `{line.level['blocks']}`" if line.level["blocks"]
+                                else _codes(line.level["step_gates"]))),
     ("Polarity", lambda line: line.level["polarity"]),
     ("Links", _links_cell),
     ("Exit review", review_cell),
