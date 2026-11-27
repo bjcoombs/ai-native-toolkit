@@ -330,11 +330,11 @@
     },
     "core.skill_personal_data": {
       "repos": {
-        "grpa/sub/deep/svc2": "72815178a8c4f7d06e4ee97f179216aab3978aceaa01a5254eae3d43d041d04b",
-        "grpa/svc1": "72815178a8c4f7d06e4ee97f179216aab3978aceaa01a5254eae3d43d041d04b",
-        "grpb/lib1": "72815178a8c4f7d06e4ee97f179216aab3978aceaa01a5254eae3d43d041d04b"
+        "grpa/sub/deep/svc2": "695efa33c241d1e42a4f7ac2216dee270680fc0027eae5199d388fd32b7452ac",
+        "grpa/svc1": "695efa33c241d1e42a4f7ac2216dee270680fc0027eae5199d388fd32b7452ac",
+        "grpb/lib1": "695efa33c241d1e42a4f7ac2216dee270680fc0027eae5199d388fd32b7452ac"
       },
-      "revision": 2
+      "revision": 3
     },
     "core.skill_script_tests": {
       "repos": {

@@ -22,6 +22,9 @@ SKILL = "---\nname: {0}\ndescription: Does {0}.\n---\n{1}\n"
 # Built here so no literal personal datum sits in the repository's own text.
 EMAIL = "jane.smith" + "@" + "acme-corp.io"
 PHONE = "+44 20 7946 " + "0958"
+# A high-entropy value, so a credential assignment around it is a finding (#1196); split as above.
+KEY = "Q7rx9Lm2" + "Vt8Kp4Wz6Nb3"
+KEY36 = KEY + "Hs5Jd1Fg7Ry2Mc9P"
 
 
 def _plugin(root: Path, files: dict[str, str]) -> Path:
@@ -54,22 +57,21 @@ def _state(block: Any) -> tuple[str, str | None]:
     ("Pass --host=10.20." + "30.40 here.", ["ip_address"]),
     ("postgres://app@10.20." + "30.40:5432/db", ["ip_address"]),
     ("Run ssh deploy@" + "build-01 to deploy.", ["ssh_or_host"]),
-    ('password: "Straw' + 'berry42"', ["credential"]),  # a literal that starts with a schema word
-    ("password: nosfer" + "atu77", ["credential"]),
-    ("token: object" + "9x8y", ["credential"]),
-    ("token: abc" + "[1]", ["credential"]),
-    ("password: no." + "way.42", ["credential"]),
-    ("password: yes!" + "please9", ["credential"]),
-    ("password: str/" + "abc123", ["credential"]),
-    ('password: str = "hun' + 'ter2"', ["credential"]),  # a typed field with a literal default
-    ("secret: bool=hun" + "ter2", ["credential"]),
-    ('password: "correct horse ' + 'battery"', ["credential"]),  # quoted: still a value
-    ("password: hunter" + "2  # rotate me", ["credential"]),  # a comment after the value
-    ("PASSWORD=hunter" + "2 mysql -u app", ["credential"]),  # an assignment before a command
-    ("password: hunter" + "2 then run", ["credential"]),  # secret-shaped, then prose
-    ("token: ghp_abc" + "defghijk and more", ["credential"]),
-    ("token = " + "ghp" + "_abc123def456", ["credential"]),
-    ("token: ${{ secrets.X }} and password = " + "hunter" + "2abc", ["credential"]),  # one literal is enough
+    (f'password: "Str{KEY}"', ["credential"]),  # a literal that starts with a schema word
+    (f"token: object{KEY}", ["credential"]),
+    (f"token: list{KEY}", ["credential"]),
+    (f"password: no.{KEY}", ["credential"]),
+    (f"password: yes!{KEY}", ["credential"]),
+    (f"password: str/{KEY}", ["credential"]),
+    (f'password: str = "{KEY}"', ["credential"]),  # a typed field with a literal default
+    (f"secret: bool={KEY}", ["credential"]),
+    (f'password: "{KEY[:10]} {KEY[10:]}"', ["credential"]),  # quoted: still a value
+    (f"password: {KEY}  # rotate me", ["credential"]),  # a comment after the value
+    (f"PASSWORD={KEY} mysql -u app", ["credential"]),  # an assignment before a command
+    (f"password: {KEY} then run", ["credential"]),  # secret-shaped, then prose
+    (f"token: {'gh' + 'p_'}{KEY36} and more", ["credential"]),
+    (f"Use {'gh' + 'p_'}{KEY36} once.", ["credential"]),  # a provider key needs no assignment
+    (f"token: ${{{{ secrets.X }}}} and password = {KEY}", ["credential"]),  # one literal is enough
     ("AKIA" + "ABCDEFGHIJKLMNOP is the key.", ["cloud_key"]),
     ("-----BEGIN RSA PRIVATE KEY-----", ["private_key"]),
     (f"{EMAIL} or {PHONE}", ["email", "phone"]),
@@ -113,6 +115,12 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "Token: The value from step 2",
     "Password: Use the one in 1Password",
     "token: see below",
+    # Example values, not generated secrets (#1196): short, low in entropy or a provider-key stub.
+    "password: hunter" + "2",
+    "password: nosfer" + "atu77",
+    'password: "correct horse ' + 'battery"',
+    "token = " + "ghp" + "_abc123def456",
+    "token = _strip_anchor(m.group(1))",  # code, not a literal
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:
     assert kinds_in(text) == []
@@ -138,7 +146,7 @@ def test_a_finding_names_the_file_and_kind_never_the_data(tmp_path: Path) -> Non
     assert block["files"] == [{"path": "skills/a/references/contacts.md", "kinds": ["email"]},
                               {"path": "skills/b/SKILL.md", "kinds": ["phone"]}]
     assert (block["files_considered"], block["files_with_personal_data"]) == (3, 2)
-    assert block["kinds_detected"] == list(FINDING_KINDS) and "credential" not in block["kinds_detected"]
+    assert block["kinds_detected"] == list(FINDING_KINDS) and "credential" in block["kinds_detected"]
     dumped = json.dumps(block)
     assert EMAIL not in dumped and "7946" not in dumped and "jane" not in dumped
     assert _state(block) == ("unmet", None)
@@ -190,11 +198,20 @@ def test_a_reference_outside_the_scope_or_excluded_is_not_read(tmp_path: Path) -
     assert excluded["files"] == []
 
 
-def test_a_credential_is_information_only_and_never_unmet(tmp_path: Path) -> None:
-    repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", "Set password = " + "hunter" + "2abc.")})
+def test_a_credential_is_a_finding_and_an_example_value_is_information_only(tmp_path: Path) -> None:
+    repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", f"Set password = {KEY}."),
+                              "skills/b/SKILL.md": SKILL.format("b", "Set password = " + "hunter" + "2abc.")})
     block = scan_skill_personal_data(repo)
-    assert block["files"] == [] and block["credential_candidates"] == 1
-    assert _state(block) == ("met", None)
+    assert block["files"] == [{"path": "skills/a/SKILL.md", "kinds": ["credential"]}]
+    assert block["credential_candidates"] == 1  # the example value in b, set aside
+    assert KEY not in json.dumps(block)
+    assert _state(block) == ("unmet", None)
+
+
+@pytest.mark.parametrize("text", ["token: ${{ secrets.GH_TOKEN }}", "password=os.environ['PW']", "api_key=sk-..."])
+def test_a_reference_or_placeholder_is_not_counted_as_a_candidate(tmp_path: Path, text: str) -> None:
+    block = scan_skill_personal_data(_plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", text)}))
+    assert block["files"] == [] and block["credential_candidates"] == 0
 
 
 @pytest.mark.parametrize("value", ["xxxxxxxx", "******", "<your-token>", "${API_KEY}", "your_token_here",
@@ -215,9 +232,8 @@ def test_the_condition_carries_the_approved_why_and_names_the_kinds() -> None:
     cond = next(e for e in manifest["entries"]
                 if e.get("key") == f"{CID}:skill_personal_data.files_with_personal_data")
     assert cond["why"] == WHY  # type: ignore[typeddict-item]
-    for kind in ("email", "phone", "home path", "IP", "SSH login", "key"):
+    for kind in ("email", "phone", "home path", "IP", "SSH login", "key", "credential"):
         assert kind in cond["title"]  # type: ignore[typeddict-item]
-    assert "credential" not in cond["title"]  # type: ignore[typeddict-item]  # information only (#1196)
     assert not [c for c in lt.gate_conditions(lt.default_model()) if c.startswith("skill-personal-data.")]
 
 
