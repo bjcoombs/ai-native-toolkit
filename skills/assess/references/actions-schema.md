@@ -99,6 +99,18 @@ Outside that case a marked item is never matched by title. Each existing item is
 
 `assess_actions_render.py reconcile --existing <file>` (#811) reads the same list beside `run-context.json` on an interactive run and proposes, per item, a close (its condition now holds, with the evidence line and the commit), a reopen (a closed item's condition lapsed, with the cause), a demote to informational (it can no longer move: a commit-origin finding, or a condition that reads not applicable; a condition this run's model does not list is left alone) or a close as superseded (a part of an action no longer split). A move only the new model caused reads `rules changed: your repo did not` and is never proposed. It writes nothing; `--confirm` prints the confirmed writes. Rules: `scripts/lib/report/backlog_reconcile.py`.
 
+## Open-item limit on filed items (#812)
+
+`plan` also gives each item a `wip` step, `{decision, tier}`. At most `[backlog] wip` backlog items are open at once (`.assess/config.toml`, default 3; `--wip N` overrides it). Open items that carry a condition marker or the label count, and so does any open item a `filing` step reuses.
+
+| `decision` | Meaning |
+|------------|---------|
+| `open` | The step reuses an item that is already open: no new slot. |
+| `file` | Create the item within the limit. For a step that names a closed item, propose reopening it (`assess-pr` 6c flags a closed match to the user and never reopens it silently). |
+| `next_up` | The limit is reached: not filed. `next-up --existing <file>` lists it for the report. |
+
+Items that need a slot are taken by `tier`, the next-unlock ranking: `next_unlock` (the item's condition is in `level.next_step.blockers[].condition`), then `recovery` (the step matches a closed item), then `gain`. The Top 3 order stands within a tier. `plan` takes each tracker item once per run (#811), so two actions naming one condition each take their own slot. The rules live in `scripts/lib/report/backlog_wip.py`.
+
 ## `status` lifecycle
 
 | Status | Meaning |
