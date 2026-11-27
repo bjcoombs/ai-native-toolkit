@@ -104,6 +104,8 @@ def apply_wip(items: Sequence[Mapping[str, object]], steps: Sequence[FilingStep]
     wanting = [i for i, s in enumerate(steps) if not (s["action"] != "create" and _is_open(s))]
     for i in sorted(wanting, key=lambda i: TIERS.index(tiers[i])):
         number = steps[i].get("number")
+        # Reachable through plan_filing: a marker match without sub or part claims nothing, so two
+        # actions naming one condition both reuse the same closed item.
         if isinstance(number, int) and number in reopened:
             out[i]["decision"] = FILE
             continue

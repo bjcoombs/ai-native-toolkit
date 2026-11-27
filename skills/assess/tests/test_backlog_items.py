@@ -283,3 +283,12 @@ def test_next_up_subcommand_reads_the_wip_from_config(tmp_path: Path, capsys: py
     assert "- Action 2\n- Action 3\n" in capsys.readouterr().out
     assert render.main([str(tmp_path), "next-up", "--existing", str(existing), "--wip", "3"]) == 0
     assert capsys.readouterr().out == ""
+
+
+def test_two_actions_matching_one_closed_item_take_one_slot() -> None:
+    # A marker without sub or part claims nothing, so both actions reuse closed #9 (#811 note).
+    existing = [_marked(1, "old-1.1"), _marked(2, "old-2.1"), _marked(9, "row-a.1", state="CLOSED")]
+    twins = _items(_entry(1, "row-a.1"), _entry(2, "row-a.1"), _entry(3, "row-c.1"))
+    planned = _propose(twins, existing)
+    assert [p["filing"].get("number") for p in planned[:2]] == [9, 9]
+    assert [p["wip"]["decision"] for p in planned] == [bw.FILE, bw.FILE, bw.NEXT_UP]
