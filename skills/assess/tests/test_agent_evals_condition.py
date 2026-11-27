@@ -369,6 +369,8 @@ TEMPLATE = ".evals: &evals\n  script:\n    - pytest evals/\n"
     # A rules: entry with no when: (on_success) runs the job.
     "evals:\n  <<: *evals\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"never\"\n      when: never\n    - if: $X\n",
     "evals:\n  script:\n    - pytest evals/\n  rules:\n    - when: always\n",
+    # A chain of anchored templates a running job takes through the last one.
+    ".mid: &mid\n  <<: *evals\n  image: python:3.12\nevals:\n  <<: *mid\n",
 ])
 def test_a_template_a_running_job_takes_is_a_run(tmp_path: Path, jobs: str) -> None:
     root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
@@ -386,6 +388,8 @@ def test_a_template_a_running_job_takes_is_a_run(tmp_path: Path, jobs: str) -> N
     # An alias only in a comment, or only in another hidden job.
     "# use *evals later\ntest:\n  script:\n    - pytest tests/\n",
     ".other:\n  <<: *evals\ntest:\n  script:\n    - pytest tests/\n",
+    # A chain whose running job replaces the script the chain carries.
+    ".mid: &mid\n  <<: *evals\nevals:\n  <<: *mid\n  script:\n    - pytest tests/\n",
     # A !reference held only by a manual job or by a hidden job nothing uses.
     "evals:\n  when: manual\n  script:\n    - !reference [.evals, script]\n",
     ".other:\n  script:\n    - !reference [.evals, script]\ntest:\n  script:\n    - pytest tests/\n",

@@ -260,13 +260,21 @@ def hidden_references(texts: Iterable[str]) -> frozenset[tuple[str, str]]:
     return frozenset(found)
 
 
+def _taken(tree: IndentTree, replaced: Mapping[int, set[str]], i: int) -> int | None:
+    """The used anchor line ``i`` sits under by a key no merging use replaces, or None."""
+    path = [i, *tree.ancestors(i)]
+    return next((a for n, a in enumerate(path)
+                 if a in replaced and (not n or tree.lines[path[n - 1]].key not in replaced[a])), None)
+
+
 def _hidden_keep(tree: IndentTree,
                  referenced: frozenset[tuple[str, str]]) -> tuple[dict[int, set[str]], dict[int, set[str]]]:
     """For each top-level GitLab hidden job, the keys a ``!reference`` names; and each line, at
     any depth, whose YAML anchor an alias in a visible job that runs uses (anchors do not cross
     files, and a comment holds no alias), with the keys of it every such use replaces: the
     subtree under the anchor runs where the alias puts it, but a job merging it (``<<: *evals``)
-    keeps its own copy of a key it also sets."""
+    keeps its own copy of a key it also sets. An alias inside a used anchor's subtree is a use
+    too (``.mid: &mid {<<: *evals}`` under ``evals: {<<: *mid}``), followed to a fixed point."""
     hidden = {i: {key for job, key in referenced if job == line.key} for i, line in enumerate(tree.lines)
               if line.structural and line.key.startswith(".") and not tree.ancestors(i)}
     anchors: dict[str, int] = {}
@@ -274,17 +282,27 @@ def _hidden_keep(tree: IndentTree,
         anchor = _ANCHOR.match(line.value) if line.structural else None
         if anchor:
             anchors.setdefault(anchor.group(1), i)
+    running = _running(tree)
     replaced: dict[int, set[str]] = {}
-    for i in _running(tree):
-        line = tree.lines[i]
-        own = set()
-        if not line.key and line.value.startswith("<<"):
-            own = {tree.lines[k].key for k in tree.siblings[tree.mapping_of[i]]} - {""}
-        for name in _ALIAS.findall(line.value):
-            if name in anchors:
-                a = anchors[name]
-                replaced[a] = replaced[a] & own if a in replaced else own
-    return hidden, replaced
+    while True:
+        lines: dict[int, int | None] = dict.fromkeys(running)
+        lines.update((i, a) for i, line in enumerate(tree.lines)
+                     if line.structural and i not in lines and (a := _taken(tree, replaced, i)) is not None)
+        found: dict[int, set[str]] = {}
+        for i, via in lines.items():
+            line = tree.lines[i]
+            own: set[str] = set()
+            if not line.key and line.value.startswith("<<"):
+                own = {tree.lines[k].key for k in tree.siblings[tree.mapping_of[i]]} - {""}
+                if via is not None and tree.ancestors(i)[:1] == [via]:
+                    own |= replaced[via]  # what replaces the merging template replaces its parent too
+            for name in _ALIAS.findall(line.value):
+                if name in anchors:
+                    a = anchors[name]
+                    found[a] = found[a] & own if a in found else own
+        if found == replaced:
+            return hidden, replaced
+        replaced = found
 
 
 def run_texts(text: str, referenced: frozenset[tuple[str, str]] | None = None) -> list[str]:
@@ -311,9 +329,7 @@ def run_texts(text: str, referenced: frozenset[tuple[str, str]] | None = None) -
             continue
         up = tree.ancestors(i)
         path = [i, *up]
-        # Taken through an alias: under a used anchor, by a key no merging job replaces.
-        aliased = any(a in replaced and (not n or tree.lines[path[n - 1]].key not in replaced[a])
-                      for n, a in enumerate(path))
+        aliased = _taken(tree, replaced, i) is not None
         if up and up[-1] in idle and not aliased:
             continue
         if up and up[-1] in hidden and tree.lines[path[-2]].key not in hidden[up[-1]] and not aliased:
