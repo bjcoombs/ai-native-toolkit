@@ -101,6 +101,12 @@ def condition_whys(manifest: Mapping[str, Any]) -> dict[str, str]:
             if e.get("kind") == "condition" and isinstance(e.get("key"), str)}
 
 
+def condition_fixes(manifest: Mapping[str, Any]) -> dict[str, str]:
+    """Condition key (``<row>.<level>:<signal>``) -> its fix, for every condition entry (#828)."""
+    return {e["key"]: str(e.get("fix") or "") for e in manifest.get("entries", [])
+            if e.get("kind") == "condition" and isinstance(e.get("key"), str)}
+
+
 def _text_errors(where: str, why: Any, out: list[ValidationError], *, token_ok: bool) -> None:
     """Required, a string of 1 to 300 characters, and clean against ``lib.vocabulary``."""
     if why is None:

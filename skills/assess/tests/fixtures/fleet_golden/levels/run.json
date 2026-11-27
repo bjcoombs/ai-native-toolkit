@@ -198,7 +198,7 @@
     },
     {
       "id": "core.headline",
-      "revision": 4
+      "revision": 5
     },
     {
       "id": "core.history_window",
@@ -242,7 +242,7 @@
     },
     {
       "id": "core.level",
-      "revision": 1
+      "revision": 2
     },
     {
       "id": "core.liveness",
@@ -278,7 +278,7 @@
     },
     {
       "id": "core.owner_exclusions",
-      "revision": 1
+      "revision": 2
     },
     {
       "id": "core.plugin_version",
@@ -406,7 +406,7 @@
     },
     {
       "id": "core.unit_levels",
-      "revision": 1
+      "revision": 2
     },
     {
       "id": "core.unit_readings",

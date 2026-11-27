@@ -760,3 +760,10 @@ def test_each_condition_carries_the_whys_of_its_criteria():
 def test_a_no_builder_reason_reads_in_words():
     from lib.scoring.headline import reason_word
     assert reason_word("no_builder:java") == "no import graph builder for java yet"
+
+
+@pytest.mark.parametrize("signals", [{}, {"layer_grades": {"instruction_file_present": False}}, _fresh(0)])
+def test_a_repository_with_no_decline_record_never_reads_declined(signals):
+    """#828: absence alone never produces DECLINED, whatever the signals read."""
+    result = lt.level_result(load_default_levels(), {**signals, "owner_exclusions": {"exclusions": []}})
+    assert "declined" not in result and all(c["state"] != "declined" for c in result["conditions"])

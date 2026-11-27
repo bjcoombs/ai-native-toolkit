@@ -257,6 +257,9 @@
                 ],
                 "description": "present only on a hazard condition, which is never counted (lib/scoring/levels_fields.py)"
               },
+              "blocks": {
+                "type": "string"
+              },
               "why": {
                 "type": "string"
               },
@@ -304,6 +307,9 @@
                         "type": "string"
                       },
                       "condition": {
+                        "type": "string"
+                      },
+                      "polarity": {
                         "type": "string"
                       },
                       "state": {
@@ -420,6 +426,47 @@
               "id",
               "kind",
               "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "declined": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "hazards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "fix": {
+                "type": "string"
+              },
+              "gate": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "fix",
+              "id"
             ],
             "additionalProperties": false
           }

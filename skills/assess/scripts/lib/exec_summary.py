@@ -34,7 +34,8 @@ from pathlib import Path
 from typing import Any, cast
 
 from lib.scoring.headline import headline
-from lib.scoring.level_result_types import Headline, LevelResult
+from lib.scoring.level_result_types import DeclineRecord, Headline, LevelResult
+from lib.scoring.level_tally import EXCLUSIONS_BLOCK, run_declines
 from lib.scoring.levels import MaturityModel
 from lib.card_facts import CardFact
 from lib.profiles import ModelChoice, chosen_model, model_facts
@@ -74,12 +75,14 @@ def _head_sha(measured: Any) -> str | None:
 
 
 def run_headline(level: Any, since: Any, choice: ModelChoice | None, rollup: Any = None,
-                 measured: Any = None, assess_dir: Path | None = None) -> Headline:
+                 measured: Any = None, assess_dir: Path | None = None, exclusions: Any = None) -> Headline:
     """The run context's ``headline`` block: the headline of ``level`` under the run's model
     (``choice``, the default when None), with the top card from ``since``, the unit roll-up,
-    the measured commit and ``<assess_dir>/actions.json``."""
+    the measured commit and ``<assess_dir>/actions.json``, and the DECLINED badge's owner and
+    reason from the ``owner_exclusions`` block's decline records (#828)."""
     model = chosen_model(choice)
-    block = summarised(headline(level, model), level, since, model, choice, rollup,
+    declines = cast("list[DeclineRecord]", run_declines({EXCLUSIONS_BLOCK: exclusions}))
+    block = summarised(headline(level, model, declines), level, since, model, choice, rollup,
                        _head_sha(measured), read_first_action(assess_dir))
     if choice is None or choice.kind == "default":
         return block

@@ -32,7 +32,11 @@ precedes every gate line.
    (``2 of 3 Step 4 gates held``). The commit is left out when the run recorded none;
 3. below the top Step only, the blocking gates, which lead every gate line:
    ``Blocks Step 4: no coverage gate is enforced.`` (``GATE_GAP``, plus ``headline.gate_note``
-   when the gate was not measured or the owner excluded it). When that one gate is all that
+   when the gate was not measured or the owner excluded it). A gate held by a met hazard reads
+   ``the hazard <id> undermines the <gate> gate``, and one whose condition the repository
+   declined reads ``the repository declined <id>, so the <gate> gate cannot hold`` (#828); the
+   Start here line then names the hazard's fix, or says nothing is to do while the decline
+   stands and how to lift it. When that one gate is all that
    stands below a higher Step whose other gates already hold (``headline.one_change_ceiling``,
    #1333), the line adds ``; that one change reaches Step 3.``. When the monorepo unit roll-up
    (``unit_rollup.learn_from``, #1155) names a unit that already holds the first blocking
@@ -78,7 +82,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from lib.card_facts import CardFact, advisories, blocking_gates, fully_in_place, step_gate_ids, step_name, top_step
-from lib.scoring.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, one_change_ceiling, verified_count
+from lib.scoring.headline import GATE_CHANGE, GATE_NOUN, GLOSSARY_URL, gate_note, one_change_ceiling, verified_count
 from lib.scoring.levels import MaturityModel
 from lib.model_change import model_changed_line
 from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
@@ -180,7 +184,29 @@ def read_first_action(assess_dir: Path | None) -> CardAction | None:
 
 def _gap(blocker: Mapping[str, Any]) -> str:
     gate = str(blocker.get("gate", ""))
+    noun = GATE_NOUN.get(gate, gate)
+    if blocker.get("polarity") == "hazard":  # #828: the gate's own conditions are met
+        return f"the hazard {blocker.get('condition', '')} undermines the {noun} gate"
+    if blocker.get("state") == "declined":  # #828: a declined condition never holds a gate
+        return f"the repository declined {blocker.get('condition', '')}, so the {noun} gate cannot hold"
     return GATE_GAP.get(gate, f"the {gate} gate does not hold yet") + gate_note(blocker)  # type: ignore[arg-type]
+
+
+def _special_start(level: Mapping[str, Any], blocker: Mapping[str, Any]) -> tuple[str, str] | None:
+    """Start here and Done when for a gate held by a hazard or a decline (#828); None otherwise."""
+    cid = str(blocker.get("condition", ""))
+    if blocker.get("polarity") == "hazard":
+        hazards = level.get("hazards")
+        fix = next((h.get("fix") for h in hazards if isinstance(h, Mapping) and h.get("id") == cid), "") \
+            if isinstance(hazards, list) else ""
+        task = f"clear the hazard {cid}" + (f": {_lower_first(str(fix))}" if fix else "")
+        return (f"Start here: {_sentence(task[:1].upper() + task[1:])}",
+                f"Done when: the next `/assess` run no longer reads the hazard {cid}.")
+    if blocker.get("state") == "declined":
+        return ("Start here: nothing, while the repository declines agents. To lift the decline, "
+                "remove `.assess/agents-declined.json`.",
+                f"Done when: the decline is lifted and the next `/assess` run reads {cid} met.")
+    return None
 
 
 def _lead(level: Mapping[str, Any], model: MaturityModel) -> str:
@@ -313,6 +339,8 @@ def start_lines(level: Mapping[str, Any], action: CardAction | None) -> tuple[st
     if action is not None:
         return f"Start here: {action['start']}", f"Done when: {_sentence(action['done_when'])}"
     gates = blocking_gates(level)
+    if gates and (special := _special_start(level, gates[0])) is not None:
+        return special
     if gates:
         gate = str(gates[0].get("gate", ""))
         task = GATE_TASK.get(gate, f"make the {gate} gate hold")

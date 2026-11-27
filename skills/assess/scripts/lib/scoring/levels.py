@@ -99,7 +99,7 @@ Two optional additions feed the verified tally and the Steps (``lib/scoring/leve
 
 Six condition fields come from ``lib/scoring/levels_fields.py`` (#843), which documents them:
 ``truth`` (required tags, with the legacy layer alias for a model that carries none) and the
-additive ``polarity``, ``guarded_by``, ``eq_signal``, ``predicted`` and ``review`` (#1086).
+additive ``polarity`` (with a hazard's ``blocks``, #828), ``guarded_by``, ``eq_signal``, ``predicted`` and ``review`` (#1086).
 
 Loading raises ``LevelsError`` before any evaluation on a malformed maturity model: a
 missing version, an unset or invalid scope, a gap or duplicate in level
@@ -124,7 +124,8 @@ from typing import Any, Callable, Iterable, Literal, Mapping, NotRequired, Typed
 
 from lib.scoring.levels_fields import LevelsError as LevelsError, MixedTruthError as MixedTruthError
 from lib.scoring.levels_fields import check_guards, check_truth, legacy_truth, parse_eq_signal, parse_guard
-from lib.scoring.levels_fields import ModelDemotions, ReviewFields, apply_review, parse_polarity, parse_truth
+from lib.scoring.levels_fields import HazardFields, ModelDemotions, ReviewFields, apply_hazard, apply_review, parse_truth
+from lib.scoring.levels_fields import check_hazard_gates
 from lib.scoring.levels_hints import UnknownSignalError as UnknownSignalError
 from lib.signal_aliases import dealias_model
 from lib.scoring.signal_grades import EMPTY_DENOMINATORS
@@ -147,7 +148,7 @@ OPERATORS = _EQUALITY_OPS + _ORDER_OPS + _MEMBER_OPS
 
 _ROOT_KEYS = frozenset({"version", "rows", "steps"})
 _ROW_KEYS = frozenset({"id", "title", "scope", "aggregation", "share", "levels"})
-_LEVEL_KEYS = frozenset({"level", "criteria", "requires", "truth", "polarity", "guarded_by", "predicted", "review"})
+_LEVEL_KEYS = frozenset({"level", "criteria", "requires", "truth", "polarity", "blocks", "guarded_by", "predicted", "review"})
 _STEP_KEYS = frozenset({"step", "name", "gates"})
 # The 2.x and 3.0 Step count key, refused by name since #1083: Steps are gates only.
 REMOVED_STEP_KEY = "threshold"
@@ -182,13 +183,12 @@ class Criterion(TypedDict):
     eq_signal: NotRequired[str]
 
 
-class Level(ReviewFields):  # predicted, review: the exit rule (#1086)
+class Level(ReviewFields, HazardFields):  # predicted, review: the exit rule (#1086); polarity, blocks (#828)
     level: int
     criteria: list[Criterion]
     # condition ids (``<row id>.<level>``) this condition needs met (#744)
     requires: NotRequired[list[str]]
     truth: list[str]  # declared, or resolved by the legacy layer alias (#843)
-    polarity: NotRequired[Literal["hazard"]]  # absent: positive, the default
     guarded_by: NotRequired[str]  # one condition id whose state gates a verified grade
 
 
@@ -341,6 +341,7 @@ def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None
     model: MaturityModel = {"version": version, "rows": rows}
     if "steps" in data:
         model["steps"] = _parse_steps(data["steps"], rows)
+    check_hazard_gates(rows, model.get("steps"))
     return model
 
 
@@ -423,8 +424,7 @@ def _parse_levels(raw: Any, where: str) -> list[Level]:
         parsed = [_parse_criterion(c, here) for c in criteria]
         level: Level = {"level": number, "criteria": parsed,
                         "truth": parse_truth(entry["truth"], here) if "truth" in entry else []}
-        if "polarity" in entry and parse_polarity(entry["polarity"], here) == "hazard":
-            level["polarity"] = "hazard"
+        apply_hazard(level, entry, here)
         if "guarded_by" in entry:
             level["guarded_by"] = parse_guard(entry["guarded_by"], here)
         apply_review(level, entry, here)

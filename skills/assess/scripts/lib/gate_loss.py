@@ -8,8 +8,9 @@ reads the run context; nothing writes a file or recomputes ``since_last_run``:
   run does not, in Step order. Empty on a first run, when the block is degraded, or when the
   changes are not known (``gates_lost`` null), so an unknown never reads as a loss.
 - **Unmet or unread.** ``split_lost`` sorts each lost gate by its condition state in this
-  run's ``level`` block (``level_tally.gate_blockers`` over the default model's Steps): only a
-  gate that now reads ``unmet`` is a measured loss. One that reads anything else
+  run's ``level`` block (``level_tally.gate_blockers`` over the default model's Steps): a gate
+  that now reads ``unmet``, is held by a met hazard or reads ``declined`` (#828,
+  ``MEASURED_LOSS``) is a measured loss, since each is read, not unknown. One that reads anything else
   (``not_measured``, an unavailable level result, a model without that gate's condition) is
   unknown, never a loss.
 - **The Step.** A Step needs its gates and nothing else (#1083), so the baseline's Step is
@@ -114,16 +115,23 @@ def _states(ctx: Mapping[str, Any]) -> dict[str, str]:
         blockers = gate_blockers(_steps(level), conditions)
     except KeyError:
         return {}
-    return {b["gate"]: b["state"] for b in blockers if "gate" in b and "state" in b}
+    # a met hazard that holds the gate reads as "hazard" (#828), apart from a met condition
+    return {b["gate"]: "hazard" if b.get("polarity") == "hazard" else b["state"]
+            for b in blockers if "gate" in b and "state" in b}
+
+
+# The blocker readings that are a measured loss (#828): a read state, never an unknown.
+MEASURED_LOSS = frozenset({"unmet", "hazard", "declined"})
 
 
 def split_lost(ctx: Mapping[str, Any]) -> tuple[list[str], list[str]]:
-    """(lost gates that now read unmet, lost gates this run could not read)."""
+    """(lost gates this run read as lost: unmet, held by a met hazard or declined; lost gates this
+    run could not read)."""
     states = _states(ctx)
     unmet: list[str] = []
     unread: list[str] = []
     for gate in lost_gates(ctx):
-        (unmet if states.get(gate) == "unmet" else unread).append(gate)
+        (unmet if states.get(gate) in MEASURED_LOSS else unread).append(gate)
     return unmet, unread
 
 

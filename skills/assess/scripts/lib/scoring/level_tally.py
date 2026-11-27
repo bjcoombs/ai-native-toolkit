@@ -7,9 +7,8 @@ with no prior run, no stored state and no model in the path:
 
 - each condition's **state**: ``met``, ``unmet`` or ``not_measured`` (with a
   reason code), or ``not_applicable`` when the owner excluded it (below) or the
-  signal does not apply to the repository (``NOT_APPLICABLE_REASONS``, #1407).
-  ``declined`` is a reserved state that no rule produces yet (#828), so readers
-  accept all five;
+  signal does not apply to the repository (``NOT_APPLICABLE_REASONS``, #1407), or
+  ``declined`` when a declared opt-out covers it (below, #828);
 - each condition's **grade**, the weakest ``lib.scoring.level_signals.criterion_grade``
   of its criteria. ``measured`` and ``verified`` conditions are **counted**;
   ``config_only`` and ``declared`` ones, and any criterion signal with no
@@ -36,6 +35,26 @@ neither moves a row level or, in the shipped model, anything at all: a
 met) and carries ``polarity: "hazard"``; a ``guarded_by`` condition's grade is
 capped at ``measured`` while its guard is not ``met``, so it reads ``verified``
 only when its own check is under test, and what is counted does not change.
+
+**Declines** (#828). A ``DeclineRecord`` (``level_result_types.py``) is a declared opt-out: the
+agent-level marker ``.assess/agents-declined.json`` (``lib/run/decline_markers.py``), carried in
+the ``owner_exclusions`` block's ``declines``; ``level_result`` reads them from ``data`` unless
+the caller passes its own. A record covers the condition ids it lists, or, with ``conditions``
+None, every positive condition tagged ``agent_context`` or ``agent_runtime`` (``declined_ids``); a
+hazard is never declined, and a hazard's ``requires`` never passes ``declined`` on to it. A covered condition reads ``declined`` whatever its criteria say: never met,
+never counted, out of the denominator, and never holding a Step gate, so the Step it gates stays
+unreachable while the decline stands. A condition whose own criteria are met and that requires it
+reads ``declined`` with ``requires:<id>``, as for any need that is not met (an unmet one stays
+``unmet``, as with an owner exclusion), and is not counted. An owner exclusion of the same id wins. ``declined[]`` (``{id, source}``) is
+present only when a record covers a condition. Absence of a record never produces ``declined``.
+
+**Hazards** (#828). A hazard condition (``polarity = "hazard"``) carries the model's ``blocks``
+(a Step gate id) on its result. While the hazard is ``met`` (the harm is present) that gate does
+not hold, whatever its own conditions read: the blocker is ``{kind: "gate", gate, condition:
+<hazard id>, state: "met", polarity: "hazard"}``, given only when the gate's own conditions are
+all met, so each gate has one blocker. A hazard not measured blocks nothing. ``hazards[]``
+(``{id, fix, gate?}``, present only when one is met) lists the harms apart from the tally, each
+with its fix path, the check manifest's ``fix`` for its criteria; the tally never nets a hazard.
 
 **Owner exclusions** (``lib/owner_exclusions.py``, #910) are passed in, never
 read from the signals. An excluded condition reads ``not_applicable`` with
@@ -108,7 +127,7 @@ holding a gate:
 - `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
   null for a signal with no producer class), `counted` (grade `measured` or `verified`, and
   not `not_applicable`), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
-  excluded it or a scan's reason code is in `NOT_APPLICABLE_REASONS`; `declined` is reserved for #828)
+  excluded it or a scan's reason code is in `NOT_APPLICABLE_REASONS`, `declined` under a decline record, #828)
   and, when not measured, not applicable by a scan code, or held by a `requires` that is not met, a `reason` code. An owner-excluded condition also carries
   `disposition: "excluded_by_owner"` and `exclusion_kind`. `why` (#939) is the static text of
   the check manifest's whys for the condition's criteria, in criterion order, each once, joined
@@ -132,6 +151,14 @@ holding a gate:
   A demoted condition keeps its state, is never counted (it is listed when met) and carries
   `disposition: "demoted_by_exit_rule"`. A gate condition (`gate_conditions`) or an unknown id
   is ignored, so a demotion changes the count and never a Step. An owner exclusion wins.
+- Declines and hazards (#828): `level_result(model, data, exclusions, declines=None)` reads the
+  `DeclineRecord`s of `data`'s `owner_exclusions.declines` when `declines` is None. A covered
+  condition (`declined_ids`: the ids a record lists, or, with `conditions` None, every positive
+  `agent_context` or `agent_runtime` condition) is `declined`, uncounted, out of the denominator and never holding a
+  gate; `declined[]` (`{id, source}`) is present only then. A hazard condition carries `blocks`
+  (its Step gate); met, it holds that gate with a blocker `{kind: "gate", gate, condition, state:
+  "met", polarity: "hazard"}` once the gate's own conditions are met, and `hazards[]`
+  (`{id, fix, gate?}`) lists it apart from the tally. Neither changes `tally`.
 - `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
   unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
 - `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
@@ -185,7 +212,8 @@ from typing import Any
 
 from lib.counts_only.reason_codes import reason_code, reason_token
 from lib.scoring.level_tags import tag_rows
-from lib.scoring.level_result_types import Blocker, ConditionResult, ExcludedCondition, InPlace, LevelResult, NextStep
+from lib.scoring.level_result_types import Blocker, ConditionResult, DeclinedCondition, ExcludedCondition, HazardEntry
+from lib.scoring.level_result_types import InPlace, LevelResult, NextStep
 from lib.scoring.levels import Criterion, CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef
 from lib.scoring.levels import condition_id, evaluate_row, unavailable_signal
 from lib.scoring.levels import load_levels
@@ -211,6 +239,8 @@ EXCLUDED_BY_OWNER = "excluded_by_owner"
 NOT_APPLICABLE_REASONS = frozenset({"fewer_than_two_systems", "no_configured_gates"})
 # A condition the fleet's exit rule demoted (lib/fleet/condition_demotion.py, #1086): listed, never counted.
 DEMOTED = "demoted_by_exit_rule"
+# The truth tags a decline record listing no condition covers (#828): the agent-level opt-out.
+AGENT_TAGS = frozenset({"agent_context", "agent_runtime"})
 
 
 def scan_not_applicable(cond: Mapping[str, Any], by_id: Mapping[str, Mapping[str, Any]]) -> str | None:
@@ -301,17 +331,39 @@ def _mark(entry: ConditionResult, exclusion: ExcludedCondition | None, demoted: 
         entry["disposition"] = DEMOTED
 
 
+def _resolve(cid: str, own: Mapping[str, tuple[str, str | None]], requires: Mapping[str, list[str]],
+             hazards: Collection[str], final: dict[str, tuple[str, str | None]]) -> tuple[str, str | None]:
+    """A condition's state after its ``requires``: a met condition takes the state of the first
+    need that is not met, with ``requires:<id>``. A hazard skips a declined need (#828)."""
+    # parse_levels rejects unknown ids and cycles, so this terminates
+    if cid not in final:
+        state, reason = own[cid]
+        if state == "met":
+            for need in requires[cid]:
+                need_state, _ = _resolve(need, own, requires, hazards, final)
+                if need_state == "declined" and cid in hazards:
+                    continue  # a hazard is never declined, so a declined need never hides it
+                if need_state != "met":
+                    state, reason = need_state, f"requires:{need}"
+                    break
+        final[cid] = (state, reason)
+    return final[cid]
+
+
 def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
-                excluded: Mapping[str, ExcludedCondition], demoted: Collection[str] = ()) -> list[ConditionResult]:
+                excluded: Mapping[str, ExcludedCondition], demoted: Collection[str] = (),
+                declined: Collection[str] = ()) -> list[ConditionResult]:
     own: dict[str, tuple[str, str | None]] = {}
     built: list[ConditionResult] = []
     requires: dict[str, list[str]] = {}
     guards: dict[str, str] = {}
+    hazards = {condition_id(r["id"], lv["level"]) for r in model["rows"] for lv in r["levels"]
+               if lv.get("polarity") == "hazard"}
     for row in model["rows"]:
         evaluation: Evaluation = evaluate_row(row, dict(data) if data is not None else None)
         for outcome, level in zip(evaluation["levels"], row["levels"]):
             cid = condition_id(row["id"], level["level"])
-            state, reason = (("not_applicable", None) if cid in excluded
+            state, reason = (("not_applicable", None) if cid in excluded else ("declined", None) if cid in declined
                              else _own_state(outcome, level["criteria"], data))
             own[cid] = (state, reason)
             requires[cid] = level.get("requires", [])
@@ -320,34 +372,22 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
             grade = _grade(row, level["level"])
             hazard = level.get("polarity") == "hazard"
             entry: ConditionResult = {"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
-                                      "counted": (grade in COUNTED_GRADES and state != "not_applicable"
+                                      "counted": (grade in COUNTED_GRADES and state not in ("not_applicable", "declined")
                                                   and not hazard and cid not in demoted),
                                       "state": state}
-            if hazard:
-                entry["polarity"] = "hazard"
+            if hazard:  # #828: a hazard names the gate it holds while met
+                entry.update({"polarity": "hazard", **({"blocks": level["blocks"]} if "blocks" in level else {})})
             if "source" in row:
                 entry["source"] = row["source"]
             _mark(entry, excluded.get(cid), cid in demoted)
             built.append(entry)
     final: dict[str, tuple[str, str | None]] = {}
-
-    def resolve(cid: str) -> tuple[str, str | None]:
-        # parse_levels rejects unknown ids and cycles, so this terminates
-        if cid not in final:
-            state, reason = own[cid]
-            if state == "met":
-                for need in requires[cid]:
-                    need_state, _ = resolve(need)
-                    if need_state != "met":
-                        state, reason = need_state, f"requires:{need}"
-                        break
-            final[cid] = (state, reason)
-        return final[cid]
-
     for entry in built:
-        entry["state"], reason = resolve(entry["id"])
+        entry["state"], reason = _resolve(entry["id"], own, requires, hazards, final)
         if reason is not None:
             entry["reason"] = reason
+        if entry["state"] == "declined":  # a requires on a declined condition: never counted either
+            entry["counted"] = False
     for entry in built:  # one hop: a guard's own guard does not matter here
         guard = guards.get(entry["id"])
         if guard is not None and entry["grade"] == "verified" and final[guard][0] != "met":
@@ -382,6 +422,8 @@ def _add_whys(model: MaturityModel, conditions: Sequence[ConditionResult]) -> No
 
 def _gate_blocker(gate_id: str, row_id: str, level: int,
                   by_id: Mapping[str, ConditionResult]) -> Blocker | None:
+    """The gate's first condition that is not met, else the first met hazard that ``blocks`` it
+    (#828), else None: the gate holds."""
     for n in range(1, level + 1):
         cond = by_id[condition_id(row_id, n)]
         if cond["state"] != "met":
@@ -393,6 +435,9 @@ def _gate_blocker(gate_id: str, row_id: str, level: int,
             if "exclusion_kind" in cond:
                 blocker["exclusion_kind"] = cond["exclusion_kind"]
             return blocker
+    for cond in by_id.values():
+        if cond.get("blocks") == gate_id and cond["state"] == "met" and cond.get("polarity") == "hazard":
+            return {"kind": "gate", "gate": gate_id, "condition": cond["id"], "state": "met", "polarity": "hazard"}
     return None
 
 
@@ -503,17 +548,70 @@ def _excluded(model: MaturityModel, exclusions: Sequence[Mapping[str, Any]]) -> 
     return out
 
 
+def declined_ids(model: MaturityModel, declines: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    """The condition ids the decline records cover (#828), each with the first covering record's
+    ``source``, in model order. A record covers the ids it lists that the model defines, or, with
+    ``conditions`` None, every positive condition tagged ``AGENT_TAGS``; an empty list covers
+    nothing. A hazard is never covered."""
+    out: dict[str, str] = {}
+    for row in model["rows"]:
+        for level in row["levels"]:
+            cid = condition_id(row["id"], level["level"])
+            if level.get("polarity") == "hazard":
+                continue
+            for record in declines:
+                listed = record.get("conditions")
+                covered = (bool(AGENT_TAGS & set(level.get("truth", []))) if listed is None
+                           else isinstance(listed, list) and cid in listed)
+                if covered:
+                    out.setdefault(cid, str(record.get("source") or "declared"))
+    return out
+
+
+def run_declines(ctx: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
+    """The decline records in a run context's ``owner_exclusions`` block (#828); none when absent."""
+    block = ctx.get(EXCLUSIONS_BLOCK) if isinstance(ctx, Mapping) else None
+    entries = block.get("declines") if isinstance(block, Mapping) else None
+    return [e for e in entries if isinstance(e, Mapping)] if isinstance(entries, list) else []
+
+
+def _hazards(model: MaturityModel, conditions: Sequence[ConditionResult]) -> list[HazardEntry]:
+    """The hazards present (#828): each met hazard condition with its gate and its fix path, the
+    check manifest's ``fix`` of its criteria in criterion order, each once, joined by one space
+    (``""`` for a caller's own row the manifest does not list)."""
+    from lib.manifest.check_manifest import condition_key, core_manifest
+    from lib.manifest.manifest_whys import condition_fixes
+    if not any(c.get("polarity") == "hazard" and c["state"] == "met" for c in conditions):
+        return []
+    known = condition_fixes(core_manifest())
+    fixes = {condition_id(r["id"], lv["level"]): " ".join(dict.fromkeys(
+        f for c in lv["criteria"] if (f := known.get(condition_key(r["id"], lv["level"], c["signal"]), ""))))
+        for r in model["rows"] for lv in r["levels"]}
+    out: list[HazardEntry] = []
+    for c in conditions:
+        if c.get("polarity") == "hazard" and c["state"] == "met":
+            entry: HazardEntry = {"id": c["id"], "fix": fixes.get(c["id"], "")}
+            if "blocks" in c:
+                entry["gate"] = c["blocks"]
+            out.append(entry)
+    return out
+
+
 def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
-                 exclusions: Sequence[Mapping[str, Any]] = ()) -> LevelResult:
+                 exclusions: Sequence[Mapping[str, Any]] = (),
+                 declines: Sequence[Mapping[str, Any]] | None = None) -> LevelResult:
     """The tally and the Step of one repository's signals (``scans`` or a run context).
 
     ``exclusions`` are the owner's (``OwnerExclusion`` entries, ``lib/owner_exclusions.py``);
-    an id the model does not define is ignored. The model's ``demoted`` ids are the fleet exit
+    an id the model does not define is ignored. ``declines`` are ``DeclineRecord``s (#828); None
+    reads them from ``data`` (``run_declines``). The model's ``demoted`` ids are the fleet exit
     rule's (#1086), set only by ``fleet.py``; a gate condition among them is ignored, so a
     demotion never moves a Step."""
     excluded = _excluded(model, exclusions)
+    declined = {cid: src for cid, src in declined_ids(model, run_declines(data) if declines is None else declines).items()
+                if cid not in excluded}
     demoted = frozenset(model.get("demoted", ())) & condition_ids(model) - gate_conditions(model)
-    conditions = _conditions(model, data, excluded, demoted)
+    conditions = _conditions(model, data, excluded, demoted, declined)
     _add_whys(model, conditions)
     counted = [c for c in conditions if c["counted"]]
     met = sum(c["state"] == "met" for c in counted)
@@ -545,6 +643,10 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
     }
     if excluded:
         result["excluded"] = [excluded[c["id"]] for c in conditions if c["id"] in excluded]
+    if declined:
+        result["declined"] = [DeclinedCondition(id=cid, source=src) for cid, src in declined.items()]
+    if hazards := _hazards(model, conditions):
+        result["hazards"] = hazards
     result["tags"] = tag_rows(result, model)
     return result
 

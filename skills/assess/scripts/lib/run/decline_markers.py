@@ -49,6 +49,18 @@ SKILL.md Step 2d re-offer flag), and one-line `disclosures` so an active decline
 never invisible in the report. Legacy markers have no version and are never
 re-offered. Pure stdlib; never raises. Called by `assess_core.py`.
 
+**The agent-level opt-out (#828).** `.assess/agents-declined.json` records that the repository
+decided not to enable agents: `{declined_by, declined_at, plugin_version, reason, conditions?}`.
+`read_agent_decline(assess_dir)` returns it as a `DeclineRecord` (`source: "agents_marker"`,
+`level_result_types.py`), or None when the file is absent, so absence never declines anything. An
+empty or non-JSON file still declines, with no provenance. `conditions` lists condition ids; left
+out (None), the record covers every positive `agent_context` or `agent_runtime` condition; written,
+it covers only the string ids it holds, so a malformed value never widens the scope
+(`level_tally.declined_ids`). `lib/owner_exclusions.py` carries the record in the run context's
+`owner_exclusions` block as `declines`, and `level_tally` reads each covered condition as
+`declined`: never met, never counted, never holding a Step gate. A `.no-<tool>` marker never
+sets `declined`. `decline_badge` words the headline's DECLINED badge with the owner and reason.
+
 **Declined backlog proposals (#813).** A reconcile proposal (close, reopen, demote or
 supersede, `lib/report/backlog_reconcile.py`) the user declines is recorded in
 `.assess/backlog-declines.json` (`{"declines": [...]}`) with the same provenance
@@ -87,6 +99,8 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, TypeVar
+
+from lib.scoring.level_result_types import DeclineRecord
 
 MARKER_PREFIX = ".no-"
 
@@ -247,6 +261,54 @@ def _tool_label(tool: str) -> str:
     if tool == "scc":
         return "scc coverage extension"
     return f"Dead-code analysis (`{tool}`)"
+
+
+# ── The agent-level opt-out (#828) ───────────────────────────────────────────
+# A repository that has decided not to enable agents says so in one committed
+# file. It is apart from the tool markers above: a ``.no-<tool>`` marker never
+# sets a condition ``declined``, and this file is never a tool decline.
+
+AGENT_DECLINE = "agents-declined.json"
+AGENTS_MARKER = "agents_marker"
+
+
+def read_agent_decline(assess_dir: Path) -> DeclineRecord | None:
+    """The agent-level decline record in ``<assess_dir>/agents-declined.json``; None when the
+    file is absent, so absence never declines anything. A present file that is empty or not a
+    JSON object still declines, with no provenance and the default scope, as a legacy tool
+    marker does. ``conditions`` is None when the key is absent: the default scope (every positive
+    ``agent_context`` or ``agent_runtime`` condition, ``level_tally``). When written, it keeps only
+    the string ids, so a value that is not a list, or a list with no string id, covers nothing."""
+    path = assess_dir / AGENT_DECLINE
+    try:
+        if not path.is_file():
+            return None
+        raw = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    try:
+        data = json.loads(raw) if raw else None
+    except ValueError:
+        data = None
+    data = data if isinstance(data, dict) else {}
+    listed = data.get("conditions")
+    # absent: the default scope (None); written: only its string ids, so a malformed list covers
+    # fewer conditions, never every agent condition
+    conditions = (None if "conditions" not in data else
+                  list(dict.fromkeys(c for c in listed if isinstance(c, str) and c.strip()))
+                  if isinstance(listed, list) else [])
+    return {"source": AGENTS_MARKER, "conditions": conditions,
+            "declined_by": _opt_str(data.get("declined_by")), "declined_at": _opt_str(data.get("declined_at")),
+            "version": _opt_str(data.get("plugin_version")), "reason": _opt_str(data.get("reason"))}
+
+
+def decline_badge(record: DeclineRecord) -> str:
+    """The DECLINED badge's words for one record: who declined, when and why, as recorded."""
+    who = record["declined_by"] or "an unknown user"
+    line = f"agents declined by {who}"
+    if record["declined_at"]:
+        line += f" on {record['declined_at']}"
+    return line + (f": {record['reason']}" if record["reason"] else ": no reason recorded")
 
 
 # ── Declined backlog proposals (#813) ───────────────────────────────────────

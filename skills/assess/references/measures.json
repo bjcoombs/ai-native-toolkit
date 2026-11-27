@@ -4072,7 +4072,7 @@
     {
       "name": "owner_exclusions",
       "title": "Owner exclusions",
-      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.",
+      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined.",
       "collector": "core.owner_exclusions",
       "reads": [
         "repo_root"
@@ -4086,6 +4086,12 @@
       "privacy": {
         "written": true,
         "strings_kept": {
+          "owner_exclusions.declines.conditions": "token",
+          "owner_exclusions.declines.declined_at": "token",
+          "owner_exclusions.declines.declined_by": "drop",
+          "owner_exclusions.declines.reason": "drop",
+          "owner_exclusions.declines.source": "token",
+          "owner_exclusions.declines.version": "token",
           "owner_exclusions.disclosures": "drop",
           "owner_exclusions.exclusions.excluded_at": "token",
           "owner_exclusions.exclusions.excluded_by": "drop",
@@ -5789,7 +5795,8 @@
         "maturity_model",
         "unit_rollup",
         "measured_commit",
-        "assess_dir"
+        "assess_dir",
+        "owner_exclusions"
       ],
       "network": false,
       "private": false

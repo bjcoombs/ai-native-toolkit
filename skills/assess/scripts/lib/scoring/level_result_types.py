@@ -5,7 +5,7 @@ import cycle (the engine reads ``lib.scoring.level_signals``, which reads the co
 shapes). String fields hold condition ids, states, grades and reason codes only.
 
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
-`NextStep`, `InPlace`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844) and the level's per-tag `TagRow` (#940), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+`NextStep`, `InPlace`, and #828's `HazardEntry`, `DeclinedCondition` and `DeclineRecord`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844) and the level's per-tag `TagRow` (#940), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
 import cycle. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
@@ -25,6 +25,7 @@ class ConditionResult(TypedDict):
     disposition: NotRequired[str]
     exclusion_kind: NotRequired[str]  # the exclusion's kind (lib.owner_exclusions.KINDS)
     polarity: NotRequired[str]  # "hazard" only: a harm, never counted (#843); absent: positive
+    blocks: NotRequired[str]  # a hazard only: the Step gate it holds while met (#828)
     why: NotRequired[str]  # the manifest whys of its criteria, joined by a space (#939)
     # the base model or practice pack its row came from (lib/pack_layering.py, #1274); present
     # only when a pack added rows to the model
@@ -45,7 +46,9 @@ class Tally(TypedDict):
 class Blocker(TypedDict):
     kind: str  # "gate": the only kind since Steps read gates only (#1083)
     gate: NotRequired[str]
-    condition: NotRequired[str]  # the gate's first condition that is not met
+    # the gate's first condition that is not met, or the met hazard that holds it (polarity set, #828)
+    condition: NotRequired[str]
+    polarity: NotRequired[str]  # "hazard": ``condition`` is a hazard that undermines the gate (#828)
     state: NotRequired[str]
     reason: NotRequired[str]
     disposition: NotRequired[str]  # the gate condition's disposition, when the owner excluded it
@@ -58,6 +61,21 @@ class ExcludedCondition(TypedDict):
     id: str  # a condition id of the model
     kind: str  # one of lib.owner_exclusions.KINDS
     source: str  # "repo": .assess/config.toml
+
+
+class HazardEntry(TypedDict):
+    """One hazard present, as the level result lists it apart from the tally (#828)."""
+
+    id: str  # the hazard condition's id
+    fix: str  # the check manifest's fix for it: the change that clears it ("" when none; dropped from counts-only)
+    gate: NotRequired[str]  # the Step gate it holds; absent when it blocks none
+
+
+class DeclinedCondition(TypedDict):
+    """A condition the repository declined, as the level result lists it (#828)."""
+
+    id: str  # a condition id of the model
+    source: str  # the decline record's source, such as "agents_marker"
 
 
 class NextStep(TypedDict):
@@ -111,6 +129,8 @@ class LevelResult(TypedDict):
     held_above: list[str]  # #1374: gate ids already held above the current Step, once each, in Step order
     in_place: list[InPlace]  # #1334: rows at their top level and rows a held Step's gates read, in model order
     excluded: NotRequired[list[ExcludedCondition]]  # present only when the owner excluded a condition
+    declined: NotRequired[list[DeclinedCondition]]  # present only when a decline record applies (#828)
+    hazards: NotRequired[list[HazardEntry]]  # present only when a hazard is met (#828); never in the tally
     tags: NotRequired[list[TagRow]]  # #940: every truth tag, in TRUTH_TAGS order; absent before #940
 
 
@@ -137,12 +157,27 @@ class SkippedExclusion(TypedDict):
     problem: str  # a reason code (lib.owner_exclusions.PROBLEMS)
 
 
+class DeclineRecord(TypedDict):
+    """A declared opt-out that sets conditions ``declined`` (``lib/run/decline_markers.py``, #828).
+
+    The agent-level marker gives one; a detector may add more. Never inferred from absence.
+    """
+
+    source: str  # "agents_marker": .assess/agents-declined.json
+    conditions: list[str] | None  # condition ids as declared; None: every positive agent_context or agent_runtime one
+    declined_by: str | None  # dropped from counts-only output
+    declined_at: str | None
+    version: str | None  # the plugin version recorded with the record
+    reason: str | None  # the owner's own words: dropped from counts-only output
+
+
 class OwnerExclusionsBlock(TypedDict):
     """The run context's ``owner_exclusions`` block (``lib/owner_exclusions.py``, #910)."""
 
     exclusions: list[OwnerExclusion]
     skipped: list[SkippedExclusion]
     disclosures: list[str]  # one line per exclusion in force, for the report
+    declines: NotRequired[list[DeclineRecord]]  # #828: the declared opt-outs in force; absent before #828
 
 
 class TagCell(TypedDict):

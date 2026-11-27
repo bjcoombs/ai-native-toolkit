@@ -49,7 +49,9 @@ line per exclusion. A skipped entry leaves its condition in force. `owner_exclus
 reads the repository's config and warns on stderr per skipped entry; never raises. A
 `scan_registry` entry (`core_scans.owner_exclusions`); the headless runner reports it too
 (`headless_static.owner_exclusions`, #944), so `/fleet` applies a repository's own exclusions
-in `level.json` and `fleet-data.json`. Counts-only keeps
+in `level.json` and `fleet-data.json`. The block also carries `declines` (#828), present only
+when `.assess/agents-declined.json` exists (`decline_markers.read_agent_decline`): the
+declared agent opt-out that `level_tally` reads as `declined`. Counts-only keeps
 ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 """
 from __future__ import annotations
@@ -60,8 +62,9 @@ from collections.abc import Collection, Mapping
 from pathlib import Path
 from typing import Any
 
-from lib.assess_config import load_config
+from lib.assess_config import ASSESS_DIR, load_config
 from lib.scoring.level_result_types import OwnerExclusion, OwnerExclusionsBlock, SkippedExclusion
+from lib.run.decline_markers import read_agent_decline
 from lib.scoring.level_tally import condition_ids, default_model
 
 SECTION = "checks"
@@ -153,4 +156,7 @@ def owner_exclusions_block(repo_root: Path) -> OwnerExclusionsBlock:
     block = parse_exclusions(load_config(repo_root), condition_ids(default_model()))
     for skip in block["skipped"]:
         _warn(skip)
+    record = read_agent_decline(repo_root / ASSESS_DIR)
+    if record is not None:  # #828: present only when declared, so a block without one is unchanged
+        block["declines"] = [record]
     return block

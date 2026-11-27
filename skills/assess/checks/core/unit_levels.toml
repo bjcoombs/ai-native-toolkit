@@ -14,7 +14,7 @@ stage = "post_offers"
 shapes = [
   { path = "unit_levels", type = "lib.unit_levels:UnitLevelsBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "unit_levels.unit_count_reason" = "token"
   "unit_levels.levels_version" = "token"
@@ -32,3 +32,4 @@ revision = 1
   "unit_levels.units.next_step.blockers.reason" = "token"
   "unit_levels.units.next_step.blockers.disposition" = "token"
   "unit_levels.units.next_step.blockers.exclusion_kind" = "token"
+  "unit_levels.units.next_step.blockers.polarity" = "token"

@@ -23,6 +23,15 @@ Step ladder's caption words gates as the headline did. The lines, in order:
    with that tag. NOT MEASURED, HAZARD (a hazard condition met) and DECLINED are badges
    with their counts, shown only when non-zero. No line when no condition is tagged.
 
+Two badge lines lead the block when they apply (#828), so neither is ever netted into a count:
+
+- ``DECLINED: N conditions · agents declined by <owner> on <date>: <reason> · a declined
+  condition never holds a Step gate``, when the level result lists ``declined``. The owner and
+  reason come from the decline records ``headline`` is given (``decline_markers.decline_badge``);
+  with none the line keeps the count only.
+- ``HAZARD: <id> undermines the <gate> gate. Fix: <fix>`` for each hazard the level result lists, or
+  ``HAZARD: <id>. Fix: <fix>`` for one that blocks no gate.
+
 ``summary`` is the one-line form the badge and the ``log.md`` entry carry. It leads with what
 holds (#1334): the Step, then the practices fully in place (``practices_held``, the level
 result's ``in_place`` rows at their top level, left out at 0), then the next gate:
@@ -61,7 +70,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from lib.card_facts import blocking_gates, fully_in_place
-from lib.scoring.level_result_types import Blocker, ConditionResult, Headline, LevelResult, TagCell
+from lib.run.decline_markers import decline_badge
+from lib.scoring.level_result_types import Blocker, ConditionResult, DeclineRecord, Headline, LevelResult, TagCell
 from lib.scoring.level_tags import tag_cells
 from lib.scoring.level_tally import NOT_APPLICABLE_REASONS, default_model, scan_not_applicable
 from lib.scoring.levels import MaturityModel, StepDef, condition_id
@@ -76,7 +86,7 @@ from lib.scoring.levels import MaturityModel, StepDef, condition_id
 #   `summary_markdown`, the report's three-line summary and its one call to action (#1102).
 HEADLINE_VERSION = 4
 
-__all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "gate_change", "gate_note", "headline",
+__all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "badge_lines", "gate_change", "gate_note", "headline",
            "lone_condition", "one_change_ceiling", "practices_held", "reason_word", "run_context_headline", "tag_cells", "verified_count"]
 
 # The plain-English glossary (#1102). The report's markdown links a term's first use to its
@@ -138,6 +148,10 @@ def reason_word(code: str) -> str:
 def gate_note(blocker: Blocker) -> str:
     """Why a blocking gate is open when it was not measured or the owner excluded it, as
     `` (...)``; ``""`` for a gate that is simply not yet in place."""
+    if blocker.get("polarity") == "hazard":  # #828: a met hazard holds a gate whose conditions are met
+        return f" (held by the hazard {blocker.get('condition', '')}; see HAZARD)"
+    if blocker.get("state") == "declined":
+        return " (declined by the repository; a gate holds only when met)"
     if blocker.get("disposition") == "excluded_by_owner":
         kind = blocker.get("exclusion_kind", "other").replace("_", " ")
         return f" (excluded by owner: {kind}; the Step waits while the exclusion stands)"
@@ -265,6 +279,22 @@ def _tally_line(level: LevelResult) -> str:
     return line + f" · model {level['levels_version']}"
 
 
+def badge_lines(level: LevelResult, declines: Sequence[DeclineRecord] = ()) -> list[str]:
+    """The DECLINED and HAZARD badge lines (#828), apart from every count: see the module doc."""
+    lines: list[str] = []
+    declined = level.get("declined", [])
+    if declined:
+        words = "".join(f" · {decline_badge(r)}" for r in declines)
+        n = len(declined)
+        lines.append(f"DECLINED: {n} {'condition' if n == 1 else 'conditions'}{words}"
+                     " · a declined condition never holds a Step gate")
+    for hazard in level.get("hazards", []):
+        gate = hazard.get("gate")
+        held = f" undermines the {GATE_NOUN.get(gate, gate)} gate" if gate else ""
+        lines.append(f"HAZARD: {hazard['id']}{held}. Fix: {hazard['fix'] or 'no fix recorded in the check manifest'}")
+    return lines
+
+
 def _strip_line(cells: list[TagCell]) -> str:
     parts = []
     for cell in cells:
@@ -283,15 +313,16 @@ def _unavailable(reason: str) -> Headline:
             "summary_lines": [], "call_to_action": "", "summary_markdown": "", "reason": reason}
 
 
-def headline(value: Any, model: MaturityModel) -> Headline:
-    """The headline for one ``LevelResult`` under the model that produced it."""
+def headline(value: Any, model: MaturityModel, declines: Sequence[DeclineRecord] = ()) -> Headline:
+    """The headline for one ``LevelResult`` under the model that produced it; ``declines`` are
+    the run's decline records, which give the DECLINED badge its owner and reason (#828)."""
     if not isinstance(value, dict) or "tally" not in value:
         reason = value.get("reason") if isinstance(value, dict) else None
         return _unavailable(str(reason or "no_level_result"))
     level: LevelResult = value  # type: ignore[assignment]
     step = level["step"]
     # the Step and the gate that blocks the next one are the top card's (lib/top_card.py, #1252)
-    lines = [_tally_line(level)]
+    lines = [*badge_lines(level, declines), _tally_line(level)]
     cells = tag_cells(level, model)
     if cells:
         lines.append(_strip_line(cells))
