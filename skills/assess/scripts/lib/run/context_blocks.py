@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.complexity.generated_files import matches_generated_name
-from lib.docs.doc_complexity_join import STALENESS_RATIO_THRESHOLD
+from lib.docs.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
 from lib.run_context_types import KeyholeIntegration
 from lib.run.degrade import safe as _safe
 from lib.keyhole.structure_drift import (
@@ -268,7 +268,9 @@ def build_stale_hubs(
     a denominator across every baseline entry - confidence on those is "low".
     The sort halves the priority of low-confidence entries so a precise-subject
     hub at half the raw priority of a baseline one still outranks it.
-    A doc a CI check keeps true (``kept_true_by``, #852) is never a stale hub.
+    A doc a CI check keeps true (``kept_true_by``, #852) is not a stale hub unless
+    ``is_stale`` still holds (a renamed child it names, a newer declared source), so the
+    hub list and ``summary.stale_docs`` use the same test.
     """
     if not doc_graph.get("available") or not doc_staleness.get("available"):
         return []
@@ -276,8 +278,8 @@ def build_stale_hubs(
     hubs: list[dict[str, Any]] = []
     for hub in doc_graph.get("hubs", []):
         s = staleness_by_path.get(hub["path"])
-        if s is None or s.get("kept_true_by"):
-            continue   # a doc a CI check keeps true is not a stale hub (#852)
+        if s is None or (s.get("kept_true_by") and not is_stale(s)):
+            continue   # a doc a CI check keeps true is not a stale hub, unless it still reads stale (#852)
         priority = round(hub["pagerank"] * s["ratio"], 3)
         renamed = int(s.get("renamed_children_named") or 0)
         if renamed:  # names a path that no longer exists: stale at any ratio (#822)

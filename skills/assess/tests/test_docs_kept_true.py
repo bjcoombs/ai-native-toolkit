@@ -255,3 +255,12 @@ def test_a_script_run_behind_a_passing_fallback_is_not_followed(tmp_path: Path) 
                             "hack/check.sh": "#!/bin/sh\nmake gen\ngit diff --exit-code docs\n",
                             ".github/workflows/ci.yml": _workflow("make check")})
     assert _block(root)["present"] is False
+
+
+def test_a_covered_hub_that_still_reads_stale_stays_a_stale_hub() -> None:
+    from lib.run.context_blocks import build_stale_hubs
+
+    graph = {"available": True, "hubs": [{"path": "docs/a.md", "pagerank": 0.5}]}
+    row = {**_staleness_row("docs/a.md", 0.0), "last_commit_days": 9, "code_churn_in_window": 9,
+           "renamed_children_named": 1, "kept_true_by": {"kind": "regen_diff", "path": ".github/workflows/ci.yml"}}
+    assert [h["path"] for h in build_stale_hubs(graph, {"available": True, "docs": [row]})] == ["docs/a.md"]
