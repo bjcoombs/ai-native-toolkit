@@ -217,3 +217,17 @@ def test_labels_compare_without_case(tmp_path: Path) -> None:
     other = GATED.replace("'skip-checks'", "'SKIP-Checks'").replace("name: checks", "name: more")
     block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/checks.yml": GATED, ".github/workflows/more.yml": other}))
     assert block["skip_labels"] == 1
+
+
+@pytest.mark.parametrize("refail", ["        junit '**/target/surefire-reports/*.xml'\n",
+                                    "        junit testResults: '**/reports/*.xml'\n"])
+def test_a_jenkinsfile_that_fails_the_build_from_the_test_reports_is_not_counted(tmp_path: Path, refail: str) -> None:
+    text = JENKINS.replace("        sh 'mvn", refail + "        sh 'mvn")
+    block = scan_ci_hazards(_repo(tmp_path, {"Jenkinsfile": text}))
+    assert block["test_failures_ignored"] == 0
+
+
+def test_a_report_action_that_fails_on_failure_clears_its_workflow(tmp_path: Path) -> None:
+    text = PLAIN.replace("pytest", "mvn -Dmaven.test.failure.ignore=true verify") + (
+        "      - uses: example-org/report-action@v1\n        with:\n          fail_on_failure: true\n")
+    assert scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text}))["test_failures_ignored"] == 0
