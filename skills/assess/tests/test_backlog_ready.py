@@ -323,6 +323,7 @@ def test_a_scheduled_job_that_adds_an_untriaged_label(tmp_path: Path, job: str) 
     "r:\n" + _SCHED + "  script: glab issue list --label needs-triage\n",  # lists
     "r:\n" + _SCHED + "  script: glab api projects/1/issues?labels=needs-triage\n",  # a filter
     "r:\n" + _SCHED + "  script: glab issue update 1 -l needs-triage-later\n",  # another label
+    "r:\n" + _SCHED + "  script: echo \"/label ~needs-triage\"\n",  # a quick action posted nowhere
     "r:\n" + _SCHED + "  script:\n    # glab issue update 1 -l needs-triage\n    - echo\n",  # a comment
     "r:\n" + _SCHED + "  script: [echo]\n.x:\n  script: glab issue update 1 -l needs-triage\n",
     "workflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n      when: never\n    - when: always\n"
@@ -351,6 +352,22 @@ def test_a_job_that_does_not_label_new_issues_on_a_schedule(tmp_path: Path, job:
 ])
 def test_a_labelling_job_this_reader_cannot_settle_reads_not_measured(tmp_path: Path, job: str) -> None:
     assert _gl_untriaged(tmp_path, job) == (None, "gitlab_ci_unsettled")
+
+
+@pytest.mark.parametrize(("ci", "want"), [
+    # a flow list over two lines: valid, though this reader does not follow it
+    ("r:\n  only: [main,\n    schedules]\n  script: glab issue update 1 -l needs-triage\n", (None, "gitlab_ci_unsettled")),
+    # tabs inside a block scalar (a <<- heredoc) are text, not indentation
+    ("r:\n" + _SCHED + "  script:\n    - |\n      cat <<-EOF\n      \t\tbody\n      \tEOF\n"
+     "      glab issue update 1 -l needs-triage\n", (True, None)),
+])
+def test_valid_yaml_is_not_read_as_malformed(tmp_path: Path, ci: str, want: tuple[Any, Any]) -> None:
+    assert _gl_untriaged(tmp_path, ci) == want
+
+
+def test_a_met_refinement_include_wins_over_an_unreadable_line(tmp_path: Path) -> None:
+    ci = f"include:\n  - remote: {REMOTE}\nx:\n\tscript: y\n"
+    assert _gl_untriaged(tmp_path, ci) == (True, None)
 
 
 def test_an_anchor_merge_in_a_file_that_adds_no_label_is_settled(tmp_path: Path) -> None:

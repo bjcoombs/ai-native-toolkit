@@ -19,7 +19,7 @@ met by either:
   may be left out, so it is unsettled, never met;
 - a visible job that runs in a scheduled pipeline and whose ``script``, ``before_script`` or
   ``after_script`` adds an untriaged label: ``glab issue update|create --label`` / ``-l``, an
-  ``add_labels`` API field, or a ``/label ~name`` quick action. A label is compared whole,
+  ``add_labels`` API field, or a ``/label ~name`` quick action in a ``glab`` or ``curl`` call. A label is compared whole,
   ignoring case; a ``$VARIABLE`` argument is unsettled.
 
 Each job is read as GitLab merges it (``ci_includes.merged_config``, rendered by
@@ -37,8 +37,9 @@ the refinement include sits under ``rules:``, or if a job that adds a label or m
 be settled: a merge the reader does not follow (an anchor merge, an unread ``extends:`` parent),
 a ``!reference``, a ``$VARIABLE`` label or a ``rules:`` outcome that reads unknown. An anchor
 merge is file-local, so a job with one is unsettled only when its file adds an untriaged label
-somewhere. **Unreadable** (``REASON_UNREADABLE``): the root ``.gitlab-ci.yml`` has a tab in its
-indentation or an unclosed flow collection, which GitLab rejects.
+somewhere. **Unreadable** (``REASON_UNREADABLE``): the root ``.gitlab-ci.yml`` has a tab in a key
+line's indentation or a flow collection never closed, which GitLab rejects; a met refinement
+include is read first.
 
 Known limits: a vendored copy of the refinement template (a ``local:`` include) is read like any
 other file, and its jobs take the label from a variable, so it reads unsettled. A project CI
@@ -76,8 +77,11 @@ _SEGMENTS = re.compile(r"\|\|?|;|&&")
 _GLAB_ISSUE = re.compile(r"\bglab\s+issue\s+(?:update|create|new)\b")
 _GLAB_LABEL = re.compile(r"""(?<![\w-])(?:--label|-l)(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|]+)""")
 _ADD_LABELS = re.compile(r"""\badd_labels["']?\s*[=:]\s*("[^"]*"|'[^']*'|[^\s;&|"']+)""")
+# A quick action counts only where it is posted: a glab or curl call, or a notes API path.
+_POSTS = re.compile(r"\bglab\b|\bcurl\b|/notes\b")
 _QUICK_LABEL = re.compile(r"""(?:^|[\s"'])/label((?:\s+~(?:"[^"]*"|[^\s"'~]+))+)""")
 _QUICK_ARG = re.compile(r"""~("[^"]*"|[^\s"'~]+)""")
+_BLOCK_SCALAR = re.compile(r"^[|>][-+0-9]*$")
 _RUN_WHEN = frozenset({"on_success", "always", "delayed"})
 _STOP_WHEN = frozenset({"never", "manual", "on_failure"})
 
@@ -127,11 +131,31 @@ def template_has_sections(text: str) -> bool:
 # --- the refiner ------------------------------------------------------------------------
 
 def malformed(text: str) -> bool:
-    """A tab in a line's indentation, or a flow collection left open: GitLab rejects either."""
+    """A tab in a key line's indentation, or a flow collection never closed: GitLab rejects
+    either. A block scalar's lines (a heredoc's tabs) are not keys, and a flow collection may run
+    over several lines (``only: [main,`` then ``schedules]``)."""
     lines = text.splitlines()
-    if any("\t" in ln[:len(ln) - len(ln.lstrip(" \t"))] for ln in lines):
-        return True
-    return any(ln.structural and ln.value[:1] in "[{" and unbalanced(ln.value) for ln in parse_lines(lines))
+    parsed = parse_lines(lines)
+    scalar = -1  # the indent of the line opening a block scalar; deeper lines are its text
+    for i, ln in enumerate(parsed):
+        raw = lines[i]
+        spaces = len(raw) - len(raw.lstrip(" "))
+        if scalar >= 0 and (not raw.strip() or spaces > scalar):
+            continue
+        scalar = ln.indent if ln.structural and _BLOCK_SCALAR.match(ln.value) else -1
+        if not ln.structural:
+            continue
+        if "\t" in raw[:len(raw) - len(raw.lstrip(" \t"))]:
+            return True
+        if ln.value[:1] in "[{" and unbalanced(ln.value):
+            joined = ln.value
+            for nxt in lines[i + 1:]:
+                joined += " " + strip_comment(nxt)
+                if not unbalanced(joined):
+                    break
+            else:
+                return True
+    return False
 
 
 def _labels_added(line: str) -> list[str]:
@@ -141,7 +165,7 @@ def _labels_added(line: str) -> list[str]:
         if _GLAB_ISSUE.search(segment):
             out += _GLAB_LABEL.findall(segment)
         out += _ADD_LABELS.findall(segment)
-        for quick in _QUICK_LABEL.findall(segment):
+        for quick in _QUICK_LABEL.findall(segment) if _POSTS.search(segment) else ():
             out += _QUICK_ARG.findall(quick)
     return [name.strip(" '\"") for arg in out for name in arg.strip("'\"").split(",") if name.strip(" '\"")]
 
@@ -172,8 +196,8 @@ def _refs(tree: IndentTree, key: int) -> list[str] | None:
     """The ref names of an ``only:`` / ``except:``, or None for a form this reader does not read
     (a flow map, a map with a key besides ``refs``)."""
     value = tree.lines[key].value
-    if value.startswith("{"):
-        return None
+    if value.startswith("{") or unbalanced(value):
+        return None  # a flow map, or a flow list continued on the next line
     if value:
         return [v.strip(" '\"") for v in value.strip("[]").split(",") if v.strip(" '\"")]
     children = tree.children(key)
@@ -268,11 +292,11 @@ def _refine_include(text: str) -> JobState:
 def gitlab_untriaged(root: Path, text: str, labels: tuple[str, ...]) -> tuple[bool | None, str | None]:
     """Whether ``.gitlab-ci.yml`` (``text``) runs a refiner that labels new issues untriaged:
     the signal and its reason code (see the module doc). ``root`` is resolved."""
-    if malformed(text):
-        return None, REASON_UNREADABLE
     include = _refine_include(text)
     if include == "met":
         return True, None
+    if malformed(text):
+        return None, REASON_UNREADABLE
     unsettled = include == "unsettled"
     unread = [r for r in resolve_includes(root).includes
               if r["status"] not in SETTLED and r["kind"] != "template"]

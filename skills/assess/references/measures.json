@@ -2573,7 +2573,7 @@
         },
         {
           "code": "gitlab_ci_unsettled",
-          "means": "No workflow or GitLab job read adds an untriaged label on a schedule. But an include not read offline, a refinement include under rules:, or a labelling job with an anchor merge, !reference, variable label or unread rule may.",
+          "means": "No workflow or GitLab job read adds an untriaged label on a schedule. But something this reader cannot follow may: an include not read offline, or an anchor merge, !reference, variable label or unread rule.",
           "next_step": "Nothing to change if a scheduled job labels new issues; a literal label, plain rules: and a local include let the scan read it."
         },
         {
