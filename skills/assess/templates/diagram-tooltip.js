@@ -19,8 +19,11 @@
  * data-practice and data-gate name; state codes with no twin (data-cell="not_measured",
  * data-status="orphan") stay, since the muted <title> no longer says them. A part with no
  * data attributes shows its <title> text instead. Mouse and pen show it on hover and hide it
- * on pointer leave.
- * Touch shows it on the first tap and hides it on a second tap, a tap elsewhere or Escape.
+ * on pointer leave; a click on a part pins it. A click on another part moves the pin there; a
+ * click off any part, a scroll or Escape hides it; a second click on the pinned part unpins
+ * it, back to a hover tooltip that hides on leave.
+ * Touch shows it on the first tap and hides it on a second tap, a tap elsewhere, a scroll or
+ * Escape.
  * On a linked part (inside an <a>), a mouse click follows the link; on touch the first tap
  * shows the tooltip and the second follows the link.
  *
@@ -47,6 +50,7 @@
   var tip = null;       // the one tooltip element, in the host page
   var shown = null;     // the part whose tooltip is showing
   var touching = false; // the last pointer was a finger
+  var pinned = false;   // a mouse click pinned the shown tooltip: hover no longer moves or hides it
   var blockClick = false; // the tap that showed a linked part's tooltip must not follow it
   // Model ids a readable attribute on the same part names (tests/svg_data_attrs.py ID_KEYS).
   var IDS = ["condition", "row"];
@@ -167,6 +171,7 @@
   }
 
   function hide() {
+    pinned = false;
     if (shown) {
       restoreTitle(shown);
       shown = null;
@@ -199,7 +204,10 @@
       touching = event.pointerType === "touch";
     });
     on(root, "pointermove", function (event) {
-      if (event.pointerType === "touch") {
+      if (pinned && shown && !shown.isConnected) {
+        hide(); // the host redrew the pinned part away: drop the stale tooltip
+      }
+      if (event.pointerType === "touch" || pinned) {
         return;
       }
       var part = partOf(event.target);
@@ -211,12 +219,12 @@
       }
     });
     on(root, "pointerleave", function (event) {
-      if (event.pointerType !== "touch") {
+      if (event.pointerType !== "touch" && !pinned) {
         hide();
       }
     });
     on(root, "pointerout", function (event) {
-      if (event.pointerType === "touch" || !shown) {
+      if (event.pointerType === "touch" || !shown || pinned) {
         return;
       }
       if (partOf(event.relatedTarget) !== shown) {
@@ -245,7 +253,22 @@
     });
     on(root, "click", function (event) {
       if (!touching) {
-        return; // a mouse click follows a link, as it would without the helper
+        // A mouse click follows a link, as it would without the helper; on any other part it
+        // pins the tooltip. A click on another part moves the pin there; a click off any part
+        // hides it; a second click on the pinned part unpins it, and the next pointermove shows
+        // it again as a hover tooltip until the pointer leaves.
+        var part = partOf(event.target);
+        if (part && linkOf(part)) {
+          return;
+        }
+        if (!part || (pinned && shown === part)) {
+          hide();
+          return;
+        }
+        var at = offset();
+        show(part, event.clientX + at.x, event.clientY + at.y, formatOf());
+        pinned = true;
+        return;
       }
       if (blockClick) {
         event.preventDefault();
@@ -296,6 +319,13 @@
   }
 
   window.DiagramTooltip = {attach: attach, hide: hide, format: defaultFormat};
+
+  // A scroll anywhere moves the part from under its fixed-position tooltip: dismiss it.
+  window.addEventListener("scroll", function () {
+    if (shown) {
+      hide();
+    }
+  }, {passive: true, capture: true});
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () { attach(document); });

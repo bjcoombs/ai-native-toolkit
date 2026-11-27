@@ -92,9 +92,35 @@ def test_a_format_passed_to_an_attached_root_takes_effect() -> None:
     attach = CODE[CODE.index("function attach("):CODE.index("window.DiagramTooltip")]
     assert attach.index("__diagramTooltipFormat = options.format") < attach.index("if (!target.__diagramTooltip)")
     listen = CODE[CODE.index("function listen"):CODE.index("function attachObject")]
-    assert listen.count("formatOf()") == 2
+    assert listen.count("formatOf()") == listen.count("show(part, ") == 3  # every show reads it
 
 
 def test_a_custom_format_gets_the_title_text_even_while_it_is_muted() -> None:
     show = CODE[CODE.index("function show("):CODE.index("function hide(")]
     assert "format(part, part.getAttribute(PARKED) || (title ? title.textContent" in show
+
+
+def test_a_mouse_click_pins_the_tooltip_until_a_second_click_a_click_elsewhere_scroll_or_escape() -> None:
+    """#1364: a click pins; hover then neither moves nor hides it; a linked part's click follows the link."""
+    click = CODE[CODE.index('on(root, "click"'):CODE.index('on(root, "keydown"')]
+    mouse = click[click.index("if (!touching)"):click.index("if (blockClick)")]
+    assert mouse.index("linkOf(part)") < mouse.index("pinned = true")
+    assert "!part || (pinned && shown === part)" in mouse and "hide()" in mouse
+    for event in ("pointermove", "pointerleave", "pointerout"):
+        body = CODE[CODE.index(f'on(root, "{event}"'):]
+        assert "pinned" in body[:body.index("});")], event
+    hide = CODE[CODE.index("function hide("):CODE.index("function on(")]
+    assert "pinned = false" in hide
+
+
+def test_a_scroll_dismisses_the_tooltip() -> None:
+    scroll = CODE[CODE.index('addEventListener("scroll"'):]
+    assert "hide()" in scroll[:scroll.index("});")] and "passive: true" in scroll and "capture: true" in scroll
+
+
+def test_a_pinned_tooltip_whose_part_was_redrawn_away_is_dropped_on_the_next_move() -> None:
+    """The fleet page redraws its pictures on live updates: a pinned part left detached must not
+    keep its tooltip on screen with every hover handler returning early."""
+    move = CODE[CODE.index('on(root, "pointermove"'):CODE.index('on(root, "pointerleave"')]
+    guard = move.index("!shown.isConnected")
+    assert guard < move.index("hide()") < move.index('pointerType === "touch" || pinned')

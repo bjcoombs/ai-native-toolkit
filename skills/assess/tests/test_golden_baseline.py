@@ -9,6 +9,7 @@ decomposition work depends on it.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import golden
@@ -195,6 +196,36 @@ def test_the_template_sections_follow_the_card_in_order() -> None:
     """#1252: no section holds the card or the coverage lines; the visible sections follow it."""
     headings = [line for line in _template_surface().splitlines() if line.startswith("## ")]
     assert headings == ["## Top 3 Actions", "## Says one thing, does another", "## Snapshots"]
+
+
+def _template_report() -> str:
+    """The findings template's whole report: its ``markdown`` fence, inner fences included."""
+    lines, inner = [], False
+    for line in _TEMPLATE.read_text(encoding="utf-8").split("```markdown\n", 1)[1].splitlines():
+        if line.startswith("```"):
+            if not inner and line == "```":
+                break
+            inner = not inner
+        lines.append(line)
+    return "\n".join(lines)
+
+
+SNAPSHOT_SVGS = ("complexity-heatmap", "doc-graph", "step-ladder", "evidence-waffle", "tag-profile",
+                 "package-map", "doc-drift", "review-strip")
+
+
+def test_assess_report_md_links_each_svg_and_inlines_no_svg_or_script() -> None:
+    """#1364 (#1365's scope): only the generated HTML pages inline diagrams with the tooltip
+    helper; ``assess-report.md`` keeps a relative image link per snapshot, since GitHub strips
+    inline SVG and scripts from markdown. Checked on the template and the golden report."""
+    template = _template_report()
+    for svg in SNAPSHOT_SVGS:
+        assert f"](./{svg}.svg)](./{svg}.svg)" in template, svg
+    for name, report in (("template", template), ("golden", golden.load_golden_report())):
+        assert re.search(r"<svg[\s>]|<script[\s>]", report, re.I) is None, name
+    golden_report = golden.load_golden_report()
+    for svg in ("complexity-heatmap", "doc-graph"):
+        assert "[![" in golden_report and f"](./{svg}.svg)](./{svg}.svg)" in golden_report, svg
 
 
 def test_mutation_caveat_present_when_mutation_not_run() -> None:
