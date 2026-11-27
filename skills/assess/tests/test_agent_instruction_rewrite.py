@@ -141,3 +141,9 @@ def test_codeowned_reads_the_last_matching_line() -> None:
     assert not codeowned(text, "AGENTS.md")  # a later line with no owner clears it
     assert not codeowned("", "AGENTS.md")
     assert codeowned("CLAUDE.md @org/a  # trailing comment\n", "sub/CLAUDE.md")
+
+
+def test_the_github_codeowners_file_wins_over_a_stale_root_one(git_repo) -> None:
+    repo = _repo(git_repo, {WORKFLOW: SCHEDULED_WRITER, "CODEOWNERS": OWNERS,
+                            ".github/CODEOWNERS": "/src/ @example-org/maintainers\n"})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1

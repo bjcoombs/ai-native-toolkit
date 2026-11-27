@@ -469,8 +469,7 @@ _WORDING: dict[str, Wording] = {
         "`safe-outputs:`, does the writing."),
     "agent_ops.summary.agent_instruction_rewrite": _flag_count(
         "Add a CODEOWNERS line with an owner for `AGENTS.md`, `CLAUDE.md`, the other instruction "
-        "files and each agent workflow, or drop `contents: write` from the agent job and open a "
-        "pull request from a separate job instead.",
+        "files and each agent workflow, and require code-owner review on the default branch.",
         "No agent job that can write files runs while an instruction file or its own workflow has "
         "no CODEOWNERS owner."),
     "ci_hazards.skip_labels": _flag_count(

@@ -299,7 +299,7 @@
               "eq_signal": null,
               "text": "Agent jobs that can rewrite unowned instruction or workflow files: is above 0",
               "title": "An agent job can rewrite its own instructions",
-              "fix": "Add a CODEOWNERS line with an owner for AGENTS.md, CLAUDE.md, the other instruction files and each agent workflow listed, and require code-owner review on the default branch. Or drop contents: write from the agent job and open a pull request from a separate job.",
+              "fix": "Give AGENTS.md, CLAUDE.md and each agent workflow listed an owner in CODEOWNERS. Require code-owner review on the default branch, so every change to them waits for an owner.",
               "why": "An agent job that can push files can change AGENTS.md, CLAUDE.md or its own workflow, so the next run follows instructions no reviewer approved. CI then checks changes against rules the agent wrote for itself.",
               "why_source": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners",
               "input_class": "head_structure",

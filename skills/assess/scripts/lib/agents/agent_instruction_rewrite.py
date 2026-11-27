@@ -10,11 +10,14 @@ next run follows text no reviewer approved (#826, hazard H2). The hazard reads t
   write through ``safe-outputs:`` ``create-pull-request`` or ``push-to-pull-request-branch``,
   whatever its own scope. A split job with a ``contents`` write still counts: the scope is
   the agent job's own. An ``undeclared`` scope is not counted, as for
-  ``agent_job_write_access``: the repository default token cannot be read here.
+  ``agent_job_write_access``: the repository default token cannot be read here. A read-only
+  agent job is not counted even when a writer job that ``needs:`` it holds ``contents:
+  write``: what that job writes is not read, so the fix is CODEOWNERS, never a split.
 - **Paths at risk.** The root ``AGENTS.md`` and ``CLAUDE.md`` (written or created), every
   committed file at ``lib.instructions.instruction_files.INSTRUCTION_FILE_PATHS``, and the
   job's own workflow file (with a gh-aw source's compiled ``.lock.yml`` when committed).
-- **Guard.** A committed CODEOWNERS (root, ``.github/`` or ``docs/``, GitHub's precedence)
+- **Guard.** A committed CODEOWNERS (``.github/``, then the root, then ``docs/``: the first
+  GitHub finds, ``CODEOWNERS_ORDER``)
   whose last matching line names an owner (``lib.docs.ownership_parser.codeowned``). The job
   raises the hazard when any path at risk has no owner. Whether branch protection requires
   code-owner review is a hosting setting this offline reader does not see.
@@ -34,13 +37,15 @@ from collections.abc import Callable, Mapping
 from lib.agents.agent_job_scope import NO_AGENT_JOBS, SCOPE_UNREAD, UNREAD, WRITE
 from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.counts_only.block_shapes import AgentJob
-from lib.docs.ownership_parser import CODEOWNERS_LOCATIONS, codeowned
+from lib.docs.ownership_parser import codeowned
 from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
 
 ROOT_INSTRUCTIONS = ("AGENTS.md", "CLAUDE.md")
 # gh-aw safe outputs that land the agent's file changes on a branch.
 FILE_OUTPUTS = frozenset({"create-pull-request", "push-to-pull-request-branch"})
 UNREAD_WORKFLOWS = "agent_workflows_unread"
+# GitHub uses the first CODEOWNERS it finds in this order (about-code-owners).
+CODEOWNERS_ORDER = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 
 Read = Callable[[str], "str | None"]
 
@@ -69,8 +74,8 @@ def at_risk(job: AgentJob, files: frozenset[str]) -> list[str]:
 
 
 def codeowners_text(files: frozenset[str], read: Read) -> str:
-    """The committed CODEOWNERS in effect, by GitHub's precedence, or empty."""
-    rel = next((r for r in CODEOWNERS_LOCATIONS if r in files), None)
+    """The committed CODEOWNERS in effect (the first of ``CODEOWNERS_ORDER``), or empty."""
+    rel = next((r for r in CODEOWNERS_ORDER if r in files), None)
     return (read(rel) or "") if rel is not None else ""
 
 
