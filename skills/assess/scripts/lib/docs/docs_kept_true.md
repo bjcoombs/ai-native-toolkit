@@ -10,7 +10,7 @@ The module docstring has the rules and the block shape. Known limits:
 - `git status --porcelain` with `test -z`, and `git diff-index --quiet`, are not read as a
   diff check.
 - "Regenerated" means any earlier command in the same job, script or recipe that is not a
-  `git`, shell built-in or install command. A job that runs only `actions/checkout` and a
+  `git`, shell built-in, install, test or lint command. A job that runs only `actions/checkout` and a
   generator action before the diff has no such command and is not credited.
 - A followed script or recipe line is masked by its own `||` rule only: a Makefile `-`
   prefix (ignore errors) is dropped by the follower, so `-git diff --exit-code` counts.

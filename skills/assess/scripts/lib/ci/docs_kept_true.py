@@ -8,7 +8,7 @@ script, a ``make`` recipe, up to ``_MAX_FOLLOW`` levels). Nothing is executed. I
 
 - **regen_diff.** A ``git diff`` with ``--exit-code`` or ``--quiet`` after an earlier command
   of the same job (or of the same followed script or recipe) that is not a ``git``, shell
-  built-in or install command: the job regenerates files, then fails when they differ from
+  built-in, install, test or lint command (``lib.ci.check_command``): the job regenerates files, then fails when they differ from
   the commit. ``covers`` is the diff's literal path arguments (``git diff --exit-code --
   docs/``); ``.`` and no path name no subtree.
 - **verify_pair.** A step runs a committed ``verify-<x>`` script (``hack/verify-codegen.sh``)
@@ -56,6 +56,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TypedDict
 
+from lib.ci.check_command import is_check_command, is_lint_command
 from lib.ci.ci_action_inputs import ReadLocal
 from lib.ci.ci_kept_types import DocsKeptTrueBlock, KeptCheck, KeptKind, KeptTrueBy
 from lib.ci.ci_masking import IndentTree, mask_lines, parse_lines
@@ -71,7 +72,7 @@ REASON_SCAN_FAILED = "scan_failed"
 PYTEST_CONFIGS = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
 _MAX_FOLLOW = 3
 _OPERATOR = re.compile(r"(&&|\|\||;|\|)")
-_RERAISE = re.compile(r"\bexit\s+(?:[1-9]\d*|\"?\$)|(?:^|[\s;{(])false\b")
+_RERAISE = re.compile(r"(?:^|[;{(]|&&|\|\|)\s*(?:exit\s+(?:[1-9]\d*|\"?\$)|false\b)")
 _VERIFY = re.compile(r"^(?P<dir>(?:.*/)?)verify-(?P<name>[\w.-]+)$")
 _NOT_REGEN = frozenset({"git", "echo", "printf", "cd", "pushd", "popd", "ls", "cat", "pwd", "mkdir",
                         "set", "export", "true", ":", "test", "[", "exit", "apt-get", "apt", "brew"})
@@ -180,8 +181,12 @@ def _runs_pytest(words: list[str]) -> bool:
 
 
 def _regenerates(words: list[str]) -> bool:
+    """Whether a command can regenerate files: not git, a built-in, an install, or a test or
+    lint run (``pytest`` then ``git diff`` checks the tests left the tree clean, nothing more)."""
     head = posixpath.basename(words[0])
-    return head not in _NOT_REGEN and "install" not in words[:3] and words[:2] != ["npm", "ci"]
+    text = " ".join(words)
+    return (head not in _NOT_REGEN and "install" not in words[:3] and words[:2] != ["npm", "ci"]
+            and not is_check_command(text) and not is_lint_command(text))
 
 
 class _Reader:

@@ -269,3 +269,14 @@ def test_a_covered_hub_that_still_reads_stale_stays_a_stale_hub() -> None:
 def test_a_gitlab_after_script_diff_cannot_fail_the_job(tmp_path: Path) -> None:
     root = _repo(tmp_path, {".gitlab-ci.yml": "codegen:\n  script:\n    - make gen\n  after_script:\n    - git diff --exit-code\n"})
     assert _block(root)["present"] is False
+
+
+def test_a_test_run_then_a_diff_is_not_a_regeneration(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {**DOCS, ".github/workflows/ci.yml": _workflow("pytest", "git diff --exit-code -- docs/")})
+    assert _block(root)["present"] is False
+
+
+def test_false_as_an_argument_does_not_re_raise(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {**DOCS, "Makefile": "check:\n\tpython gen.py\n\tgit diff --exit-code docs || echo false\n",
+                            ".github/workflows/ci.yml": _workflow("make check")})
+    assert _block(root)["present"] is False
