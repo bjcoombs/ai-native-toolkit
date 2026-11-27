@@ -123,9 +123,13 @@ jobs:
         run: |
           ws="$GITHUB_WORKSPACE/repo"
           mkdir -p "$ws/.assess"
+          # `uv run --locked <file>.py` is script mode and wants a <file>.py.lock, so the
+          # scripts the project environment covers run as `python <file>` against uv.lock.
+          # complexity-treemap.py needs matplotlib, squarify and numpy, which the project
+          # lacks, so it runs unlocked in script mode on its inline pins.
           uv run scripts/complexity-treemap.py "$ws" -o "$RUNNER_TEMP/heatmap.svg" \
             --stats "$ws/.assess/complexity-stats.json"
-          uv run scripts/assess_core.py "$ws"
+          uv run --locked python scripts/assess_core.py "$ws"
 
       - name: Plan the writes (no model)
         id: plan
@@ -147,7 +151,7 @@ jobs:
             echo "::error::The issue listing reached its 500-item limit, so the plan could miss filed items; nothing is written."
             exit 1
           fi
-          uv run scripts/assess_actions_render.py "$GITHUB_WORKSPACE/repo" reconcile \
+          uv run --locked python scripts/assess_actions_render.py "$GITHUB_WORKSPACE/repo" reconcile \
             --existing "$out/existing.json" --label "$LABEL" --scheduled --today "$(date -u +%Y-%m-%d)" \
             > "$out/plan.json"
           jq -r '.summary' "$out/plan.json" >> "$GITHUB_STEP_SUMMARY"
