@@ -369,6 +369,9 @@ TEMPLATE = ".evals: &evals\n  script:\n    - pytest evals/\n"
     # A rules: entry with no when: (on_success) runs the job.
     "evals:\n  <<: *evals\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"never\"\n      when: never\n    - if: $X\n",
     "evals:\n  script:\n    - pytest evals/\n  rules:\n    - when: always\n",
+    # A !reference inside a template a running job takes by alias, or by another !reference.
+    ".mid: &mid\n  script:\n    - !reference [.evals, script]\nagent:\n  <<: *mid\n",
+    ".mid:\n  script:\n    - !reference [.evals, script]\nagent:\n  script:\n    - !reference [.mid, script]\n",
     # A chain of anchored templates a running job takes through the last one.
     ".mid: &mid\n  <<: *evals\n  image: python:3.12\nevals:\n  <<: *mid\n",
 ])

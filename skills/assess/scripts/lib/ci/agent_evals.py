@@ -256,13 +256,27 @@ def _running(tree: IndentTree) -> list[int]:
 
 def hidden_references(texts: Iterable[str]) -> frozenset[tuple[str, str]]:
     """The GitLab hidden job and key each ``!reference [.name, key]`` names in a visible job of
-    ``texts`` that runs (``_running``); one in a manual job or a hidden job names nothing."""
+    ``texts`` that runs (``_running``), in a template such a job takes by anchor alias, or in a
+    key another such reference names (GitLab nests them), followed to a fixed point; one in a
+    manual job or a hidden job nothing takes names nothing."""
+    trees = [IndentTree(parse_lines(text.splitlines())) for text in texts]
+    taken: list[set[int]] = []
+    for tree in trees:
+        _, replaced = _hidden_keep(tree, frozenset())
+        taken.append({i for i, line in enumerate(tree.lines)
+                      if line.structural and (_taken(tree, replaced, i) is not None)} | set(_running(tree)))
     found: set[tuple[str, str]] = set()
-    for text in texts:
-        tree = IndentTree(parse_lines(text.splitlines()))
-        for i in _running(tree):
-            found.update((m.group(1), m.group(2)) for m in _REFERENCE.finditer(tree.lines[i].value))
-    return frozenset(found)
+    while True:
+        more = set(found)
+        for tree, lines in zip(trees, taken):
+            for i, line in enumerate(tree.lines):
+                path = [i, *tree.ancestors(i)]
+                named = len(path) > 1 and (tree.lines[path[-1]].key, tree.lines[path[-2]].key) in found
+                if line.structural and (i in lines or named):
+                    more.update((m.group(1), m.group(2)) for m in _REFERENCE.finditer(line.value))
+        if more == found:
+            return frozenset(found)
+        found = more
 
 
 def _taken(tree: IndentTree, replaced: Mapping[int, set[str]], i: int) -> int | None:
