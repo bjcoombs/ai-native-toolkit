@@ -25,7 +25,8 @@ REMOTE_RE = re.compile(r"^https://raw\.githubusercontent\.com/bjcoombs/ai-native
 FENCE_RE = re.compile(r"^```ya?ml\n(.*?)^```", re.MULTILINE | re.DOTALL)
 REFINE_CALLERS = {"reusable-refine-triage.yml": "refine-triage.yml",
                   "reusable-refine-dedupe.yml": "refine-dedupe.yml",
-                  "reusable-refine-sweep.yml": "refine-sweep.yml"}
+                  "reusable-refine-sweep.yml": "refine-sweep.yml",
+                  "reusable-refine-contract.yml": "refine-contract.yml"}
 
 
 def _tag() -> str:

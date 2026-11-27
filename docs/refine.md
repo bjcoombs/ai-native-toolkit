@@ -13,6 +13,7 @@ How another repository adopts the refiner: three GitHub workflows that check iss
 | `reusable-refine-triage.yml` | an issue is opened, or a comment is added | yes, read-only | `refine.py` decides what a script can. An issue it leaves unsettled goes to a Sonnet-class model, which returns a plan; a separate job with no model applies the plan through guarded write scripts. A `/reopen` comment reopens a duplicate the refiner closed |
 | `reusable-refine-dedupe.yml` | an issue is opened | yes, read-only | An exact duplicate is closed with no model, under a weekly cap; otherwise the model names at most three candidates in one comment and closes nothing |
 | `reusable-refine-sweep.yml` | a schedule, twice a day | no | Ready label on settled ready issues, exact-duplicate closes, the ready-buffer report with the unsettled issues listed oldest first for a maintainer, and the optional project sync |
+| `reusable-refine-contract.yml` | after each sweep | no | Drafts the next marathon run's acceptance contract from the ready queue and opens or refreshes its pull request ([Contract draft](#contract-draft)) |
 
 Paths are relative to the toolkit's `.github/workflows/`. The definition of ready is your repository's `docs/contributing/definition-of-ready.md` when it has one, and the toolkit's copy otherwise.
 
@@ -143,6 +144,42 @@ The sweep can keep a GitHub project's `Status`, `Size` and `Verdict` fields in s
 - **Size** comes from the `<!-- refine:size N -->` marker or a `Size: N points` line, and is cleared when the issue has neither. **Verdict** is `refine.py`'s verdict.
 - An open issue missing from the project is added. A project with more than 2000 items stops the sync before it writes. Only a field whose value differs is written, at most 500 writes a run, and nothing is written in dry-run.
 - The sync is the only writer of these three fields; a value set by hand is put back on the next sweep.
+
+## Contract draft
+
+An `/issues` marathon starts only when `scripts/contract/start_gate.py` (relative to the toolkit root) finds a frozen acceptance contract. The contract workflow drafts one from the ready queue after each sweep, so nobody writes it by hand.
+
+- **Queue.** The ready buffer: open issues with the ready label, no open blocker, no sub-issues and no open pull request closing them. `refine_queue.py` reads each one's Success Criteria, with clarified-scope comments applied.
+- **Draft.** `scripts/contract/draft.py` writes `.claude/contracts/<run_id>.contract.md` with one criterion per Success Criteria item, its text and commands verbatim, and `<run_id>.kill-test.json` beside it. An issue with a Success Criteria item that names no command in a code span is left out whole and listed under "Not drafted", so it never blocks the rest of the queue. The draft's kill test (`draft.py check`) must pass before anything is pushed: it fails when a criterion has lost a command.
+- **Approve.** In live mode the draft goes to the branch `refine/contract-draft-<run_id>` and one pull request. Merging it approves the draft. `start_gate.py` refuses a drafted contract that is not on the default branch, differs from the merged copy, or was frozen at another hash.
+- **Freeze.** Still a person's step: run each criterion against the default branch, set `passed_against_null` in the kill-test file, then run `freeze.py --kill-test-results`. `freeze.py` refuses the file while any value is `null`, and refuses a criterion that already passes.
+- **Refresh.** When the queue changes, the next run rewrites the draft on the same branch and comments on the pull request with the criteria added, removed and reworded, by issue. An unchanged queue changes nothing. Edit an issue's Success Criteria, not the draft: the next run overwrites edits to the draft.
+- **Settings.** Set the variable `REFINE_CONTRACT_RUN_ID` to the run id the marathon's start gate uses (`issues-agent-ready` for the `agent-ready` label); unset, the job is skipped. Allow GitHub Actions to create pull requests (Settings > Actions > General). A pull request opened with `GITHUB_TOKEN` starts no workflows, so required checks never report on it: store a token that can push and open pull requests as `REFINE_CONTRACT_TOKEN` to have them run.
+
+### `.github/workflows/refine-contract.yml`
+
+```yaml
+name: Refine contract draft
+on:
+  workflow_run:
+    workflows: ["Refine sweep"]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+jobs:
+  contract:
+    if: vars.REFINE_ENABLED == 'true' && vars.REFINE_CONTRACT_RUN_ID != ''
+    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-contract.yml@v4.1.0
+    with:
+      enabled: ${{ vars.REFINE_ENABLED == 'true' }}
+      mode: ${{ vars.REFINE_MODE || 'dry-run' }}
+      run_id: ${{ vars.REFINE_CONTRACT_RUN_ID }}
+    secrets:
+      contract_token: ${{ secrets.REFINE_CONTRACT_TOKEN }}
+```
 
 ## GitLab
 
