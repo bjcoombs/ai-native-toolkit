@@ -539,7 +539,7 @@ def _attribute(groups: list[GroupChange], earlier: FleetRun, later: FleetRun,
                 if state is not None and state["status"] == "unknown" and stored is not None:
                     missing = [s for lv in stored["levels"] if lv["id"] == row["id"] for s in lv["missing_signals"]]
                     absent += absent_signals(missing, mine, other)
-            absent += _stale_reads(row["id"], earlier, later, [stale.get(r, []) for r in both])
+            absent = sorted({*absent, *_stale_reads(row["id"], earlier, later, [stale.get(r, []) for r in both])})
             row_reads = _row_blocks(row["id"], earlier, later)
             result = attribute(row["cause"], absent=absent, diff=scanner, blocks_changed=blocks,
                                row_blocks=row_reads, moved_blocks=moved_blocks)
@@ -553,7 +553,8 @@ def _attribute(groups: list[GroupChange], earlier: FleetRun, later: FleetRun,
 
 
 def _stale_reads(row_id: str, earlier: FleetRun, later: FleetRun, stale: list[list[str]]) -> list[str]:
-    """The stale paths a row reads, from either run's cell signals; every one when neither has them."""
+    """The stale paths a row reads, from either run's cell signals; every one when neither has them
+    (the row's signals are then unknown, so no move is read as a repository move)."""
     found = [run.row_signals.get(row_id, frozenset()) for run in (earlier, later) if run.row_signals is not None]
     signals = frozenset().union(*found) if found and any(found) else None
     return sorted({p for paths in stale for p in paths if signals is None or reads(p, signals)})

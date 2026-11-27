@@ -68,7 +68,9 @@ they match.
 When the two rows differ, the row at the lower version reads each signal whose meaning
 changed between them as absent (`lib/signal_meaning.py` lists them per version), so `repos`
 shows only the other side's value, never a repository move. A maturity model row that moved
-and reads such a signal gets cause `set` with `absent_signals`. When the versions differ and
+and reads such a signal (the `signal` of its `fleet-data.json` cells in either run) gets cause
+`set` with `absent_signals`; without cell signals for the row, every such signal in its group
+counts, so the move is never read as a repository move. When the versions differ and
 either is one this toolkit does not know, every signal of the earlier run's row reads as
 absent; two rows at one version compare as they are.
 

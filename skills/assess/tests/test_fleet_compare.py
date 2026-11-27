@@ -195,6 +195,22 @@ def test_a_level_move_on_a_changed_signal_is_measured_set_movement(monkeypatch):
     assert repo["signals"] == [{"path": "shared_tooling.available", "now": True}]
 
 
+def test_a_changed_signal_the_row_does_not_read_leaves_its_level_move(monkeypatch):
+    # with cell signals, only a stale path the row reads makes the move measured-set movement
+    monkeypatch.setattr(sm, "MEANING_CHANGES", {2: ("observability.rung",)})
+    earlier = [_versioned("grpa/svc1", {**_scans(20, shared=False), "observability": {"rung": 1}}, 1)]
+    later = [_versioned("grpa/svc1", {**_scans(20), "observability": {"rung": 3}}, 2)]
+    cells = {"teamdocs": frozenset({"shared_tooling.available"})}
+    then = FleetRun(_stamp(earlier), earlier, roll_up(earlier, LEVELS, {}), cells)
+    now = FleetRun(_stamp(later), later, roll_up(later, LEVELS, {}), cells)
+    move = _row_move(compare(then, now), "grpa", "teamdocs")
+    assert move["moved"] and move["cause"] == fc.CAUSE_LEVEL and "absent_signals" not in move
+    reading = {"teamdocs": frozenset({"observability.rung"})}
+    move = _row_move(compare(FleetRun(then.stamp, earlier, then.groups, reading),
+                             FleetRun(now.stamp, later, now.groups, reading)), "grpa", "teamdocs")
+    assert move["cause"] == fc.CAUSE_SET and move["absent_signals"] == ["observability.rung"]
+
+
 def test_a_schema_version_this_toolkit_does_not_know_reads_every_earlier_signal_as_absent():
     then = [_versioned("g/a", {"observability": {"kept": 1}}, 1)]
     now = [_versioned("g/a", {"observability": {"kept": 1}}, 99)]
