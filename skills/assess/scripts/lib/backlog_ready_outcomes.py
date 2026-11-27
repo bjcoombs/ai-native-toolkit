@@ -32,7 +32,10 @@ read (a capped timeline, note read or bot probe). The ratio reads ``window_trunc
 window's issue list stopped at its page cap: that list is newest first, so the issues it drops are
 old ones closed in the window, and a ratio over the rest would be low. For the same reason
 ``first_response_met`` is null when that capped list never reached an issue opened before the
-window: issues opened in the window were dropped, and they may decide the median. One exception keeps an ignored tracker from reading
+window: issues opened in the window were dropped, and they may decide the median. The untriaged
+share reads ``open_truncated`` when the open-issue list stopped at its page cap: a capped slice
+holds only the oldest issues on GitHub or the newest on GitLab, and untriaged issues gather at one
+end, so a share over it could read met while others sit untriaged. One exception keeps an ignored tracker from reading
 not measured: when no issue opened in the window got a response and the overdue ones decide the
 median, the median is null with ``no_response`` and ``first_response_met`` is false, since any
 later response is already past the threshold. Each
@@ -73,6 +76,7 @@ EMPTY_WINDOW = "empty_window"
 NO_RESPONSE = "no_response"
 RESPONSE_UNREAD = "response_unread"
 WINDOW_TRUNCATED = "window_truncated"
+OPEN_TRUNCATED = "open_truncated"
 METRICS = ("first_response_median_days", "untriaged_after_7d_share", "close_open_ratio_90d")
 _DAY = 86400.0
 
@@ -172,7 +176,10 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
         fields["first_response_median_days_reason"] = (
             NO_RESPONSE if met is False else RESPONSE_UNREAD if unread else EMPTY_WINDOW)
 
-    if read.open_old:
+    if read.open_truncated:  # a capped slice is the oldest (GitHub) or newest (GitLab) issues only
+        fields.update(untriaged_after_7d_share=None, untriaged_after_7d_share_reason=OPEN_TRUNCATED,
+                      untriaged_met=None)
+    elif read.open_old:
         share = untriaged_n / len(read.open_old)
         fields["untriaged_after_7d_share"] = round(share, 4)
         fields["untriaged_met"] = share <= thresholds.untriaged_max_share

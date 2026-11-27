@@ -240,11 +240,22 @@ def test_an_issue_with_unread_labels_counts_untriaged(tmp_path: Path, gh: FakeGh
     assert block["outcomes"]["untriaged_after_7d"] == 3 and block["untriaged_met"] is False
 
 
-def test_a_capped_open_list_keeps_the_ratio(tmp_path: Path, gh: FakeGh, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_capped_open_list_leaves_the_untriaged_share_null(tmp_path: Path, gh: FakeGh,
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(io, "MAX_PAGES", 1)
     gh.open["data"]["repository"]["issues"]["pageInfo"] = {"hasNextPage": True, "endCursor": "Y3Vyc29yOjEx"}
     block = _block(_repo(tmp_path))
     assert block["outcomes"]["truncated"] is True and block["close_open_met"] is True
+    assert (block["untriaged_after_7d_share"], block["untriaged_met"]) == (None, None)
+    assert block["untriaged_after_7d_share_reason"] == "open_truncated"
+
+
+def test_gitlab_a_capped_open_list_leaves_the_untriaged_share_null(tmp_path: Path, glab: FakeGlab,
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(iog, "GITLAB_PAGE", 10)  # the 10 open issues fill the one page read
+    monkeypatch.setattr(iog, "MAX_PAGES", 1)
+    block = _block(_repo(tmp_path))
+    assert (block["untriaged_met"], block["untriaged_after_7d_share_reason"]) == (None, "open_truncated")
 
 
 def test_unread_responses_are_not_an_empty_window(tmp_path: Path, gh: FakeGh) -> None:

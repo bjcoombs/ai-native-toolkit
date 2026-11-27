@@ -167,4 +167,4 @@ def gitlab_read(project: GitlabProject, start: datetime, now: datetime) -> Issue
                                                 if isinstance(x, str)))
                      for r in open_rows if (created := parse_time(r.get("created_at"))) is not None)
     return IssueRead("gitlab", start, now, tuple(recent), open_old, cut or cut_open or bots.capped,
-                     cut_window)
+                     cut_window, cut_open)

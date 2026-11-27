@@ -6,7 +6,7 @@ client: a scan whose module reaches ``gh_cli`` or ``gitlab_cli`` must be a netwo
 ``backlog_ready`` is not one (its network read is the private ``backlog_outcomes`` spec).
 
 `Issue` (`created`, `closed`, lower-cased `labels`, `first_response`, `response_read`), `IssueRead`
-(`provider`, `start`, `now`, `recent`, `open_old`, `truncated`, `window_truncated`), `OutcomeRead` (an `IssueRead` or an
+(`provider`, `start`, `now`, `recent`, `open_old`, `truncated`, `window_truncated`, `open_truncated`), `OutcomeRead` (an `IssueRead` or an
 unavailable dict), the reason codes `REASONS` and `UNTRIAGED_AFTER` (7 days). Tests:
 `tests/test_backlog_ready_platform.py`.
 """
@@ -53,6 +53,7 @@ class IssueRead:
     open_old: tuple[Issue, ...]
     truncated: bool
     window_truncated: bool = False
+    open_truncated: bool = False  # the open-issue list stopped at its page cap
 
 
 OutcomeRead = IssueRead | dict[str, Any]

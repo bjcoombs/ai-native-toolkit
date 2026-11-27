@@ -203,7 +203,8 @@ def github_read(repo: GithubRepo, start: datetime, now: datetime) -> IssueRead:
             total = _dict(node.get("labels")).get("totalCount")
             complete = not isinstance(total, int) or total <= len(names)
             open_old.append(Issue(created, None, names, labels_complete=complete))
-    return IssueRead("github", start, now, tuple(recent), tuple(open_old), cut_recent or cut_open, cut_recent)
+    return IssueRead("github", start, now, tuple(recent), tuple(open_old), cut_recent or cut_open, cut_recent,
+                     cut_open)
 
 
 # --- the registry values -------------------------------------------------------------
