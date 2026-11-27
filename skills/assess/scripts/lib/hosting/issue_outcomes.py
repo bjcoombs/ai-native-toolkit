@@ -62,7 +62,7 @@ from lib.hosting.merged_sample import parse_time, remote_kind
 # Issues per GitHub GraphQL page, timeline items read per issue, label names per issue.
 GITHUB_PAGE = 50
 TIMELINE_ITEMS = 25
-LABELS_PER_ISSUE = 20
+LABELS_PER_ISSUE = 100
 # Pages read per list before the read is truncated (GitHub and GitLab).
 MAX_PAGES = 10
 
@@ -115,7 +115,7 @@ OPEN_QUERY = (
     " repository(owner: $owner, name: $name) {"
     " issues(first: 100, after: $after, states: OPEN, orderBy: {field: CREATED_AT, direction: ASC}) {"
     " pageInfo { hasNextPage endCursor }"
-    f" nodes {{ createdAt labels(first: {LABELS_PER_ISSUE}) {{ nodes {{ name }} }} }} }} }} }}"
+    f" nodes {{ createdAt labels(first: {LABELS_PER_ISSUE}) {{ totalCount nodes {{ name }} }} }} }} }} }}"
 )
 
 
@@ -199,7 +199,10 @@ def github_read(repo: GithubRepo, start: datetime, now: datetime) -> IssueRead:
     for node in open_nodes:
         created = parse_time(node.get("createdAt"))
         if created is not None and created < cutoff:
-            open_old.append(Issue(created, None, _labels(node)))
+            names = _labels(node)
+            total = _dict(node.get("labels")).get("totalCount")
+            complete = not isinstance(total, int) or total <= len(names)
+            open_old.append(Issue(created, None, names, labels_complete=complete))
     return IssueRead("github", start, now, tuple(recent), tuple(open_old), cut_recent or cut_open, cut_recent)
 
 

@@ -223,6 +223,23 @@ def test_a_page_cap_is_truncated_and_still_measured(tmp_path: Path, gh: FakeGh,
     assert block["close_open_ratio_90d_reason"] == "window_truncated"
 
 
+def test_a_capped_window_that_drops_window_issues_leaves_first_response_null(
+        tmp_path: Path, gh: FakeGh, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(io, "MAX_PAGES", 1)
+    nodes = gh.nodes()
+    del nodes[3]  # no row from before the window: issues opened in it may have been dropped
+    gh.recent["data"]["repository"]["issues"]["pageInfo"] = {"hasNextPage": True, "endCursor": "Y3Vyc29yOjM="}
+    block = _block(_repo(tmp_path))
+    assert block["first_response_median_days"] == 1.0 and block["first_response_met"] is None
+
+
+def test_an_issue_with_unread_labels_counts_untriaged(tmp_path: Path, gh: FakeGh) -> None:
+    for node in gh.open["data"]["repository"]["issues"]["nodes"][:2]:
+        node["labels"]["totalCount"] = 150
+    block = _block(_repo(tmp_path))
+    assert block["outcomes"]["untriaged_after_7d"] == 3 and block["untriaged_met"] is False
+
+
 def test_a_capped_open_list_keeps_the_ratio(tmp_path: Path, gh: FakeGh, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(io, "MAX_PAGES", 1)
     gh.open["data"]["repository"]["issues"]["pageInfo"] = {"hasNextPage": True, "endCursor": "Y3Vyc29yOjEx"}

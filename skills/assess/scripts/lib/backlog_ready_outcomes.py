@@ -30,7 +30,9 @@ Each metric is null with a ``<metric>_reason`` code when it is not measured: the
 issues opened in the window got no response the read could settle and some response could not be
 read (a capped timeline, note read or bot probe). The ratio reads ``window_truncated`` when the
 window's issue list stopped at its page cap: that list is newest first, so the issues it drops are
-old ones closed in the window, and a ratio over the rest would be low. One exception keeps an ignored tracker from reading
+old ones closed in the window, and a ratio over the rest would be low. For the same reason
+``first_response_met`` is null when that capped list never reached an issue opened before the
+window: issues opened in the window were dropped, and they may decide the median. One exception keeps an ignored tracker from reading
 not measured: when no issue opened in the window got a response and the overdue ones decide the
 median, the median is null with ``no_response`` and ``first_response_met`` is false, since any
 later response is already past the threshold. Each
@@ -152,12 +154,16 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
     silent = [i for i in opened if i.response_read and i.first_response is None]
     unread = sum(1 for i in opened if not i.response_read)
     marks = {label.lower() for label in untriaged}
-    untriaged_n = sum(1 for i in read.open_old if not i.labels or marks & set(i.labels))
+    # An issue with more labels than were read counts as untriaged: an unread label cannot make it met.
+    untriaged_n = sum(1 for i in read.open_old
+                      if not i.labels or marks & set(i.labels) or not i.labels_complete)
     fields: dict[str, Any] = {}
 
     limit = thresholds.first_response_max_days
     overdue = sum(1 for i in silent if _days(i.created, read.now) > limit)
     met = _response_met(waits, overdue, len(silent) - overdue + unread, limit)
+    if read.window_truncated and not any(i.created < read.start for i in read.recent):
+        met = None  # the capped list (newest first) dropped issues opened in the window: they may decide it
     fields["first_response_met"] = met
     if waits:
         fields["first_response_median_days"] = round(median(waits), 2)

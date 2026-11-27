@@ -37,6 +37,7 @@ class Issue:
     labels: tuple[str, ...]
     first_response: datetime | None = None
     response_read: bool = True  # False: the events read could not settle the first response
+    labels_complete: bool = True  # False: the issue has more labels than were read
 
 
 @dataclass(frozen=True)
