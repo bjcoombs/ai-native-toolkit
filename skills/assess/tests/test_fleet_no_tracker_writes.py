@@ -154,7 +154,7 @@ TRACKER_OBJECTS = frozenset({
     "issue", "pr", "mr", "label", "release", "repo", "variable", "secret", "milestone",
     "project", "ruleset", "workflow", "run", "cache", "incident", "snippet",
 })
-FIELD_FLAGS = ("-f", "-F", "--field", "--raw-field", "--input")
+FIELD_FLAGS = ("-f", "-F", "--field", "--raw-field")
 
 
 def _api_method(args: list[str]) -> str | None:
@@ -167,21 +167,41 @@ def _api_method(args: list[str]) -> str | None:
     return None
 
 
+def _payload(args: list[str]) -> tuple[list[str], bool]:
+    """The ``api`` call's field values, separate (``-f x=1``) or attached (``-fx=1``,
+    ``--field=x=1``), and whether it sends ``--input``, separate or attached."""
+    fields: list[str] = []
+    for i, arg in enumerate(args):
+        if arg in FIELD_FLAGS:
+            fields.append(args[i + 1] if i + 1 < len(args) else "")
+        elif arg.startswith(("--field=", "--raw-field=")):
+            fields.append(arg.split("=", 1)[1])
+        elif arg[:2] in ("-f", "-F") and len(arg) > 2:
+            fields.append(arg[2:])
+    has_input = any(a == "--input" or a.startswith("--input=") for a in args)
+    return fields, has_input
+
+
 def is_write(call: list[str]) -> bool:
     """A ``gh`` or ``glab`` argv that writes to a tracker.
 
     ``issue|pr|mr|...`` with a changing subcommand; an ``api`` call with a method other
-    than GET, or with a field or ``--input`` and no method (both CLIs then POST),
-    unless it is a GraphQL query with no mutation.
+    than GET, or with a field or ``--input`` and no method (both CLIs then POST). A
+    GraphQL call is a read only when every field is inline (no ``@file``), there is no
+    ``--input`` and no field holds a mutation: an operation read from a file is opaque,
+    so it counts as a write.
     """
     args = call[1:]
     if args[:1] == ["api"]:
         method = _api_method(args)
         if method is not None:
             return method != "GET"
-        if not any(a in FIELD_FLAGS or a.startswith(("--field=", "--raw-field=")) for a in args):
+        fields, has_input = _payload(args)
+        if not fields and not has_input:
             return False
-        return "graphql" not in args or any("mutation" in a for a in args)
+        if "graphql" not in args or has_input:
+            return True
+        return any("=@" in f or "mutation" in f for f in fields)
     return len(args) >= 2 and args[0] in TRACKER_OBJECTS and args[1] in WRITE_SUBCOMMANDS
 
 
@@ -204,6 +224,14 @@ def tracker_writes(calls: list[list[str]]) -> list[list[str]]:
     ["gh", "api", "repos/grp/svc/issues", "-f", "title=t"],
     ["glab", "api", "--hostname", "gitlab.com", "projects/1/issues", "--field", "title=t"],
     ["gh", "api", "graphql", "-f", "query=mutation { closeIssue(input: {}) { clientMutationId } }"],
+    ["gh", "api", "repos/grp/svc/issues", "-ftitle=t"],
+    ["gh", "api", "repos/grp/svc/issues", "-Ftitle=t"],
+    ["gh", "api", "repos/grp/svc/issues", "--raw-field=title=t"],
+    ["gh", "api", "repos/grp/svc/issues", "--input", "payload.json"],
+    ["gh", "api", "repos/grp/svc/issues", "--input=payload.json"],
+    ["gh", "api", "graphql", "--input", "payload.json"],
+    ["gh", "api", "graphql", "--input=payload.json"],
+    ["gh", "api", "graphql", "-F", "query=@operation.graphql"],
 ])
 def test_every_write_shape_is_caught(call):
     assert is_write(call)
@@ -214,6 +242,7 @@ def test_every_write_shape_is_caught(call):
     ["gh", "api", "repos/grp/svc"],
     ["gh", "api", "-X", "GET", "repos/grp/svc/issues", "-f", "state=open"],
     ["gh", "api", "graphql", "-f", "query={ viewer { login } }"],
+    ["gh", "api", "graphql", "-fquery={ viewer { login } }", "-F", "first=10"],
     ["gh", "pr", "list", "--repo", "grp/svc", "--state", "merged", "--json", "mergedAt"],
     ["gh", "repo", "view", "grp/svc", "--json", "isPrivate"],
     ["glab", "api", "--hostname", "gitlab.com", "projects/grp%2Fapp/merge_requests/1/notes"],
