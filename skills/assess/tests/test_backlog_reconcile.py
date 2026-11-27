@@ -11,6 +11,7 @@ import pytest
 import assess_actions_render as render
 from lib.report import backlog_items as bi
 from lib.report import backlog_reconcile as br
+from lib.report import backlog_schedule as bs
 
 MODEL = "default-2026.11.24"
 OLD_MODEL = "default-2026.11.01"
@@ -277,7 +278,7 @@ def test_run_facts_reads_a_profile_record_and_missing_blocks() -> None:
 
 def _cli_dir(tmp_path: Path, ctx: Mapping[str, object] | None) -> tuple[Path, Path]:
     assess = tmp_path / ".assess"
-    assess.mkdir()
+    assess.mkdir(exist_ok=True)
     if ctx is not None:
         (assess / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
     existing = tmp_path / "existing.json"
@@ -309,3 +310,128 @@ def test_reconcile_subcommand_errors(tmp_path: Path, capsys: pytest.CaptureFixtu
     existing.write_text("{}", encoding="utf-8")
     assert render.main([str(tmp_path), "reconcile", "--existing", str(existing)]) == 1
     assert "JSON array" in capsys.readouterr().err
+
+
+# ── the scheduled reconcile (#814) ─────────────────────────────────────────
+
+def _status(cid: int, text: str = "Filed by /assess.") -> dict[str, object]:
+    body = bs.new_status_comment(bs.status_line(text, "2026-11-01", None))
+    return {"url": f"https://github.com/o/r/issues/1#issuecomment-{cid}", "body": body,
+            "authorAssociation": "OWNER", "author": {"login": "owner"}}
+
+
+def _human(text: str) -> dict[str, object]:
+    return {"url": "https://github.com/o/r/issues/1#issuecomment-999", "body": text,
+            "authorAssociation": "OWNER", "author": {"login": "owner"}}
+
+
+def _scheduled_tracker() -> list[dict[str, object]]:
+    """The fixture tracker with a status comment and a human comment on each marked item."""
+    items = copy.deepcopy(TRACKER)
+    for n, item in enumerate(items[:3], start=1):
+        item["comments"] = [_human("I will take this."), _status(100 + n)]
+        item["assignees"] = [{"login": "dev"}]
+    items.append({"number": 5, "title": "Unmarked item", "state": "OPEN", "labels": LABELS,
+                  "body": "No marker here.\n", "comments": [_status(105)]})
+    return items
+
+
+class ScheduledTracker:
+    """A tracker that applies scheduled writes, so a test can diff what a run changed."""
+
+    def __init__(self, items: list[dict[str, object]]) -> None:
+        self.items = items
+
+    def apply(self, writes: list[dict[str, object]]) -> None:
+        for w in writes:
+            if w["op"] == "create":
+                self.items.append({"number": 100 + len(self.items), "title": w["title"], "body": w["body"],
+                                   "state": "OPEN", "labels": [{"name": x} for x in w["labels"]],  # type: ignore[attr-defined]
+                                   "comments": [{**_status(900), "body": w["status"]}]})
+                continue
+            item = next(i for i in self.items if i["number"] == w["number"])
+            comments: list[dict[str, object]] = item.setdefault("comments", [])  # type: ignore[assignment]
+            if w["op"] == "edit_comment":
+                c = next(c for c in comments if bs.comment_id(c) == w["comment_id"])
+                c["body"] = w["body"]
+            elif w["op"] == "add_comment":
+                comments.append({**_status(800 + int(w["number"])), "body": w["body"]})  # type: ignore[call-overload]
+            elif w["op"] == "close":
+                item["state"] = "CLOSED"
+
+
+def _scheduled(tmp_path: Path, capsys: pytest.CaptureFixture[str], tracker: ScheduledTracker, today: str,
+               mode: str | None = None, ctx: Mapping[str, object] | None = None) -> dict[str, object]:
+    _cli_dir(tmp_path, ctx or _context(*CONDITIONS, interactive=False))
+    if mode:
+        (tmp_path / ".assess" / "config.toml").write_text(f'[backlog]\nmode = "{mode}"\n', encoding="utf-8")
+    existing = tmp_path / "existing.json"
+    existing.write_text(json.dumps(tracker.items), encoding="utf-8")
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--scheduled",
+                        "--today", today]) == 0
+    plan: dict[str, object] = json.loads(capsys.readouterr().out)
+    tracker.apply(plan["writes"])  # type: ignore[arg-type]
+    return plan
+
+
+def _without_status_lines(items: list[dict[str, object]]) -> list[dict[str, object]]:
+    out = copy.deepcopy(items)
+    for item in out:
+        for c in item.get("comments", []):  # type: ignore[attr-defined]
+            c["body"] = "\n".join(x for x in c["body"].split("\n") if not x.startswith(bs.STATUS_PREFIX))
+    return out
+
+
+def test_two_propose_runs_change_only_the_status_line_of_one_comment_per_item(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    tracker = ScheduledTracker(_scheduled_tracker())
+    before = copy.deepcopy(tracker.items)
+    for today in ("2026-11-27", "2026-11-28"):
+        prior = copy.deepcopy(tracker.items)
+        plan = _scheduled(tmp_path, capsys, tracker, today)
+        assert plan["mode"] == "propose"
+        assert {w["op"] for w in plan["writes"]} == {"edit_comment"}  # type: ignore[attr-defined]
+        assert sorted(w["number"] for w in plan["writes"]) == [1, 2, 3]  # type: ignore[attr-defined]
+        assert _without_status_lines(tracker.items) == _without_status_lines(prior)
+        for old, new in zip(prior, tracker.items, strict=True):
+            changed = [(a["body"], b["body"]) for a, b in zip(old.get("comments", []), new.get("comments", []),  # type: ignore[call-overload]
+                                                               strict=True) if a["body"] != b["body"]]
+            assert len(changed) == (1 if old["number"] in (1, 2, 3) else 0)
+            for a, b in changed:
+                diff = [(x, y) for x, y in zip(a.split("\n"), b.split("\n"), strict=True) if x != y]
+                assert len(diff) == 1 and diff[0][1].startswith(bs.STATUS_PREFIX) and today in diff[0][1]
+    assert _without_status_lines(tracker.items) == _without_status_lines(before)
+    one = next(i for i in tracker.items if i["number"] == 1)
+    assert "Proposed close" in one["comments"][1]["body"] and one["state"] == "OPEN"  # type: ignore[index]
+
+
+@pytest.mark.parametrize(("mode", "state"), [("file", "OPEN"), ("file-and-close", "CLOSED"), ("propose", "OPEN")])
+def test_file_and_close_closes_an_item_whose_condition_holds_and_file_does_not(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str], mode: str, state: str) -> None:
+    tracker = ScheduledTracker(_scheduled_tracker())
+    _scheduled(tmp_path, capsys, tracker, "2026-11-27", mode)
+    states = {i["number"]: i["state"] for i in tracker.items}
+    assert states[1] == state
+    assert states[2] == "CLOSED" and states[3] == "OPEN"  # a reopen stays a proposal in every mode
+
+
+def test_an_unmarked_item_is_untouched_and_human_edits_are_kept(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    items = _scheduled_tracker()
+    items[0]["title"], items[0]["labels"] = "Renamed by a person", [*LABELS, {"name": "p1"}]
+    tracker = ScheduledTracker(items)
+    before = copy.deepcopy(tracker.items)
+    plan = _scheduled(tmp_path, capsys, tracker, "2026-11-27", "file-and-close")
+    assert all(w.get("number") not in (4, 5) for w in plan["writes"])  # type: ignore[attr-defined]
+    for old, new in zip(before, tracker.items, strict=True):
+        assert {k: new[k] for k in ("title", "body", "labels")} == {k: old[k] for k in ("title", "body", "labels")}
+        assert new.get("assignees") == old.get("assignees")
+    assert tracker.items[3] == before[3] and tracker.items[4] == before[4]
+    assert {w["op"] for w in plan["writes"]} <= {"edit_comment", "close"}  # type: ignore[attr-defined]
+
+
+def test_an_unknown_mode_fails_the_scheduled_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _, existing = _cli_dir(tmp_path, _context(*CONDITIONS))
+    (tmp_path / ".assess" / "config.toml").write_text('[backlog]\nmode = "close-all"\n', encoding="utf-8")
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--scheduled"]) == 1
+    assert "propose, file, file-and-close" in capsys.readouterr().err

@@ -1,0 +1,200 @@
+name: Backlog reconcile (reusable)
+
+# The scheduled /assess backlog reconcile (issue #814). No model runs.
+# Adopt it with one `uses:` line from a scheduled workflow;
+# backlog-reconcile.yml is the reference caller.
+#
+#   1. `plan` (contents: read, issues: read) checks out the repository's
+#      default branch, measures it with the deterministic core
+#      (complexity-treemap.py, assess_core.py), lists the filed items with
+#      their comments and prints the run's writes with
+#      `assess_actions_render.py reconcile --scheduled`. The plan goes to
+#      `apply` as an artifact.
+#   2. `apply` (contents: read, issues: write) is the one job that can write.
+#      It checks out the writer script alone and runs the plan with
+#      backlog_reconcile_apply.py, which refuses any write the mode does not
+#      allow. Nothing from the measured repository runs in it.
+#
+# What a run may write comes from the repository's committed
+# .assess/config.toml `[backlog] mode`, not from an input:
+#   propose          (default) the status line of each filed item's existing
+#                    status comment, and nothing else
+#   file             also a missing status comment, and one new item per
+#                    unfiled gate of the next Step, under `[backlog] wip`
+#   file-and-close   also closes an item whose condition now holds
+# Reference: skills/assess-pr/SKILL.md, "6g: Scheduled reconcile".
+#
+# Permissions: grant `contents: read` and `issues: write` in the caller.
+# Each job declares its own, so neither runs with more, whatever the caller
+# grants. No job here uses actions/cache or a setup-* cache.
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        description: Kill switch. Pass `vars.BACKLOG_RECONCILE_ENABLED != 'false'`; false skips both jobs.
+        type: boolean
+        default: false
+      label:
+        description: The label the filed items carry, as `assess-pr` files them. Empty reads every marked item.
+        type: string
+        default: assess-finding
+
+jobs:
+  plan:
+    if: inputs.enabled
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: read
+    concurrency:
+      group: backlog-reconcile-${{ github.repository }}
+      cancel-in-progress: false
+    outputs:
+      writes: ${{ steps.plan.outputs.writes }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      LABEL: ${{ inputs.label }}
+    steps:
+      # Full history: the churn window and the since-last-run comparison
+      # read it, as they do on an interactive run. Checked out under repo/ so
+      # the scripts beside it are never measured.
+      - name: Check out the repository (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: repo
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The reconcile scripts come from the commit this reusable workflow was
+      # called at (job.workflow_repository at job.workflow_sha): the ref the
+      # caller pinned in its `uses:` line. No input chooses the code, and a
+      # missing or malformed value fails the job.
+      - name: Pin the reconcile scripts to this workflow's commit
+        env:
+          TOOLKIT_REPO: ${{ job.workflow_repository }}
+          TOOLKIT_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ "$TOOLKIT_REPO" != "bjcoombs/ai-native-toolkit" ] && [ "$TOOLKIT_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::The reconcile scripts come only from bjcoombs/ai-native-toolkit or this repository, not '${TOOLKIT_REPO}'."
+            exit 1
+          fi
+          if [[ ! "$TOOLKIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The reconcile scripts are pinned only to a full commit sha, not '${TOOLKIT_SHA}'."
+            exit 1
+          fi
+
+      - name: Check out the reconcile scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .reconcile-toolkit
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            skills/assess/
+
+      - name: Install ripgrep
+        run: sudo apt-get update -q && sudo apt-get install -y -q ripgrep
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: Measure the repository (no model)
+        timeout-minutes: 20
+        working-directory: .reconcile-toolkit/skills/assess
+        env:
+          ASSESS_NON_INTERACTIVE: '1'
+        run: |
+          ws="$GITHUB_WORKSPACE/repo"
+          mkdir -p "$ws/.assess"
+          uv run scripts/complexity-treemap.py "$ws" -o "$RUNNER_TEMP/heatmap.svg" \
+            --stats "$ws/.assess/complexity-stats.json"
+          uv run scripts/assess_core.py "$ws"
+
+      - name: Plan the writes (no model)
+        id: plan
+        timeout-minutes: 5
+        working-directory: .reconcile-toolkit/skills/assess
+        run: |
+          out="$RUNNER_TEMP/backlog"
+          mkdir -p "$out"
+          if [ -n "$LABEL" ]; then
+            gh issue list --repo "$GH_REPO" --label "$LABEL" --state all --limit 500 \
+              --json number,title,body,state,labels,comments > "$out/existing.json"
+          else
+            gh issue list --repo "$GH_REPO" --state all --limit 500 \
+              --json number,title,body,state,labels,comments > "$out/existing.json"
+          fi
+          uv run scripts/assess_actions_render.py "$GITHUB_WORKSPACE/repo" reconcile \
+            --existing "$out/existing.json" --label "$LABEL" --scheduled --today "$(date -u +%Y-%m-%d)" \
+            > "$out/plan.json"
+          jq -r '.summary' "$out/plan.json" >> "$GITHUB_STEP_SUMMARY"
+          echo "writes=$(jq '.writes | length' "$out/plan.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Hand the plan to the apply job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: backlog-reconcile-plan-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backlog/plan.json
+          if-no-files-found: error
+
+  # The one job with a write token. No model, and nothing from the measured
+  # repository is checked out: only the writer script, from the same commit
+  # as the plan job's scripts.
+  apply:
+    needs: plan
+    if: inputs.enabled && needs.plan.outputs.writes != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: backlog-reconcile-apply-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Pin the writer script to this workflow's commit
+        env:
+          TOOLKIT_REPO: ${{ job.workflow_repository }}
+          TOOLKIT_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ "$TOOLKIT_REPO" != "bjcoombs/ai-native-toolkit" ] && [ "$TOOLKIT_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::The writer script comes only from bjcoombs/ai-native-toolkit or this repository, not '${TOOLKIT_REPO}'."
+            exit 1
+          fi
+          if [[ ! "$TOOLKIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The writer script is pinned only to a full commit sha, not '${TOOLKIT_SHA}'."
+            exit 1
+          fi
+
+      - name: Check out the writer script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .reconcile-toolkit
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            skills/assess/scripts/backlog_reconcile_apply.py
+
+      - name: Fetch the plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: backlog-reconcile-plan-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backlog
+
+      - name: Write the plan (no model)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .reconcile-toolkit/skills/assess/scripts/backlog_reconcile_apply.py \
+            --plan "$RUNNER_TEMP/backlog/plan.json" --repo "$GITHUB_REPOSITORY"

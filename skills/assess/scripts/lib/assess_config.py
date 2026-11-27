@@ -45,9 +45,14 @@ ready_labels = ["agent-ready"]
 
 # Backlog work-in-progress limit (issue #812), read through `load_backlog_wip`:
 # how many filed backlog items stay open at once (default 3); `assess-pr` lists
-# the items over it as "Next up" instead of filing them.
+# the items over it as "Next up" instead of filing them. `mode` (issue #814),
+# read through `load_backlog_mode`, is what the scheduled reconcile workflow may
+# write: "propose" (default, the status line of each item's status comment only),
+# "file" (also files the next Step's gates and posts missing status comments) or
+# "file-and-close" (also closes an item whose condition holds).
 [backlog]
 wip = 3
+mode = "propose"
 
 # Central guardrails (issue #1153): read this machine's Claude Code managed settings
 # for the agent permissions practice, as `assess_core.py --managed-settings` does. A
@@ -102,7 +107,10 @@ CLI and `doc-graph-svg.py` call it, so every artifact computes over the identica
 `load_backlog_ready_labels` returns the `[backlog_ready]` `untriaged_labels` and
 `ready_labels` lists (issue #1322), each replacing its default when it holds a string.
 `load_backlog_wip` returns `[backlog] wip` (issue #812), the backlog's open-item limit,
-3 when absent or malformed.
+3 when absent or malformed. `load_backlog_mode` returns `[backlog] mode` (issue #814), the
+scheduled reconcile's write mode, `propose` when absent; it is the one loader that raises
+(`BacklogModeError`) on a value it does not know, because a mistyped opt-in must fail the
+scheduled run rather than run it in another mode.
 Degrades silently on missing or malformed config rather than blocking the run. The
 `[ai_usage]`, `[review]` and `[platform]` sections are read by `fleet_config.py`, not here
 (they extend a `--fleet-config` file, #706).
@@ -228,6 +236,30 @@ def load_backlog_wip(repo_root: Path) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         return DEFAULT_BACKLOG_WIP
     return value
+
+
+BACKLOG_MODES = ("propose", "file", "file-and-close")
+DEFAULT_BACKLOG_MODE = BACKLOG_MODES[0]
+
+
+class BacklogModeError(ValueError):
+    """``[backlog] mode`` holds a value other than ``BACKLOG_MODES``."""
+
+
+def load_backlog_mode(repo_root: Path) -> str:
+    """``[backlog] mode`` (#814): what the scheduled reconcile may write.
+
+    ``propose`` (``DEFAULT_BACKLOG_MODE``) when the key is absent or the section is not a
+    table; ``file`` or ``file-and-close`` when set. Any other value raises
+    ``BacklogModeError``: the mode is an opt-in to tracker writes, so a typo fails the run.
+    """
+    section = load_config(repo_root).get("backlog")
+    value = section.get("mode") if isinstance(section, dict) else None
+    if value is None:
+        return DEFAULT_BACKLOG_MODE
+    if value not in BACKLOG_MODES:
+        raise BacklogModeError(f"[backlog] mode must be one of {', '.join(BACKLOG_MODES)}, not {value!r}")
+    return str(value)
 
 
 def _string_list(config: TomlTable, key: str) -> list[str]:
