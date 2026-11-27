@@ -339,7 +339,11 @@ def trackers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv(LOG_ENV, str(log))
     monkeypatch.chdir(tmp_path)
     make_repo(tmp_path / "root", "grp/svc", remote="https://github.com/grp/svc.git")
-    make_repo(tmp_path / "root", "grp/app", remote="https://gitlab.com/grp/app.git")
+    # A remote include does not resolve offline, so the pass reads the merged CI configuration.
+    make_repo(tmp_path / "root", "grp/app", remote="https://gitlab.com/grp/app.git", files={
+        "README.md": "x\n",
+        ".gitlab-ci.yml": "include:\n  - remote: https://example.com/ci.yml\ntest:\n  script: make test\n",
+    })
     return log
 
 
@@ -367,6 +371,7 @@ def _assert_both_trackers_were_read(calls: list[list[str]]) -> None:
     assert any(c.startswith("api repos/grp/svc/commits/") and c.endswith("/check-runs") for c in gh), gh
     assert any(c.startswith("api repos/grp/svc/commits/") and c.endswith("/status") for c in gh), gh
     assert any("/approval_rules" in c for c in glab), glab
+    assert any("/ci/lint?content_ref=" in c for c in glab), glab
     assert any("merge_requests?state=merged" in c for c in glab), glab
     assert any("/merge_requests/1/approvals" in c for c in glab), glab
     assert any("/merge_requests/1/notes" in c for c in glab), glab
