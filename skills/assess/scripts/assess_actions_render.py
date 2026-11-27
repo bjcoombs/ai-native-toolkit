@@ -50,8 +50,13 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   demote and superseded proposals and the batched summary to confirm. It writes nothing.
   ``--filed`` names the items this run filed or reused, which are never proposed superseded.
   With ``--confirm`` it prints only the writes of the confirmed item numbers (``all`` for
-  every proposal) as a JSON array. It needs no ``actions.json``; rules:
-  ``lib/report/backlog_reconcile.py``.
+  every proposal, ``none`` for none) as a JSON array. A proposal declined before is held
+  back while the condition's state and the model are the ones it was declined under, and
+  named under ``declined`` and at the foot of ``summary`` (#813); ``--record-declines``
+  with ``--confirm`` records each shown proposal not confirmed in
+  ``.assess/backlog-declines.json``, with ``--declined-by`` and ``--decline-reason``. That
+  file is the only thing it writes, never the tracker. It needs no ``actions.json``; rules:
+  ``lib/report/backlog_reconcile.py`` and ``lib/run/decline_markers.py``.
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
   ``run-context.json`` joined with `` / ``; the ``badge.json`` ``message`` when the run
   context has no headline lines; ``not known`` when neither file has one.
@@ -75,6 +80,7 @@ Tests: ``tests/test_assess_actions_render.py``.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import re
 import sys
@@ -86,8 +92,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.assess_config import load_backlog_wip  # noqa: E402
 from lib.report.backlog_items import DEFAULT_LABEL, FilingStep, condition_marker, plan_filing  # noqa: E402
-from lib.report.backlog_reconcile import confirmed_writes, reconcile, run_facts  # noqa: E402
+from lib.report.backlog_reconcile import confirmed_writes, reconcile, run_facts, summary  # noqa: E402
 from lib.report.backlog_wip import WipStep, apply_wip, next_up_markdown  # noqa: E402
+from lib.run.decline_markers import (  # noqa: E402
+    decline_record,
+    live_proposal_declines,
+    merge_proposal_declines,
+    proposal_disclosure,
+    read_proposal_declines,
+    split_declined,
+    write_proposal_declines,
+)
 
 REQUIRED_KEYS = ("rank", "action", "done_when", "scope_fence")
 SUB_ITEM_KEYS = ("label", "action", "done_when")
@@ -399,8 +414,16 @@ def parse_numbers(value: str) -> frozenset[int]:
     return frozenset(int(x) for x in parts)
 
 
+DECLINED_HEAD = "Declined before, not proposed again until the condition's state or the model changes:"
+
+
 def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
-    """The ``reconcile`` subcommand: proposals, or with ``--confirm`` the confirmed writes only."""
+    """The ``reconcile`` subcommand: proposals, or with ``--confirm`` the confirmed writes only.
+
+    A proposal declined earlier (``.assess/backlog-declines.json``, #813) is held back while
+    its evidence holds and listed under ``declined``; a record whose evidence changed is
+    dropped from the file. ``--record-declines`` records every shown proposal not confirmed.
+    """
     existing, context = _read_json(args.existing), _read_json(assess_dir / "run-context.json")
     if not isinstance(existing, list):
         print("assess_actions_render: --existing must hold a JSON array of tracker items", file=sys.stderr)
@@ -409,12 +432,31 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
         print(f"assess_actions_render: no readable run-context.json in {assess_dir}", file=sys.stderr)
         return 1
     items = [x for x in existing if isinstance(x, dict)]
-    result = reconcile(items, run_facts(context), label=args.label, filed=args.filed)
+    facts = run_facts(context)
+    conditions, model = facts["conditions"], facts["model"]
+    result = reconcile(items, facts, label=args.label, filed=args.filed)
+    records = read_proposal_declines(assess_dir)
+    live = live_proposal_declines(records, conditions, model)
+    if len(live) != len(records):
+        write_proposal_declines(assess_dir, live)
+    proposals, held = split_declined(result["proposals"], live, conditions, model)
     if args.confirm is None:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        declined = [proposal_disclosure(r) for r in held]
+        text = summary(proposals, result["rules_changed"], result["notes"])
+        if declined:
+            text += "\n" + DECLINED_HEAD + "\n" + "".join(f"- {line}.\n" for line in declined)
+        out = {**result, "proposals": proposals, "declined": declined, "summary": text}
+        print(json.dumps(out, indent=2, ensure_ascii=False))
         return 0
-    proposals = result["proposals"]
-    confirmed = {p["number"] for p in proposals} if args.confirm == "all" else parse_numbers(args.confirm)
+    confirmed = {p["number"] for p in proposals} if args.confirm == "all" else (
+        frozenset() if args.confirm == "none" else parse_numbers(args.confirm))
+    if args.record_declines:
+        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        new = [r for p in proposals if p["number"] not in confirmed
+               and (r := decline_record(p, conditions, model, declined_by=args.declined_by, declined_at=today,
+                                        reason=args.decline_reason)) is not None]
+        if new:
+            write_proposal_declines(assess_dir, merge_proposal_declines(live, new))
     print(json.dumps(confirmed_writes(proposals, confirmed), indent=2, ensure_ascii=False))
     return 0
 
@@ -464,7 +506,11 @@ def _parser() -> argparse.ArgumentParser:
     rc.add_argument("--label", default=DEFAULT_LABEL, help="label an item must carry; '' for none")
     rc.add_argument("--filed", type=parse_numbers, default=frozenset(), metavar="N,...",
                     help="items this run filed or reused: never proposed superseded")
-    rc.add_argument("--confirm", metavar="all|N,...", help="print only the writes of these confirmed items")
+    rc.add_argument("--confirm", metavar="all|none|N,...", help="print only the writes of these confirmed items")
+    rc.add_argument("--record-declines", action="store_true",
+                    help="with --confirm: record each shown proposal not confirmed in .assess/backlog-declines.json")
+    rc.add_argument("--declined-by", help="who declined, for the record (git config user.name)")
+    rc.add_argument("--decline-reason", help="the user's reason for the declines, for the record")
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p
 

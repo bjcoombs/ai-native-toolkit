@@ -6,7 +6,8 @@ interactive run this pass reads the tracker's items again (``gh issue list --sta
 number,title,body,state,labels``) beside this run's ``run-context.json`` and proposes, per
 item, at most one change. It never writes: ``reconcile`` returns proposals, the skill shows
 them as one batched summary, and ``confirmed_writes`` gives back only the writes for the item
-numbers the user confirmed. A declined proposal is not recorded here (#813 owns that).
+numbers the user confirmed. A declined proposal is recorded and held back outside this pass
+(``lib/run/decline_markers.py``, #813).
 
 Per item, in this order (the first rule that applies wins; an item with the
 ``assess-informational`` label, already demoted, is passed over):
