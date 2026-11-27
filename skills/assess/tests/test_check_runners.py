@@ -227,3 +227,12 @@ def test_known_programs_behind_a_wrapper_stay_definite(text: str, expected: bool
 def test_a_lerna_run_reads_like_its_package_manager_form(text: str) -> None:
     """``lerna run test`` runs each package's test script: never a wrong 0."""
     assert check_verdict(text) is not False
+
+
+@pytest.mark.parametrize("text", ["uv run --env-file ci.env mypy", "uvx --env-file ci.env mypy",
+                                  "uv run --env CI=1 mypy", "uv run -P sub mypy"])
+def test_a_shared_wrapper_option_value_is_skipped_for_lint(text: str) -> None:
+    """``check_command.WRAPPER_FLAGS`` is shared with ``lib.ci.docs_kept_true`` (#1589): a
+    valued option's value is never read as the program."""
+    assert is_lint_run(text) is True
+    assert check_verdict(text) is False

@@ -58,7 +58,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TypedDict
 
-from lib.ci.check_command import is_check_command, is_lint_command
+from lib.ci.check_command import WRAPPER_FLAGS, is_check_command, is_lint_command
 from lib.ci.ci_action_inputs import ReadLocal
 from lib.ci.ci_kept_types import DocsKeptTrueBlock, KeptCheck, KeptKind, KeptTrueBy
 from lib.ci.ci_masking import IndentTree, mask_lines, parse_lines
@@ -84,12 +84,6 @@ _INCLUDE = re.compile(r"^include\s*:", re.M)
 _DOCTEST_RUNNERS = frozenset({"mdtest", "phmdoctest", "byexample"})
 _WRAPPERS = frozenset({"uv", "poetry", "pdm", "hatch", "pipenv", "rye", "python", "python3", "run", "exec",
                        "uvx", "pipx", "npx", "bunx"})
-# Wrapper options that take the next word (``uv run --with pytest-cov``, ``poetry -C sub``).
-_WRAPPER_VALUED = frozenset({
-    "--with", "--with-editable", "--with-requirements", "--python", "-p", "--project", "-P",
-    "--directory", "-C", "--package", "--extra", "--group", "--only-group", "--env-file",
-    "--index", "--from", "--spec", "-e", "--env",
-})
 
 
 class _Cmd(TypedDict):
@@ -132,7 +126,7 @@ def _program(words: list[str]) -> list[str]:
         if word in _WRAPPERS or word == "-m":
             i += 1
         elif i and word.startswith("-"):
-            i += 2 if word in _WRAPPER_VALUED else 1
+            i += 2 if word in WRAPPER_FLAGS else 1
         else:
             break
     return words[i:]

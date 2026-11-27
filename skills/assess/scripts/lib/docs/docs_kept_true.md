@@ -23,6 +23,9 @@ The module docstring has the rules and the block shape. Known limits:
   docs it runs from churn staleness. It proves their examples run, not that the prose around
   them still describes the code.
 - A wrapper (`uv run`, `poetry run`, `pdm run`, `hatch run`, `uvx`, `pipx run`, `npx`, `bunx`,
-  `python -m`) is read through to the program it runs, its own options skipped (#1589). A
-  valued option missing from the module's `_WRAPPER_VALUED` list leaves its value read as the
-  program, so a pytest run behind it is not credited.
+  `python -m`) is read through to the program it runs, its own options skipped (#1589). The
+  valued options come from `lib.ci.check_command.WRAPPER_FLAGS`, one set for every wrapper,
+  so both readers read a step alike. A valued option missing from it leaves its value read as
+  the program (`python -W error -m pytest` is not credited). A listed option that is a plain
+  flag for another wrapper eats the next word: `-P` is poetry's `--project` but a no-value flag
+  for `python` 3.11+, so `python -P gen.py` reads no program. Neither gives a false met.
