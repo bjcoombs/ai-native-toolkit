@@ -105,8 +105,8 @@ relative to the module's `pages/` directory (or to the citing page's directory a
 `./`), and an include may name a family (`partial$`, `example$`). A component the
 repository does not declare belongs to another project and is skipped; so is a target
 holding an attribute reference (`{snippets}`). An unresolved `xref` or `include` is a
-broken link of kind `asciidoc`, except in a component whose `antora.yml` runs a
-`collector`, because its build writes pages a checkout lacks. A `link:` is never broken: it
+broken link of kind `asciidoc`, except in a component whose `antora.yml` has a
+`collector:` key (an Antora collector), because its build writes pages a checkout lacks. A `link:` is never broken: it
 may point at the published site. The nav files an `antora.yml` lists, and any
 `modules/<module>/nav.adoc` beside it, are entry points, as is a root `README.adoc`.
 Listing, literal, passthrough and comment blocks and `//` lines are blanked before the

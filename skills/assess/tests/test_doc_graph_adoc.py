@@ -146,3 +146,12 @@ def test_adoc_files_are_discovered_as_docs(tmp_path: Path) -> None:
     _write(tmp_path, "guide.asciidoc", "= Guide\n")
     _write(tmp_path, "build/out.adoc", "= built\n")
     assert _rels(tmp_path, discover_doc_files(tmp_path)) == ["README.adoc", "guide.asciidoc"]
+
+
+def test_a_component_named_collector_still_counts_broken_links(tmp_path: Path) -> None:
+    _antora(tmp_path, "name: otel-collector\ntitle: The collector\nnav:\n- ./modules/ROOT/nav.adoc\n")
+    _write(tmp_path, f"{ROOT}/pages/index.adoc", "= Home\n\nxref:gone.adoc[]\n")
+    r = build_doc_graph(tmp_path)
+    assert r.broken_links == [
+        {"from": f"{ROOT}/pages/index.adoc", "target": "gone.adoc", "kind": "asciidoc"}]
+    assert f"{ROOT}/nav.adoc" in r.entry_points

@@ -25,7 +25,7 @@ Links (:func:`harvest_adoc_links`), each a ``link`` edge:
   because a ``link:`` may point at the published site.
 
 An ``xref`` or ``include`` naming no file is a broken link of kind ``asciidoc``,
-except inside an Antora component whose ``antora.yml`` runs a ``collector``: its
+except inside an Antora component whose ``antora.yml`` has a ``collector:`` key: its
 build generates pages a checkout does not hold, so a miss there is not counted.
 Listing, literal, passthrough and comment blocks (``----``, ``....``, ``++++``,
 ``////``) and ``//`` comment lines only show syntax, so they are blanked before the
@@ -59,6 +59,7 @@ _LINK = re.compile(r"(?<![\w\\])link:([^\s\[\]]+)\[")
 _INCLUDE = re.compile(r"^include::([^\[\s]+)\[")
 _EXTERNAL = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
 _NAME = re.compile(r"^name:\s*['\"]?([^'\"\s#]+)", re.MULTILINE)
+_COLLECTOR_KEY = re.compile(r"^\s*collector\s*:", re.MULTILINE)
 _NAV_ITEM = re.compile(r"^\s*-\s*['\"]?([^'\"\s#]+\.adoc)")
 
 
@@ -81,7 +82,7 @@ def _nav_entries(descriptor: str) -> set[str]:
             in_nav = False
         m = _NAV_ITEM.match(line) if in_nav else None
         if m:
-            out.add(m.group(1).lstrip("./"))
+            out.add(m.group(1).removeprefix("./"))
     return out
 
 
@@ -144,7 +145,7 @@ class _Component:
         name = _NAME.search(descriptor)
         self.root = root
         self.name = name.group(1) if name else ""
-        self.collector = "collector" in descriptor
+        self.collector = bool(_COLLECTOR_KEY.search(descriptor))
 
     def module_of(self, doc: Path) -> str:
         parts = doc.relative_to(self.root).parts
