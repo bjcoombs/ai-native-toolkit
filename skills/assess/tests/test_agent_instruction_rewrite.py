@@ -231,3 +231,5 @@ def test_gh_aw_imports_reads_each_list_form_and_skips_remote_imports() -> None:
     block = "imports:\n  - 'shared/a.md'  # house style\n  - shared/b.md\n  - example-org/agentics/x.md@v1\n"
     assert gh_aw_imports(rel, block) == shared
     assert gh_aw_imports(rel, "engine: claude\n") == []
+    mapped = "imports:\n  - path: shared/a.md\n    inputs: {tone: plain}\n  - uses: shared/b.md\n    with:\n      x: 1\n"
+    assert gh_aw_imports(rel, mapped) == shared

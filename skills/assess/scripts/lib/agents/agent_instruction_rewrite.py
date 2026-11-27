@@ -52,6 +52,8 @@ ROOT_INSTRUCTIONS = ("AGENTS.md", "CLAUDE.md")
 # gh-aw safe outputs that land the agent's file changes on a branch.
 FILE_OUTPUTS = frozenset({"create-pull-request", "push-to-pull-request-branch"})
 UNREAD_WORKFLOWS = "agent_workflows_unread"
+# A block import item: a bare path (no key), or a mapping that names it under one of these.
+IMPORT_KEYS = frozenset({"", "path", "uses"})
 # GitHub uses the first CODEOWNERS it finds in this order (about-code-owners).
 CODEOWNERS_ORDER = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 
@@ -72,7 +74,8 @@ def frontmatter(text: str) -> str | None:
 def gh_aw_imports(rel: str, front: str) -> list[str]:
     """The local files a gh-aw frontmatter's ``imports:`` names, relative to ``rel``'s folder.
 
-    Block (``- shared/x.md``) and flow (``[a.md, b.md]``, over one line or several) lists are
+    Block (``- shared/x.md``, or a mapping item's ``path:`` or ``uses:`` for an import with
+    inputs) and flow (``[a.md, b.md]``, over one line or several) lists are
     read; a trailing comment and a ``#Section`` suffix are dropped and a remote
     ``owner/repo/path@ref`` import is skipped.
     """
@@ -89,8 +92,8 @@ def gh_aw_imports(rel: str, front: str) -> list[str]:
         joined = " ".join([flow, *(strip_comment(line.strip()) for line in lines[top + 1:end + 1])])
         values = joined[1:].split("]", 1)[0].split(",")
     else:
-        values = [tree.lines[k].value for k in tree.children(top)
-                  if tree.lines[k].dash and not tree.lines[k].key]
+        values = [tree.lines[k].value for k in tree.children(top) if tree.lines[k].dash
+                  and tree.lines[k].key in IMPORT_KEYS]
     found: list[str] = []
     for raw in values:
         value = strip_comment(raw.strip()).strip("'\"").split("#", 1)[0].strip()
