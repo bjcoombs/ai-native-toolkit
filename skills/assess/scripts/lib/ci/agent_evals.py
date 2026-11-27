@@ -67,7 +67,7 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import NotRequired, TypedDict
 
 from lib.ci.ci_includes import MergedConfig
-from lib.ci.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_merged_view import MergedView, merged_jobs
 from lib.ci.ci_shell_text import command_text
 
@@ -301,7 +301,7 @@ def _hidden_keep(tree: IndentTree,
                 own = {tree.lines[k].key for k in tree.siblings[tree.mapping_of[i]]} - {""}
                 if via is not None and tree.ancestors(i)[:1] == [via]:
                     own |= replaced[via]  # what replaces the merging template replaces its parent too
-            for name in _ALIAS.findall(line.value):
+            for name in _ALIAS.findall(strip_comment(line.value)):
                 if name in anchors:
                     a = anchors[name]
                     found[a] = found[a] & own if a in found else own
