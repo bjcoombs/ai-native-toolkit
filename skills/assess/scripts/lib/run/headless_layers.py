@@ -243,7 +243,7 @@ def stats_summary(
             scores.append(score)
             rels.append(path.relative_to(root).as_posix())
     block: JsonDict = dict(summarise(scores))
-    block["loc_by_class"] = loc_by_class(zip(rels, (nloc for nloc, _ in scores)))
+    block["loc_by_class"] = loc_by_class(zip(rels, (nloc for nloc, _ in scores)), root)
     return block
 
 
