@@ -132,6 +132,12 @@ jobs:
             gh issue list --repo "$GH_REPO" --state all --limit 500 \
               --json number,title,body,state,labels,comments > "$out/existing.json"
           fi
+          # A listing that reaches the limit may leave items out, and a `file`
+          # run would then file their conditions again.
+          if [ "$(jq length "$out/existing.json")" -ge 500 ]; then
+            echo "::error::The issue listing reached its 500-item limit, so the plan could miss filed items; nothing is written."
+            exit 1
+          fi
           uv run scripts/assess_actions_render.py "$GITHUB_WORKSPACE/repo" reconcile \
             --existing "$out/existing.json" --label "$LABEL" --scheduled --today "$(date -u +%Y-%m-%d)" \
             > "$out/plan.json"

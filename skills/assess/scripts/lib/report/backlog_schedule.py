@@ -10,7 +10,8 @@ confirm, so this module turns its result into tracker writes bounded by ``.asses
   confirmed on the next interactive ``/assess``; nothing is closed, filed or commented.
 - ``file``: as ``propose``, plus a status comment on a marked item that has none, plus one
   new item for each gate of the next Step (``level.next_step.blockers[].condition``) that no
-  item is marked for, under the ``[backlog] wip`` limit, in condition id order.
+  item is marked for, under the ``[backlog] wip`` limit, in condition id order, each with
+  ``label`` so the next run's listing finds it.
 - ``file-and-close``: as ``file``, plus closing an open marked item whose condition now holds
   (the reconcile's ``close`` proposal). A reopen, demote or supersede stays a proposal in
   every mode.
@@ -162,7 +163,7 @@ def _text(kind: str, reason: str, close: bool) -> str:
     return f"{_PROPOSED[kind]}: {reason}. Confirm it on the next interactive /assess run."
 
 
-def _new_item(cid: str, step: object, facts: RunFacts, today: str) -> ScheduledWrite:
+def _new_item(cid: str, step: object, facts: RunFacts, today: str, label: str) -> ScheduledWrite:
     condition = (facts["conditions"] or {}).get(cid, {})
     why = condition.get("why")
     step_name = f"Step {step}" if isinstance(step, int) else "the next Step"
@@ -173,7 +174,7 @@ def _new_item(cid: str, step: object, facts: RunFacts, today: str) -> ScheduledW
             f"---\n{FOOTER}\n\n{condition_marker(cid, facts['model'])}\n")
     line = status_line(_reading(cid, facts), today, facts["head_sha"])
     return ScheduledWrite(op="create", title=f"Meet {cid} to reach {step_name}", body=body,
-                          labels=[DEFAULT_LABEL], status=new_status_comment(line))
+                          labels=[label] if label else [], status=new_status_comment(line))
 
 
 def _number(item: Mapping[str, object]) -> int | None:
@@ -247,7 +248,7 @@ def _filings(existing: Sequence[Mapping[str, object]], facts: RunFacts, today: s
     if len(wanted) > free:
         notes.append(f"{len(wanted) - free} next-Step gate(s) not filed: the backlog holds at most {wip} open "
                      "item(s), the `[backlog] wip` limit")
-    return [_new_item(cid, step, facts, today) for cid in wanted[:free]]
+    return [_new_item(cid, step, facts, today, label) for cid in wanted[:free]]
 
 
 _VERB = {"edit_comment": "status line(s) updated", "add_comment": "status comment(s) added",

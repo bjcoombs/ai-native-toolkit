@@ -119,6 +119,10 @@ def test_file_mode_files_unmarked_next_step_gates_under_the_limit() -> None:
     nameless = bs.plan_scheduled([], facts, _empty(), mode="file", today="d", level={"next_step": {"blockers": [
         {"condition": "layer-8-b.2"}]}})
     assert nameless["writes"][0]["title"] == "Meet layer-8-b.2 to reach the next Step"
+    custom = bs.plan_scheduled([], facts, _empty(), mode="file", today="d", label="backlog", level=level)
+    assert {tuple(w["labels"]) for w in custom["writes"]} == {("backlog",)}
+    bare = bs.plan_scheduled([], facts, _empty(), mode="file", today="d", label="", level=level)
+    assert {tuple(w["labels"]) for w in bare["writes"]} == {()}
 
 
 def test_file_and_close_writes_the_close_and_frees_its_slot() -> None:

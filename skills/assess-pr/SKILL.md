@@ -419,7 +419,7 @@ It reads the filed items the way 6e does and writes only what `[backlog] mode` i
 | `mode` | What a scheduled run writes |
 |---|---|
 | `propose` (default) | The `**Status:**` line of each marked item's existing status comment (6b), and nothing else: the status, the evidence and the last run. A close, reopen, demote or supersede it would propose is written into that line, for the next interactive `/assess` to confirm. |
-| `file` | As `propose`, plus a status comment on a marked item that has none, plus one new `assess-finding` item for each gate of the next Step that no item is marked for, while `[backlog] wip` leaves a slot. |
+| `file` | As `propose`, plus a status comment on a marked item that has none, plus one new item for each gate of the next Step that no item is marked for, while `[backlog] wip` leaves a slot. A new item carries the workflow's `label` input (default `assess-finding`), so the next run's listing finds it. |
 | `file-and-close` | As `file`, plus closing an open item whose condition now holds, with the evidence in its status line. |
 
 `file-and-close` closes items with no one confirming each close, so it is off unless the config names it:
