@@ -206,7 +206,13 @@ def test_unreadable_json_and_a_missing_corpus(tmp_path: Path, capsys: pytest.Cap
     assert cc.load_corpus(tmp_path / "none") == []
     code = cli.main(["diff", str(tmp_path), "--corpus", str(tmp_path / "none")])
     assert code == 2 and "no expected-state files" in capsys.readouterr().err
-    assert cli.main(["diff", str(tmp_path / "missing"), "--corpus", str(tmp_path)]) == 2
+    assert cli.main(["report", "--corpus", str(tmp_path / "none")]) == 2
+    assert "no expected-state files" in capsys.readouterr().err
+    good = tmp_path / "good"
+    cc.write_expected(good, {"corpus_version": 1, "repo": "h:00ff", "pinned": "h:11ee", "levels_version": "v",
+                             "states": {"a.1": "met"}})
+    assert cli.main(["diff", str(tmp_path / "missing"), "--corpus", str(good)]) == 2
+    assert "is not a directory" in capsys.readouterr().err
     tmp_path.joinpath("bad.json").write_text("{", encoding="utf-8")
     assert cli.main(["report", "--corpus", str(tmp_path)]) == 2
 

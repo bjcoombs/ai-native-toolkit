@@ -15,6 +15,8 @@ ghsync layout (``<root>/<path>/<repo>/<repo>-main``). The logic is in
   toolkit's run.
 - ``report`` prints the non-discriminating conditions of the expected files alone.
 
+``diff`` and ``report`` refuse a corpus directory with no expected-state files.
+
 Exit codes: 0 no diff (or written, or reported), 1 diff lines printed, 2 refused or a usage
 error.
 """
@@ -55,6 +57,9 @@ def main(argv: list[str] | None = None, scan: ScanFn = scan_target) -> int:
     except cc.CorpusError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    if not expected and args.command != "seed":
+        print(f"error: no expected-state files in {args.corpus}", file=sys.stderr)
+        return 2
     if args.command == "report":
         _print(cc.discrimination_lines(cc.discrimination({e["repo"]: e["states"] for e in expected})))
         return 0
@@ -72,9 +77,6 @@ def main(argv: list[str] | None = None, scan: ScanFn = scan_target) -> int:
             cc.write_expected(args.corpus, entry)
         print(f"wrote {len(observed)} expected-state files to {args.corpus}")
         return 0
-    if not expected:
-        print(f"error: no expected-state files in {args.corpus}", file=sys.stderr)
-        return 2
     refused = cc.commit_refusals(expected, targets)
     if refused:
         _print(cc.refusal_lines(refused))
