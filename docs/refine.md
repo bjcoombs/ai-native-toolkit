@@ -16,6 +16,8 @@ How another repository adopts the refiner: three GitHub workflows that check iss
 
 Paths are relative to the toolkit's `.github/workflows/`. The definition of ready is your repository's `docs/contributing/definition-of-ready.md` when it has one, and the toolkit's copy otherwise.
 
+Duplicate closes from the dedupe and sweep workflows take turns in one concurrency group per repository, so two runs never read the weekly close count at once. GitHub keeps one pending run per group, so when several exact duplicates are opened together some dedupe runs show as `cancelled` while pending. That is expected: each pair stays closable, and the next sweep closes it.
+
 The model never holds a token that can write: it runs in a job with `issues: read`, and the job that writes runs no model. The scripts it runs come from the toolkit commit your `uses:` line pins, never from an input.
 
 ## Set it up
