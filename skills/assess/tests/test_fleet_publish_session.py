@@ -414,7 +414,7 @@ def test_every_target_id_the_page_carries_is_one_the_page_and_planner_accept(len
         {"count": 0, "collections": [], "targets": 1}
 
 
-def test_a_key_too_long_for_a_target_id_gets_none_and_the_rule_refuses_it() -> None:
+def test_a_key_too_long_for_a_target_id_is_refused_by_both_rules() -> None:
     with pytest.raises(PublishError):
         _system_id(201)
     assert not re.fullmatch(TARGET_ID_RE, "system~" + "a" * 194)
