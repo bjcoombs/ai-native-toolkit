@@ -373,7 +373,7 @@
 #   own line names AI and disclosure wording. Graded declared (head_text): listed, never
 #   counted. A Copilot instruction file that declines Copilot review for the whole repository
 #   is not a row: it is a decline record (owner_exclusions.declines, source copilot_opt_out)
-#   that reads layer-8-agent-ops.2 and agent-least-privilege.1 declined. Neither row gates a Step.
+#   shown as a DECLINED badge that sets no condition aside. Neither row gates a Step.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does

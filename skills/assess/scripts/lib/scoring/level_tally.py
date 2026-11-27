@@ -41,8 +41,8 @@ agent-level marker ``.assess/agents-declined.json`` (``lib/run/decline_markers.p
 the ``owner_exclusions`` block's ``declines``; ``level_result`` reads them from ``data`` unless
 the caller passes its own. A record covers the condition ids it lists (for the agent-level
 marker, only those tagged ``agent_context`` or ``agent_runtime``; for a Copilot review opt-out,
-``copilot_opt_out`` from ``lib/ai_governance.py`` (#851), only those tagged ``agent_runtime``:
-``SOURCE_TAGS``), or, with ``conditions``
+``copilot_opt_out`` from ``lib/ai_governance.py`` (#851), none, as it is shown and never
+applied: ``SOURCE_TAGS``), or, with ``conditions``
 None, every positive condition tagged ``agent_context`` or ``agent_runtime`` (``declined_ids``); a
 hazard is never declined, and a hazard's ``requires`` never passes ``declined`` on to it. A covered condition reads ``declined`` whatever its criteria say: never met,
 never counted, out of the denominator, and never holding a Step gate, so the Step it gates stays
@@ -251,7 +251,8 @@ AGENTS_MARKER = "agents_marker"
 COPILOT_OPT_OUT = "copilot_opt_out"
 # Source -> the truth tags a record from it may decline: a scoped source never covers a condition
 # without one of them, whatever it lists, so a detector never takes an unrelated condition out.
-SOURCE_TAGS: dict[str, frozenset[str]] = {AGENTS_MARKER: AGENT_TAGS, COPILOT_OPT_OUT: frozenset({"agent_runtime"})}
+# A Copilot review opt-out has no tag: no condition is about Copilot review, so it is shown, never applied.
+SOURCE_TAGS: dict[str, frozenset[str]] = {AGENTS_MARKER: AGENT_TAGS, COPILOT_OPT_OUT: frozenset()}
 
 
 def scan_not_applicable(cond: Mapping[str, Any], by_id: Mapping[str, Mapping[str, Any]]) -> str | None:
@@ -566,9 +567,9 @@ def declined_ids(model: MaturityModel, declines: Sequence[Mapping[str, Any]]) ->
     ``source``, in model order. A record covers the ids it lists that the model defines, or, with
     ``conditions`` None, every positive condition tagged ``AGENT_TAGS``; an empty list covers
     nothing. A record from a ``SOURCE_TAGS`` source covers a condition only when it carries one of
-    that source's tags: the agent-level marker (``agents_marker``) an ``AGENT_TAGS`` one, a Copilot
-    review opt-out (``copilot_opt_out``, #851) ``agent_runtime``, so neither takes an unrelated
-    condition out of the denominator; another record's listed ids are taken as written. A hazard
+    that source's tags: the agent-level marker (``agents_marker``) an ``AGENT_TAGS`` one; a Copilot
+    review opt-out (``copilot_opt_out``, #851) has none, so it covers nothing and neither takes an
+    unrelated condition out of the denominator; another record's listed ids are taken as written. A hazard
     is never covered."""
     out: dict[str, str] = {}
     for row in model["rows"]:

@@ -9,10 +9,11 @@ from pathlib import Path
 import pytest
 
 import lib.scoring.level_tally as lt
-from lib.ai_governance import (COPILOT_OPT_OUT, NO_PR_WORKFLOWS, OPT_OUT_CONDITIONS, declines_review,
+from lib.ai_governance import (COPILOT_OPT_OUT, NO_PR_WORKFLOWS, declines_review,
                                disclosure_checkboxes, enforces_disclosure, read_copilot_opt_out, scan_ai_governance)
 from lib.counts_only.content_free import counts_only
 from lib.owner_exclusions import owner_exclusions_block
+from lib.scoring.headline import badge_lines
 from lib.scoring.level_result_types import DeclineRecord
 
 ENFORCE = """name: disclosure
@@ -121,6 +122,34 @@ def test_a_workflow_missing_one_part_does_not_enforce(text: str) -> None:
     assert enforces_disclosure(text) is False
 
 
+CLAUDE_REVIEW = """name: review
+on: [pull_request]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          prompt: "Review this change. Context: ${{ github.event.pull_request.body }}"
+      - run: test -f out || exit 1
+"""
+
+
+def test_a_read_marker_and_act_in_different_steps_do_not_enforce(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".github/workflows/review.yml": CLAUDE_REVIEW})
+    assert scan_ai_governance(root)["enforced"] is False
+
+
+def test_a_body_read_set_in_the_job_env_reaches_its_step(tmp_path: Path) -> None:
+    text = ENFORCE.replace("        env:\n          BODY: ${{ github.event.pull_request.body }}\n", "").replace(
+        "    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    env:\n      BODY: ${{ github.event.pull_request.body }}\n")
+    assert scan_ai_governance(_repo(tmp_path, {".github/workflows/disclosure.yml": text}))["enforced"] is True
+
+
+def test_a_pagination_cursor_is_not_an_ai_marker() -> None:
+    assert enforces_disclosure("gh api graphql -f cursor=$cursor --jq .body pull_request.body\nexit 1\n") is False
+
+
 def test_a_disclosure_check_off_pull_requests_does_not_count(tmp_path: Path) -> None:
     root = _repo(tmp_path, {".github/workflows/disclosure.yml": ENFORCE.replace("  pull_request:\n", "  push:\n"),
                             ".github/workflows/ci.yml": PLAIN})
@@ -173,37 +202,33 @@ def test_a_changelog_line_that_does_not_accept_is_not_an_opt_out(tmp_path: Path)
 def test_a_copilot_file_that_declines_review_reads_declined(tmp_path: Path) -> None:
     root = _repo(tmp_path, {".github/copilot-instructions.md": DECLINE})
     record = read_copilot_opt_out(root)
-    assert record is not None and (record["source"], record["conditions"]) == (COPILOT_OPT_OUT, list(OPT_OUT_CONDITIONS))
+    assert record is not None and (record["source"], record["conditions"]) == (COPILOT_OPT_OUT, [])
     assert scan_ai_governance(root)["opt_out_files"] == [".github/copilot-instructions.md"]
+    assert owner_exclusions_block(root)["declines"] == [record]
     result = _level(root, scan_ai_governance(root))
-    assert {d["id"] for d in result["declined"]} == set(OPT_OUT_CONDITIONS)
-    for cid in OPT_OUT_CONDITIONS:
-        cond = _cond(result, cid)
-        assert (cond["state"], cond["counted"]) == ("declined", False)
+    assert "declined" not in result  # no condition is about Copilot review, so none is set aside
+    lines = badge_lines(result, [record])
+    assert lines == ["DECLINED: Copilot review declined in .github/copilot-instructions.md · no condition set aside"]
 
 
-def test_the_opt_out_never_declines_a_gate_or_an_unrelated_condition(tmp_path: Path) -> None:
-    record: DeclineRecord = {"source": COPILOT_OPT_OUT, "conditions": ["layer-6-coverage.1", "layer-0-instructions.1",
-                             "agent-least-privilege.1"], "declined_by": None, "declined_at": None,
-                             "version": None, "reason": "x"}
-    data = {"layer_grades": {"instruction_file_present": True}, "coverage_gate": {"enforced_meets_minimum": True}}
-    result = lt.level_result(lt.default_model(), data, declines=[record])
-    assert [d["id"] for d in result["declined"]] == ["agent-least-privilege.1"]
-    assert _cond(result, "layer-6-coverage.1")["state"] == "met"
-    assert _cond(result, "layer-0-instructions.1")["state"] == "met"
-    whole: DeclineRecord = {**record, "conditions": None}
-    scoped = lt.level_result(lt.default_model(), data, declines=[whole])
-    runtime = {lt.condition_id(r["id"], lv["level"]) for r in lt.default_model()["rows"] for lv in r["levels"]
-               if "agent_runtime" in lv["truth"]}
-    assert scoped["declined"] and {d["id"] for d in scoped["declined"]} <= runtime
-    assert _cond(scoped, "layer-0-instructions.1")["state"] == "met"
+def test_the_opt_out_never_takes_a_condition_out_of_the_denominator() -> None:
+    data = {"layer_grades": {"instruction_file_present": True}, "coverage_gate": {"enforced_meets_minimum": True},
+            "agent_ops": {"summary": {"agent_jobs_least_privilege": False}}}
+    before = lt.level_result(lt.default_model(), data)
+    for conditions in (["layer-6-coverage.1", "layer-0-instructions.1", "agent-least-privilege.1"], None):
+        record: DeclineRecord = {"source": COPILOT_OPT_OUT, "conditions": conditions, "declined_by": None,
+                                 "declined_at": None, "version": None, "reason": "x"}
+        after = lt.level_result(lt.default_model(), data, declines=[record])
+        assert "declined" not in after
+        assert (after["tally"], after["step"]) == (before["tally"], before["step"])
+        assert _cond(after, "agent-least-privilege.1")["state"] == "unmet"  # another agent's result stays
 
 
-def test_a_declined_condition_never_counts_as_met(tmp_path: Path) -> None:
+def test_another_agents_met_condition_stays_met_and_counted(tmp_path: Path) -> None:
     root = _repo(tmp_path, {".github/copilot-instructions.md": DECLINE})
     data = {"agent_ops": {"summary": {"agent_jobs_least_privilege": True}}, "owner_exclusions": owner_exclusions_block(root)}
     cond = _cond(lt.level_result(lt.default_model(), data), "agent-least-privilege.1")
-    assert (cond["state"], cond["counted"]) == ("declined", False)
+    assert (cond["state"], cond["counted"]) == ("met", True)
 
 
 @pytest.mark.parametrize("text", [
@@ -211,6 +236,8 @@ def test_a_declined_condition_never_counts_as_met(tmp_path: Path) -> None:
     "Do not review code in vendor/.\n",
     "Review pull requests for clarity.\n",
     "```\nDo not review pull requests.\n```\n",  # inside a code fence
+    "Do not review.\n",  # names nothing
+    "Never comment on.\n",
 ])
 def test_a_scoped_or_quoted_refusal_is_not_an_opt_out(text: str) -> None:
     assert declines_review(text) is False

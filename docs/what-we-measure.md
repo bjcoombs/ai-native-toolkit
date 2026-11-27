@@ -897,7 +897,7 @@ The SECURITY file in the owner's public .github repository, which GitHub shows o
 
 It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.
 
-The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which declines agent_runtime conditions only.
+The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which is shown and declines no condition.
 
 - Collector: `core.owner_exclusions`, reading `repo_root`.
 - Network: no.

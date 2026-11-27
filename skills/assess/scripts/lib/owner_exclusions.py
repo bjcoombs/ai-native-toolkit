@@ -53,8 +53,7 @@ in `level.json` and `fleet-data.json`. The block also carries `declines` (#828),
 when `.assess/agents-declined.json` exists (`decline_markers.read_agent_decline`): the
 declared agent opt-out that `level_tally` reads as `declined`, and also when a Copilot
 instruction file declines Copilot review for the whole repository
-(`ai_governance.read_copilot_opt_out`, #851), whose record declines only `agent_runtime`
-conditions. Counts-only keeps
+(`ai_governance.read_copilot_opt_out`, #851), whose record is shown and declines no condition. Counts-only keeps
 ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 """
 from __future__ import annotations

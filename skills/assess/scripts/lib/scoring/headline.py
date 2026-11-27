@@ -286,11 +286,13 @@ def badge_lines(level: LevelResult, declines: Sequence[DeclineRecord] = ()) -> l
     """The DECLINED and HAZARD badge lines (#828), apart from every count: see the module doc."""
     lines: list[str] = []
     declined = level.get("declined", [])
+    words = "".join(f" · {decline_badge(r)}" for r in declines)
     if declined:
-        words = "".join(f" · {decline_badge(r)}" for r in declines)
         n = len(declined)
         lines.append(f"DECLINED: {n} {'condition' if n == 1 else 'conditions'}{words}"
                      " · a declined condition never holds a Step gate")
+    elif declines:  # #851: a detected opt-out the model has no condition for is shown, sets nothing aside
+        lines.append(f"DECLINED{words.replace(' · ', ': ', 1)} · no condition set aside")
     for hazard in level.get("hazards", []):
         gate = hazard.get("gate")
         held = f" undermines the {GATE_NOUN.get(gate, gate)} gate" if gate else ""

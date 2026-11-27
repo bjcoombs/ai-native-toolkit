@@ -7,8 +7,10 @@ repository only through the shared CI-step follower (``lib.ci.ci_step_follower``
 reader (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout is read.
 
 - **Enforced (counted).** ``enforced`` is true when a GitHub Actions workflow whose ``on:`` names
-  ``pull_request`` or ``pull_request_target`` does all three, in its own text (local actions
-  inlined) or in a file one of its lines leads to: it reads the pull request body or the commit
+  ``pull_request`` or ``pull_request_target`` has one step that does all three, in the step's
+  own text (local actions inlined) or in a file one of its lines leads to (``step_texts``,
+  ``enforcing_steps``), so a body read in one step and an exit in another never combine; only the
+  read may come from an ``env:`` block of the workflow or the job: it reads the pull request body or the commit
   messages and trailers (``_READS``: ``pull_request.body``, ``gh pr view --json body``,
   ``git log`` with a body or trailer format, ``git interpret-trailers``, the pull request commits
   API); it names an AI disclosure or attribution marker (``_AI_MARKERS``: a tool or model name,
@@ -25,14 +27,16 @@ reader (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout 
   Copilot review for the whole repository: ``.github/copilot-instructions.md``, or a
   ``.github/instructions/*.md`` whose front matter ``applyTo`` is ``**`` or ``**/*`` and whose
   ``excludeAgent`` does not name ``code-review``. A file declines when one sentence outside code
-  fences is a whole refusal (``_REFUSAL``): a negation, then review or comment on, then nothing
-  but pull requests, the code or the repository. "Do not review generated files" names a part of
+  fences is a whole refusal (``_REFUSAL``): a negation, then review or comment on, then pull
+  requests, the code or the repository and nothing else; a bare "Do not review." names nothing,
+  so it is not one. "Do not review generated files" names a part of
   the repository, so it is not an opt-out. ``read_copilot_opt_out`` turns the files into a
-  ``DeclineRecord`` (source ``copilot_opt_out``) listing ``OPT_OUT_CONDITIONS``, the conditions
-  about agents acting on the repository's changes; ``lib/owner_exclusions.py`` carries it in the
-  ``owner_exclusions`` block's ``declines``, and ``level_tally.declined_ids`` lets this source
-  decline only ``agent_runtime`` conditions, so it never takes a Step gate or an unrelated
-  condition out of the denominator. No file, no record: absence never declines.
+  ``DeclineRecord`` (source ``copilot_opt_out``) listing ``OPT_OUT_CONDITIONS``, which is empty:
+  the model has no condition about Copilot review, and declining another agent's conditions would
+  hide results the refusal does not speak to. ``lib/owner_exclusions.py`` carries the record in
+  the ``owner_exclusions`` block's ``declines``, the headline shows it as a DECLINED badge, and
+  ``level_tally.SOURCE_TAGS`` gives this source no tag, so it never takes a condition out of the
+  denominator. No file, no record: absence never declines.
 
 Every value is a bool, a count, a reason code or a repo-relative path, so the block survives
 counts-only output with its paths. ``scan_ai_governance(repo_root)`` builds the block
@@ -61,14 +65,16 @@ TEMPLATE_PATHS = ("pull_request_template.md", "PULL_REQUEST_TEMPLATE.md", ".gith
 TEMPLATE_DIR = ".github/PULL_REQUEST_TEMPLATE/"
 COPILOT_INSTRUCTIONS = ".github/copilot-instructions.md"
 INSTRUCTIONS_DIR = ".github/instructions/"
-# The conditions a Copilot review opt-out declines: agents acting on the repository's changes.
-OPT_OUT_CONDITIONS = ("layer-8-agent-ops.2", "agent-least-privilege.1")
+# The conditions a Copilot review opt-out declines: none. The model has no condition about Copilot
+# review, so the record is shown (the DECLINED badge) and sets nothing aside; level_tally.SOURCE_TAGS
+# gives this source no tag, so even a record that listed ids could not take a condition out.
+OPT_OUT_CONDITIONS: tuple[str, ...] = ()
 
 _I = re.IGNORECASE
 _READS = re.compile(r"pull_request\.body|gh\s+pr\s+view\b[^\n]*--json\s+[\w,]*body|interpret-trailers"
                     r"|%\(trailers|git\s+log\b[^\n]*(?:%B|%b|--format=(?:full|raw|medium))"
                     r"|pulls\.listCommits|pull_request\.commits_url|/pulls/[^\s/]+/commits", _I)
-_AI_MARKERS = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|claude|chatgpt|gpt-?\d|gemini|codex|cursor"
+_AI_MARKERS = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|claude|chatgpt|gpt-?\d|gemini|codex"
                          r"|assisted-by|generated-by|ai-assisted|ai-generated)\b)")
 _ACTS = re.compile(r"\bexit\s+1\b|\bexit\s*\(\s*1\s*\)|setFailed\s*\(|process\.exit\s*\(\s*1|sys\.exit\s*\("
                    r"|raise\s+SystemExit|--add-label\b|\baddLabels\b|\badd-labels?\b|::error\b", _I)
@@ -84,8 +90,8 @@ _REFUSAL = re.compile(
     r"^\s*(?:(?:github\s+)?copilot\s*[,:]?\s*)?(?:please\s+)?(?:you\s+)?(?:copilot\s+)?"
     r"(?:do\s+not|don'?t|never|must\s+not|should\s+not|shall\s+not|will\s+not|won'?t|may\s+not|refuse\s+to|decline\s+to)\s+"
     r"(?:ever\s+)?(?:review|comment\s+on)"
-    r"(?:\s+(?:any|the|this|these|our)?\s*(?:pull\s+requests?|prs?|code|changes|contributions?|repository|repo|project"
-    r"|(?:repository|project)'s\s+(?:pull\s+requests?|prs?|code|changes)))?"
+    r"\s+(?:(?:any|the|this|these|our)\s+)?(?:pull\s+requests?|prs?|code|changes|contributions?|repository|repo|project"
+    r"|(?:repository|project)'s\s+(?:pull\s+requests?|prs?|code|changes))"
     r"(?:\s+(?:in|on|for|to)\s+this\s+(?:repository|repo|project))?\s*$", _I)
 
 
@@ -101,11 +107,14 @@ class AiGovernanceBlock(TypedDict):
     opt_out_files: list[str]  # the Copilot instruction files that decline Copilot review, sorted
 
 
-def enforces_disclosure(text: str) -> bool:
-    """True when ``text`` reads a pull request body or commit trailers, names an AI marker and
-    fails or labels (module docstring). Whole-line YAML and shell comments are dropped first."""
+def enforces_disclosure(text: str, env: str = "") -> bool:
+    """True when one step's ``text`` reads a pull request body or commit trailers, names an AI
+    marker and turns the run red or labels (module docstring). The read may come from ``env``, the
+    ``env:`` blocks around the step; the marker and the act must be in the step. Whole-line YAML
+    and shell comments are dropped first."""
     clean = _YAML_COMMENT.sub("", text)
-    return all(p.search(clean) for p in (_READS, _AI_MARKERS, _ACTS))
+    return bool((_READS.search(clean) or _READS.search(_YAML_COMMENT.sub("", env)))
+                and _AI_MARKERS.search(clean) and _ACTS.search(clean))
 
 
 def disclosure_checkboxes(text: str) -> int:
@@ -156,8 +165,49 @@ def read_copilot_opt_out(repo_root: Path) -> DeclineRecord | None:
             "declined_at": None, "version": None, "reason": "Copilot review declined in " + ", ".join(files)}
 
 
-def _workflow_text(follower: StepFollower, reader: ReadLocal, text: str) -> str:
-    """A workflow's text with every file its lines lead to appended."""
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def step_texts(text: str) -> tuple[list[str], str]:
+    """A GitHub workflow's steps, each as its own text, and its ``env:`` blocks outside the steps
+    (the workflow's and each job's), where a step's ``$BODY`` may be set."""
+    lines = text.splitlines()
+    steps: list[str] = []
+    env: list[str] = []
+    i = 0
+    while i < len(lines):
+        head = re.match(r"^(\s*)(steps|env):\s*$", lines[i])
+        if head is None:
+            i += 1
+            continue
+        base, i, item = len(head.group(1)), i + 1, None
+        current: list[str] = []
+        while i < len(lines) and (not lines[i].strip() or _indent(lines[i]) > base):
+            line = lines[i]
+            if head.group(2) == "steps" and line.lstrip().startswith("-"):
+                item = _indent(line) if item is None else item
+                if _indent(line) == item and current:
+                    steps.append("\n".join(current))
+                    current = []
+            current.append(line)
+            i += 1
+        if head.group(2) == "env":
+            env.extend(current)
+        elif current:
+            steps.append("\n".join(current))
+    return steps, "\n".join(env)
+
+
+def enforcing_steps(follower: StepFollower, reader: ReadLocal, text: str) -> int:
+    """The steps of a workflow that enforce AI disclosure on their own: the read, the marker and the
+    act all in one step and the files its lines lead to (the read may come from an ``env:`` block)."""
+    steps, env = step_texts(text)
+    return sum(1 for step in steps if enforces_disclosure(_followed_text(follower, reader, step), env))
+
+
+def _followed_text(follower: StepFollower, reader: ReadLocal, text: str) -> str:
+    """A step's text with every file its lines lead to appended."""
     parts = [text]
     for line in text.splitlines():
         for found in follower.step(line):
@@ -183,7 +233,7 @@ def scan_ai_governance(repo_root: Path) -> AiGovernanceBlock:
         if PR_EVENTS & set(workflow_events(text) or []):
             pr_workflows[rel] = text
     enforcing = sorted(rel for rel, text in pr_workflows.items()
-                       if enforces_disclosure(_workflow_text(follower, reader, text)))
+                       if enforcing_steps(follower, reader, text) > 0)
     policies = sorted(p for p in POLICY_PATHS if p in tracked)
     templates = [f for f in tracked if f in TEMPLATE_PATHS
                  or (f.startswith(TEMPLATE_DIR) and f.lower().endswith(".md"))]
