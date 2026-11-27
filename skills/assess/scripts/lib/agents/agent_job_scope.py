@@ -209,21 +209,18 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
             before = len(readings) if readings is not None else 0
             inner = workflow_jobs(local.group(1), called, signs_of, read_local, (scope, writes),
                                   seen | {rel}, alone=alone, readings=readings)
-            if not inner and readings is not None and len(readings) > before:
-                # redirected further down the chain: those readings stand for this job
+            if inner and local.group(1) in alone and readings is not None:
+                # read on its own too: count the called jobs, not this one
+                readings += [j.copy() for j in inner]
+                inner = []
+            if readings is not None and len(readings) > before:
+                # readings redirected at or below this call take this job's follower and cap
                 for reading in readings[before:]:
                     reading["split"] = reading["split"] or follower
                     reading["spend_cap"] = reading["spend_cap"] or _spend_cap(body)
-                redirected = True
-                continue
-            if inner and local.group(1) in alone and readings is not None:
-                for j in inner:  # read on its own too: count the called jobs, not this one
-                    reading = j.copy()
-                    reading["split"] = j["split"] or follower
-                    reading["spend_cap"] = j["spend_cap"] or _spend_cap(body)
-                    readings.append(reading)
-                redirected = True
-                continue
+                if not inner:  # those readings stand for this job
+                    redirected = True
+                    continue
             if inner:
                 scope, writes = _worst([(j["scope"], j["write_scopes"]) for j in inner])
                 # split inside the callee: every write-scoped called agent job hands its writes on

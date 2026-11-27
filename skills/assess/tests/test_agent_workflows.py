@@ -767,3 +767,17 @@ def test_a_redirected_callers_spend_cap_reaches_the_called_job(git_repo) -> None
                             ".github/workflows/caller.yml": _caller("read-all")
                             + "    with:\n      max-turns: 5\n"})
     assert [(j["job"], j["spend_cap"]) for j in _jobs(repo)] == [("agent", True)]
+
+
+def test_a_callers_split_and_spend_cap_reach_a_redirect_beside_a_direct_agent_job(git_repo) -> None:
+    leaf = "on:\n  workflow_call:\n  workflow_dispatch:\n" + AGENT_STEPS
+    mid = "on: workflow_call\njobs:\n  direct:\n    permissions:\n      contents: read\n" + \
+        AGENT_STEPS.split("  agent:\n", 1)[1] + "  go:\n    uses: ./.github/workflows/leaf.yml\n"
+    caller = _caller("write-all").replace("agent.yml", "mid.yml") + \
+        "    with:\n      max-turns: 3\n  after:\n    needs: call\n    runs-on: ubuntu-latest\n" \
+        "    steps:\n      - run: gh pr merge\n"
+    repo = _repo(git_repo, {".github/workflows/leaf.yml": leaf, ".github/workflows/mid.yml": mid,
+                            ".github/workflows/caller.yml": caller})
+    leaf_job = next(j for j in _jobs(repo) if j["path"] == ".github/workflows/leaf.yml")
+    assert (leaf_job["scope"], leaf_job["split"], leaf_job["spend_cap"]) == ("write", True, True)
+    assert _summary(repo)["agent_job_write_access"] == 0
