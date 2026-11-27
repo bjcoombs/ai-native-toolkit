@@ -461,6 +461,8 @@ def test_a_reopen_over_the_wip_limit_is_listed_next_up_not_proposed() -> None:
     assert "- #9 (Pin the linter):" in result["summary"]
     assert [p["number"] for p in _run(FULL, _context(*FULL_CONDITIONS), wip=4)["proposals"]] == [9]
     assert _run(FULL, _context(*FULL_CONDITIONS))["next_up"] == []  # no limit given: the #811 behaviour
+    zero = _run(FULL[3:], _context(*FULL_CONDITIONS), wip=0)
+    assert zero["proposals"] == [] and "at most 0 open items" in zero["summary"]
 
 
 def test_free_slots_go_to_the_next_unlock_reopen_first() -> None:

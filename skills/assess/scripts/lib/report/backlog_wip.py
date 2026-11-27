@@ -159,8 +159,8 @@ def next_up_markdown(items: Sequence[Mapping[str, object]], wip_steps: Sequence[
                      limit: int = DEFAULT_WIP) -> str:
     """The report's "Next up" block for the items over the limit, in ranked order; ``""`` for none.
 
-    The header names ``limit``, the configured ``[backlog] wip``: on the split path the caller
-    plans with a smaller ``wip``, which is not the limit the reader set.
+    The header names ``limit``, the configured ``[backlog] wip``, even when ``plan`` ran with
+    another ``--wip`` given on the command line.
     """
     held = [(TIERS.index(w["tier"]), n, item, _held_parts(w)) for n, (item, w)
             in enumerate(zip(items, wip_steps, strict=True)) if w["decision"] == NEXT_UP or _held_parts(w)]

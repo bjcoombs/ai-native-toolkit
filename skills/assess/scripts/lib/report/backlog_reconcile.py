@@ -376,7 +376,7 @@ def reconcile(existing: Sequence[Mapping[str, object]], facts: RunFacts, *, labe
     if wip is not None:
         proposals, next_up = within_wip(proposals, existing, facts, wip, label=label)
     return ReconcileResult(proposals=proposals, rules_changed=run.rules, notes=notes,
-                           summary=summary(proposals, run.rules, notes, next_up, wip or DEFAULT_WIP),
+                           summary=summary(proposals, run.rules, notes, next_up, DEFAULT_WIP if wip is None else wip),
                            next_up=next_up)
 
 
