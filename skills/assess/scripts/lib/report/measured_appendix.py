@@ -69,6 +69,14 @@ def _skip_reason(name: str, codes: set[str], absent: str, not_run: str | None = 
     return absent
 
 
+def _skip_word(state: str | None, block: object, absent: str) -> str:
+    """Why one repository skipped a scan: the ``absent`` words, a scan plan's own words
+    ("not run under profile citizen", as a whole-skip line reads), or the reason code."""
+    if state == "absent":
+        return absent
+    return not_run_text(block) or str(state)
+
+
 def _scans(n: int) -> str:
     return "scan was" if n == 1 else "scans were"
 
@@ -126,7 +134,8 @@ def measured_section(documents: Sequence[Mapping[str, object]],
         if missing:
             line += f": not measured in {missing} of {total} ({', '.join(unmeasured)})"
         if len(run) < total:
-            why = sorted({absent if s == "absent" else str(s) for s in states if s in SKIP_CODES or s == "absent"})
+            why = sorted({_skip_word(s, doc.get(name), absent) for doc, s in zip(documents, states)
+                          if s in SKIP_CODES or s == "absent"})
             line += f"{';' if missing else ':'} skipped in {total - len(run)} of {total} ({', '.join(why)})"
         if missing or len(run) < total:
             unread += 1

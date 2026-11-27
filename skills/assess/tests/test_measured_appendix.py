@@ -87,6 +87,8 @@ def test_a_partial_skip_names_its_reasons() -> None:
     text = measured_section([ran, skipped, _doc()], ["review_reality"], absent="not here")
     assert "- `review_reality`: skipped in 2 of 3 (network, not here)" in text
     assert "In place: over 3 repositories, 0 scans were measured everywhere, 1 ran" in text
+    planned = _doc(review_reality={"available": False, "reason": "not_run: not run under profile citizen"})
+    assert "skipped in 1 of 2 (not run under profile citizen)" in measured_section([ran, planned], ["review_reality"])
 
 
 def test_the_skip_codes_are_the_full_run_only_reasons() -> None:
