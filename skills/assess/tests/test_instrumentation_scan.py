@@ -211,6 +211,7 @@ def test_a_launcher_counts_with_a_dependency_alongside(tmp_path: Path, rel: str,
 @pytest.mark.parametrize(("rel", "text"), [
     ("bin/test.sh", "java -javaagent:jacoco/jacocoagent.jar -jar app.jar\n"),
     ("Dockerfile", "RUN pip install -r newrelic-requirements.txt\n"),
+    ("bin/run.sh", "java -javaagent:/opt/hotelbooking/jacoco.jar -jar app.jar\n"),
     ("Dockerfile", "# CMD opentelemetry-instrument python app.py\nCMD python app.py\n"),
     ("tests/run.sh", "opentelemetry-instrument python app.py\n"),
     ("app/notes.txt", "opentelemetry-instrument python app.py\n"),

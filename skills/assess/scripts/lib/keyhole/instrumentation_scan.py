@@ -38,7 +38,7 @@ evidence behind them, each kind a token:
   or Gradle or Maven build (``LAUNCHER_FILES``): ``opentelemetry-instrument``,
   ``ddtrace-run``, ``newrelic-admin run-program``, ``node --require`` of an
   auto-instrumentation entry point, or a ``-javaagent:`` flag whose jar names a
-  telemetry agent (OpenTelemetry, Datadog, New Relic, Elastic APM, Application
+  telemetry agent by its own file name (OpenTelemetry, Datadog, New Relic, Elastic APM, Application
   Insights, the Prometheus JMX exporter, Pyroscope). Another ``-javaagent`` (a
   coverage agent) is not telemetry and does not count.
 - ``config``: a committed collector or scrape config (``prometheus.yml``,
@@ -195,9 +195,10 @@ CODE_RULES: tuple[CodeRule, ...] = (
           r"|\bddtrace-run\b|\bnewrelic-admin[ \t]+run-program\b"
           r"|(?:--require|--import|-r)[ \t=]+['\"]?(?:@opentelemetry/auto-instrumentations-node"
           r"|dd-trace/init|newrelic(?=['\"\s]|$)|elastic-apm-node/start))", "launcher"),
-    _rule("JVM telemetry agent", LAUNCHER_FILES, _LINE + r"-javaagent:[^\s'\"]*(?:opentelemetry"
-          r"|otel|dd-java-agent|newrelic|elastic-apm|applicationinsights|jmx_prometheus"
-          r"|pyroscope)", "launcher"),
+    _rule("JVM telemetry agent", LAUNCHER_FILES, _LINE + r"-javaagent:(?:[^\s'\"]*[/\\])?"
+          # The jar's own name, so a path such as /opt/hotelbooking/jacoco.jar is not read.
+          r"(?:opentelemetry|otel|dd-java-agent|newrelic|elastic-apm|applicationinsights"
+          r"|jmx_prometheus|pyroscope)(?![A-Za-z0-9])", "launcher"),
 )
 # Files larger than this are not read for code rules (generated or data files).
 MAX_CODE_BYTES = 512 * 1024
