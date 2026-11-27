@@ -8,8 +8,12 @@ name: Refine sweep (reusable)
 #   2. A settled, ready issue gets the ready label, unless a person removed it.
 #   3. Exact duplicate pairs with both issues open are closed, under the
 #      weekly close cap.
-#   4. The ready-buffer depth and the critical path are posted to the
-#      questions issue, as one comment edited in place.
+#   4. The ready-buffer depth, the critical path and the unsettled issues
+#      (oldest first, with their open judgement items) are posted to the
+#      questions issue, as one comment edited in place, or shown in the job
+#      summary when no questions issue is set. No model runs on a schedule:
+#      the list puts each unsettled issue in front of a maintainer (#1345).
+#      The questions issue itself is never labelled or closed.
 #   5. With a `project_number` and the `project_token` secret, the `project`
 #      job sets Status, Size and Verdict on the issues' items in that GitHub
 #      project (refine_project.py). With no project number it is skipped.
@@ -77,8 +81,11 @@ jobs:
       contents: read
       issues: write
       pull-requests: read
+    # The repository-wide close group, shared with the dedupe apply job's
+    # exact-pair close (#1345). A sweep GitHub drops as an older pending run
+    # is replaced by the next schedule or a dispatch.
     concurrency:
-      group: refine-sweep-${{ github.repository }}
+      group: refine-close-${{ github.repository }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
@@ -89,7 +96,10 @@ jobs:
       REFINE_ALLOWED_LABELS: ${{ inputs.allowed_labels }}
       REFINE_CLOSE_CAP: ${{ inputs.close_cap }}
       REFINE_QUESTIONS_ISSUE: ${{ inputs.questions_issue }}
-      CLAUDE_CODE_SCRIPT_CAPS: '{"edit-issue-labels.sh":30,"close-duplicate.sh":10,"post-buffer-report.sh":1}'
+      # One run may close up to close_cap duplicates; the weekly cap in
+      # close-duplicate.sh still bounds the total (#1345).
+      CLAUDE_CODE_SCRIPT_CAPS: >-
+        ${{ format('{{"edit-issue-labels.sh":30,"close-duplicate.sh":{0},"post-buffer-report.sh":1}}', inputs.close_cap) }}
       APPLY: .refine-toolkit/skills/refine/scripts/refine_apply.py
     steps:
       - name: Check out the repository (default branch)
@@ -157,6 +167,8 @@ jobs:
             .refine/
             ${{ runner.temp }}/refine/actions.jsonl
           if-no-files-found: ignore
+          # upload-artifact skips hidden files by default, and .refine/ is one.
+          include-hidden-files: true
 
   # Keeps the project's Status, Size and Verdict in step with the backlog.
   # It runs after the sweep, so a ready label the sweep added shows the same

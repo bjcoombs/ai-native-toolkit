@@ -73,7 +73,7 @@ python3 "$S/refine_apply.py" sweep --verdict "$WORK/verdict.json"   # ready labe
 python3 "$S/refine_apply.py" summary
 ```
 
-Show the summary table. A `refused` row names the rule that stopped the write; it stays refused. Without `REFINE_QUESTIONS_ISSUE`, the questions comment and the sweep's ready-buffer report are refused, which is expected here: questions go to the user in Step 5, and the buffer is already in Step 2's report.
+Show the summary table. A `refused` row names the rule that stopped the write; it stays refused. Without `REFINE_QUESTIONS_ISSUE`, the questions and the sweep's ready-buffer report are listed below the table instead of posted, which is expected here: questions go to the user in Step 5, and the buffer is already in Step 2's report. They are logged as `question` and `report` rows, which are not writes; Step 5 skips them.
 
 ## Step 5: Ask, then confirm each write
 

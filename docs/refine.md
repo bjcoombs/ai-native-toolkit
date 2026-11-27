@@ -12,9 +12,11 @@ How another repository adopts the refiner: three GitHub workflows that check iss
 |---|---|---|---|
 | `reusable-refine-triage.yml` | an issue is opened, or a comment is added | yes, read-only | `refine.py` decides what a script can. An issue it leaves unsettled goes to a Sonnet-class model, which returns a plan; a separate job with no model applies the plan through guarded write scripts. A `/reopen` comment reopens a duplicate the refiner closed |
 | `reusable-refine-dedupe.yml` | an issue is opened | yes, read-only | An exact duplicate is closed with no model, under a weekly cap; otherwise the model names at most three candidates in one comment and closes nothing |
-| `reusable-refine-sweep.yml` | a schedule, twice a day | no | Ready label on settled ready issues, exact-duplicate closes, the ready-buffer report, and the optional project sync |
+| `reusable-refine-sweep.yml` | a schedule, twice a day | no | Ready label on settled ready issues, exact-duplicate closes, the ready-buffer report with the unsettled issues listed oldest first for a maintainer, and the optional project sync |
 
 Paths are relative to the toolkit's `.github/workflows/`. The definition of ready is your repository's `docs/contributing/definition-of-ready.md` when it has one, and the toolkit's copy otherwise.
+
+Duplicate closes from the dedupe and sweep workflows take turns in one concurrency group per repository, so two runs never read the weekly close count at once. GitHub keeps one pending run per group, so when several exact duplicates are opened together some dedupe runs show as `cancelled` while pending. That is expected: each pair stays closable, and the next sweep closes it.
 
 The model never holds a token that can write: it runs in a job with `issues: read`, and the job that writes runs no model. The scripts it runs come from the toolkit commit your `uses:` line pins, never from an input.
 
@@ -26,7 +28,7 @@ The model never holds a token that can write: it runs in a job with `issues: rea
    - **Workload Identity Federation.** Set the variables `REFINE_ANTHROPIC_FEDERATION_RULE_ID`, `REFINE_ANTHROPIC_ORGANIZATION_ID`, `REFINE_ANTHROPIC_SERVICE_ACCOUNT_ID` and `REFINE_ANTHROPIC_WORKSPACE_ID`, and pass them as the `anthropic_*` inputs; the callers below already grant `id-token: write`. It is used when no API key is set.
 
    Whichever credential is chosen reaches only the model step of the read-only plan job, never a job that can write.
-2. **Questions issue.** Open an issue for the refiner's questions and ready-buffer report, and set its number as the variable `REFINE_QUESTIONS_ISSUE`.
+2. **Questions issue.** Open an issue for the refiner's questions and ready-buffer report, and set its number as the variable `REFINE_QUESTIONS_ISSUE`. The refiner never triages, labels or closes that issue. Without one, the questions and the report appear in each run's job summary instead.
 3. **Callers.** Add the three workflows below.
 4. **Kill switch.** Set the variable `REFINE_ENABLED` to `true`. Any other value, or none, skips every job. Set it back to `false` to stop the refiner at once.
 5. **Dry-run first.** Leave `REFINE_MODE` unset. Every job then runs its reads and its guardrails and writes nothing: each run's summary lists what live mode would have done, and the verdict, plan and actions log are kept as artifacts. Read a week of them.
@@ -125,7 +127,7 @@ Pass any of these under `with:`. Labels must exist in the repository.
 | `ready_label`, `triage_label` | triage, sweep | `agent-ready`, `needs-triage` | The two readiness labels; match `labels` in your definition of ready |
 | `allowed_labels` | triage, sweep | `agent-ready,needs-triage,bug,enhancement,documentation,question` | The only labels the refiner may add or remove |
 | `max_points` | triage | 0 | Overrides `max_points` in your definition of ready, the largest size that can be `agent-ready`; 0 uses the definition's value |
-| `close_cap` | dedupe, sweep | 10 | The most duplicate closes the refiner may make in any 7 days |
+| `close_cap` | dedupe, sweep | 10 | The most duplicate closes the refiner may make in any 7 days, and so in one sweep |
 | `builder_slots` | sweep | 5 | The ready-buffer target is twice this |
 | `model` | triage, dedupe | `sonnet` | The model the read-only plan job runs |
 | `project_number`, `project_owner` | sweep | empty, the repository owner | The project to keep in sync (below) |

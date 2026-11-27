@@ -93,13 +93,17 @@ on:
 jobs:
   # The model runs here, with a token that can read issues but write
   # nothing: a prompt-injected `gh issue close` fails even if it runs. The
-  # job hands its verdict and plan to `apply` as an artifact.
+  # job hands its verdict and plan to `apply` as an artifact. The questions
+  # issue itself is never triaged: a maintainer's reply there would start a
+  # model run about the refiner's own questions (#1345). `route` skips it too.
   plan:
     if: >-
       inputs.enabled &&
       github.event.issue.state != 'closed' &&
       github.event.comment.user.type != 'Bot' &&
-      !(github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/reopen'))
+      !(github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/reopen')) &&
+      inputs.questions_issue != format('{0}', inputs.issue_number) &&
+      inputs.questions_issue != format('#{0}', inputs.issue_number)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -114,10 +118,12 @@ jobs:
       model: ${{ steps.route.outputs.model }}
       planned: ${{ steps.save.outputs.planned }}
       verdict_sha256: ${{ steps.digest.outputs.sha256 }}
+      artifact: ${{ steps.artifact.outputs.name }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       ISSUE: ${{ inputs.issue_number }}
+      REFINE_QUESTIONS_ISSUE: ${{ inputs.questions_issue }}
       APPLY: .refine-toolkit/skills/refine/scripts/refine_apply.py
     steps:
       # The default branch only, never code from an issue or a pull request.
@@ -159,6 +165,15 @@ jobs:
           sparse-checkout: |
             skills/refine/
             docs/contributing/definition-of-ready.md
+
+      # The artifact's name is a job output, so a re-run of `apply` alone
+      # downloads the artifact this attempt uploaded: `github.run_attempt`
+      # moves on in the re-run, while upstream job outputs carry over.
+      - name: Name the plan artifact
+        id: artifact
+        env:
+          NAME: refine-triage-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
+        run: echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
       - name: Write the deterministic verdict
         timeout-minutes: 5
@@ -273,7 +288,7 @@ jobs:
       - name: Hand the verdict and plan to the apply job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
-          name: refine-triage-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
+          name: ${{ steps.artifact.outputs.name }}
           path: .refine/
           if-no-files-found: error
           # upload-artifact skips hidden files by default, and .refine/ is one.
@@ -347,7 +362,7 @@ jobs:
       - name: Fetch the verdict and plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
-          name: refine-triage-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
+          name: ${{ needs.plan.outputs.artifact }}
           path: .refine
 
       - name: Check the verdict is the one written before the model ran

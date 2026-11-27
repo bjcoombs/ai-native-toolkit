@@ -241,10 +241,10 @@ def test_questions_batched_into_one_comment_on_the_questions_issue(tmp_path: Pat
     assert "- #101: Split it?" in gh.writes[0][-1] and "- #104: Who owns it?" in gh.writes[0][-1]
 
 
-def test_questions_refused_without_a_questions_issue(tmp_path: Path) -> None:
+def test_questions_logged_for_the_summary_without_a_questions_issue(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, {})
-    with pytest.raises(Refused, match="REFINE_QUESTIONS_ISSUE"):
-        w.post_questions([{"issue": 101, "question": "Split it?"}])
+    assert w.post_questions([{"issue": 101, "question": "Split it?"}]) == 1
+    assert gh.writes == [] and actions(tmp_path)[0]["action"] == "question"  # #1345: was refused
 
 
 def test_report_edits_the_bot_comment_in_place(tmp_path: Path) -> None:
