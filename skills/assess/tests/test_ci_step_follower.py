@@ -310,6 +310,10 @@ def test_maven_reads_plugin_management_and_the_modules_pl_names(tmp_path: Path) 
     assert _one(follower, "mvn -rf :core verify").unknown == ("-rf",)
     assert _one(follower, "mvn -pl nope verify").unknown == ("-pl: nope",)
     assert _one(follower, "mvn --projects=core verify").paths == ("pom.xml", "core/pom.xml")
+    flat = _one(follower, "mvn -N verify")
+    assert flat.paths == ("pom.xml",) and "japicmp-maven-plugin:cmp" not in flat.tasks and flat.unknown == ()
+    skipped = _one(follower, "mvn -DskipTests -D checkstyle.skip=true -Dfoo.skip=false verify")
+    assert skipped.unknown == ("-DskipTests", "-Dcheckstyle.skip")
 
 
 def test_a_project_task_reads_the_shared_blocks_above_it(tmp_path: Path) -> None:

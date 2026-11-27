@@ -29,7 +29,8 @@ is executed and no model or build tool is run: the build files are read as text.
 - **Maven** (``mvn``, ``./mvnw``). The root ``pom.xml`` (or the one ``-f`` names) and the
   closure of its ``<modules>`` are read, so a pom no module names (a test fixture) never is;
   ``-pl`` keeps the modules it names (by path or ``:artifactId``) and the root pom, and an entry
-  it cannot settle, ``-rf`` and ``-am`` / ``-amd`` land in ``unknown``. A plugin declared with no
+  it cannot settle, ``-rf``, ``-am`` / ``-amd`` and a ``-D`` property that skips a goal
+  (``-DskipTests``, ``-Dcheckstyle.skip``) land in ``unknown``; ``-N`` reads the root pom alone. A plugin declared with no
   executions takes those a ``<pluginManagement>`` in the poms read gives it.
   A phase resolves to every plugin execution bound to that phase or an earlier one of its
   lifecycle: an execution's ``<phase>``, else the goal's default phase from
@@ -560,17 +561,28 @@ def _split_long(args: list[str]) -> list[str]:
     return out
 
 
+def _skip_property(define: str) -> list[str]:
+    """``["-Dx.skip"]`` for a property that turns a bound goal off (``skipTests``,
+    ``checkstyle.skip``, ``maven.test.skip``) unless set false; the goals it skips still read
+    as bound, so the run is unknown, never credited."""
+    name, _, value = define.partition("=")
+    return [f"-D{name}"] if "skip" in name.lower() and value.lower() not in ("false",) else []
+
+
 def _maven_words(args: list[str]) -> _MavenArgs:
     pom, projects, unread, out, skip = None, [], [], [], ""
     for word in _split_long(args):
         if skip:
             pom = word if skip in ("-f", "--file") else pom
+            unread += _skip_property(word) if skip in ("-D", "--define") else []
             projects += [p for p in word.split(",") if p] if skip in ("-pl", "--projects") else []
             unread += [skip] if skip in ("-rf", "--resume-from") else []
             skip = ""
         elif word.startswith("-"):
             skip = word if word in _MAVEN_VALUED else ""
             unread += [word] if word in ("-am", "--also-make", "-amd", "--also-make-dependents") else []
+            unread += _skip_property(word[2:]) if word.startswith("-D") and len(word) > 2 else []
+            unread += [word] if word in ("-N", "--non-recursive") else []
         elif not word.startswith("$"):
             out.append(word)
     return _MavenArgs(pom, projects, unread, out)
@@ -671,13 +683,15 @@ def follow_maven(words: list[str], read_local: ReadLocal, files: frozenset[str],
     args = _maven_words(words[1:])
     root = _root_pom(args.pom, cwd)
     parsed, missing = _reactor(read_local, root) if root is not None else ({}, [])
+    if root is not None and root in parsed and {"-N", "--non-recursive"} & set(args.unread):
+        parsed, missing = {root: parsed[root]}, []   # -N builds the root pom alone
     if root is None or not parsed:
         return None
     read, unknown = _select(parsed, args.projects, root)
     unknown += missing
     poms = [parsed[rel] for rel in read]
     bindings, unread = _bindings(poms)
-    unknown += unread + args.unread
+    unknown += unread + [u for u in args.unread if u not in ("-N", "--non-recursive")]   # -N is read above
     artifacts = [a for p in poms for a in p.artifacts]
     tasks: list[str] = []
     for word in args.asked:
