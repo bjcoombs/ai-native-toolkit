@@ -14,8 +14,9 @@ A write the plan's mode does not allow, or one missing a field its op needs, (``
 over ``MAX_CLOSES`` closes or ``MAX_CREATES`` new items. ``--dry-run`` prints the writes and
 makes none. A failed ``gh`` call ends the run with exit 1, gh's stderr and the writes made
 before it; a filed item is logged as soon as its number is known, so a status comment that
-fails after ``gh issue create`` still names the new item. Any failure once writing has begun,
-a ``gh`` error or a create with no issue URL, is a ``WriteError`` with that list.
+fails after ``gh issue create`` still names the new item. Any failure once writing has begun
+(a ``gh`` error, a create with no issue URL, an unreadable ``gh label list`` reply or a body
+file that cannot be written) is a ``WriteError`` with that list.
 Stdlib only, so the writer job checks out this file and nothing else.
 Tests: ``tests/test_backlog_reconcile_apply.py``.
 """
@@ -101,7 +102,7 @@ def _text(w: Mapping[str, object], key: str) -> str:
 
 
 class WriteError(Exception):
-    """Writing failed part way through the plan (a ``gh`` error or a create with no issue URL).
+    """Writing failed part way through the plan (``apply`` lists the causes).
 
     ``done`` holds the writes already made.
     """
@@ -114,8 +115,9 @@ class WriteError(Exception):
 def apply(writes: Sequence[Mapping[str, object]], repo: str, run: Runner, workdir: Path) -> list[str]:
     """Run each write in order; returns one log line per write.
 
-    A failed ``gh`` call raises ``WriteError`` with gh's stderr and the writes made before it, as does
-    a create with no issue URL (``load_plan`` has already checked every field, so nothing else fails here).
+    A failed ``gh`` call raises ``WriteError`` with gh's stderr and the writes made before it, as do
+    a create with no issue URL, a ``gh label list`` reply that is not JSON and a body file that
+    cannot be written (``load_plan`` has already checked every field).
     """
     log: list[str] = []
     try:
@@ -124,7 +126,7 @@ def apply(writes: Sequence[Mapping[str, object]], repo: str, run: Runner, workdi
         stderr = (exc.stderr or "").strip() if isinstance(exc.stderr, str) else ""
         raise WriteError(f"gh {' '.join(str(a) for a in exc.cmd[1:3])} failed (exit {exc.returncode})"
                          + (f": {stderr}" if stderr else ""), log) from exc
-    except PlanError as exc:
+    except (PlanError, ValueError, OSError) as exc:
         raise WriteError(str(exc), log) from exc
     return log
 

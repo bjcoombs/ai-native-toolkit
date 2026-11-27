@@ -139,3 +139,22 @@ def test_a_create_without_a_url_after_earlier_writes_lists_them(
     out = capsys.readouterr()
     assert "added a status comment to #2" in out.out
     assert "no issue URL" in out.err and "1 write(s) were made before it" in out.err
+
+
+@pytest.mark.parametrize("fail", ["label_json", "body_file"])
+def test_a_bad_label_listing_or_body_file_after_earlier_writes_lists_them(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str], fail: str) -> None:
+    def run(args: Sequence[str]) -> str:
+        if args[:2] == ["label", "list"]:
+            if fail == "body_file":
+                (tmp_path / "body.md").mkdir()
+                return "[]"
+            return "not json"
+        return ""
+    writes: list[dict[str, object]] = [
+        {"op": "add_comment", "number": 2, "body": "added"},
+        {"op": "create", "title": "t", "body": "b", "labels": ["x"], "status": "s"},
+    ]
+    with pytest.raises(ap.WriteError) as info:
+        ap.apply(writes, "o/r", run, tmp_path)
+    assert info.value.done == ["added a status comment to #2"]
