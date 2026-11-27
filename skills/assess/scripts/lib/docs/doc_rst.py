@@ -5,8 +5,8 @@ module adds reST. Discovery: every ``.rst`` file is a doc, and a ``.txt`` file i
 doc only under a Sphinx root that uses ``.txt`` sources. A Sphinx root is a
 directory holding ``conf.py`` beside ``index.rst`` or ``index.txt``; it reads
 ``.txt`` sources when its index is ``index.txt`` or its ``conf.py`` names ``.txt``
-in ``source_suffix``. ``requirements*.txt`` / ``constraints*.txt`` and anything
-under a ``_build`` directory are never docs. The root's index is the toctree root,
+in ``source_suffix``. ``requirements*.txt`` / ``constraints*.txt`` and any reST
+or ``.txt`` file under a ``_build`` directory are never docs. The root's index is the toctree root,
 so ``doc_graph`` takes it as an entry point (:func:`is_sphinx_index`).
 
 Links (:func:`harvest_rst_links`), each a ``link`` edge:
@@ -22,8 +22,8 @@ Links (:func:`harvest_rst_links`), each a ``link`` edge:
   no file is a broken ``rst`` link; ``<isonum.txt>``-style standard includes are
   skipped.
 - ``.. toctree::`` entries (``target`` or ``Title <target>``), resolved like
-  ``:doc:``; under ``:glob:`` an entry is an ``fnmatch`` pattern over the root's
-  docnames. ``self`` and URLs are skipped.
+  ``:doc:``; under ``:glob:`` an entry is a pattern over the root's docnames, read
+  as Sphinx reads it: ``*`` and ``?`` stay within a directory, ``**`` crosses them. ``self`` and URLs are skipped.
 
 Literal blocks (a paragraph ending ``::``) and code directives (``code-block``,
 ``code``, ``sourcecode``, ``doctest``, ``testcode``, ``testoutput``) only *show*
@@ -39,7 +39,6 @@ Stdlib only and imports no ``lib`` module at runtime, like ``lib.docs.doc_links`
 """
 from __future__ import annotations
 
-import fnmatch
 import os
 import posixpath
 import re
@@ -96,17 +95,18 @@ def _reads_txt(directory: Path) -> bool:
 
 
 def sphinx_filter(paths: Iterable[Path], repo_root: Path) -> list[Path]:
-    """``paths`` minus the ``.txt`` files that are not Sphinx sources."""
+    """``paths`` minus the ``.txt`` files that are not Sphinx sources and the
+    reST files under a ``_build`` directory."""
     roots: dict[Path, bool] = {}
+
+    def built(p: Path) -> bool:
+        try:
+            return "_build" in p.relative_to(repo_root).parts
+        except ValueError:
+            return True
 
     def is_source(p: Path) -> bool:
         if _NON_DOC_TXT.match(p.name):
-            return False
-        try:
-            parts = p.relative_to(repo_root).parts
-        except ValueError:
-            return False
-        if "_build" in parts:
             return False
         for parent in p.parents:
             if parent not in roots:
@@ -117,7 +117,8 @@ def sphinx_filter(paths: Iterable[Path], repo_root: Path) -> list[Path]:
                 break
         return False
 
-    return [p for p in paths if p.suffix.lower() != ".txt" or is_source(p)]
+    return [p for p in paths if p.suffix.lower() not in RST_DISCOVERY_EXTENSIONS
+            or (not built(p) and (p.suffix.lower() != ".txt" or is_source(p)))]
 
 
 def unparsed_formats(paths: Iterable[Path]) -> list[str]:
@@ -222,13 +223,41 @@ class _Resolver:
         rel_dir = posixpath.relpath(source.parent.as_posix(), root.as_posix())
         pat = (pattern.lstrip("/") if pattern.startswith("/")
                else posixpath.normpath(posixpath.join(rel_dir, pattern)))
+        rx = glob_regex(pat)
         hits: list[Path] = []
         for d in sorted(self.docs):
             if d.suffix.lower() not in RST_DISCOVERY_EXTENSIONS or not d.is_relative_to(root):
                 continue
-            if fnmatch.fnmatchcase(d.relative_to(root).with_suffix("").as_posix(), pat):
+            if rx.fullmatch(d.relative_to(root).with_suffix("").as_posix()):
                 hits.append(d)
         return hits
+
+
+def glob_regex(pattern: str) -> re.Pattern[str]:
+    """A toctree glob as Sphinx reads it (``sphinx.util.matching``): ``**``
+    crosses directories, ``*`` and ``?`` stay within one, ``[...]`` is a class."""
+    out: list[str] = []
+    i = 0
+    while i < len(pattern):
+        ch = pattern[i]
+        if pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+            continue
+        if ch == "*":
+            out.append("[^/]*")
+        elif ch == "?":
+            out.append("[^/]")
+        elif ch == "[" and "]" in pattern[i + 1:]:
+            end = pattern.index("]", i + 1)
+            body = pattern[i + 1:end]
+            out.append("[" + ("^" + body[1:] if body.startswith("!") else body) + "]")
+            i = end + 1
+            continue
+        else:
+            out.append(re.escape(ch))
+        i += 1
+    return re.compile("".join(out))
 
 
 def _labels(rst_docs: list[Path], lines_of: dict[Path, list[str]]) -> dict[str, Path]:

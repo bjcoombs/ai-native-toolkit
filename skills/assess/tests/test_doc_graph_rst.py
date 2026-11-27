@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from lib.docs.doc_graph import build_doc_graph, discover_doc_files
-from lib.docs.doc_rst import strip_literals, toctree_entries
+from lib.docs.doc_rst import glob_regex, strip_literals, toctree_entries
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -111,9 +111,11 @@ def test_toctree_glob_and_literal_blocks(tmp_path: Path) -> None:
     _write(tmp_path, "docs/sample.rst", "Sample\n")
     _write(tmp_path, "docs/topics/a.rst", "A\n")
     _write(tmp_path, "docs/topics/b.rst", "B\n")
+    _write(tmp_path, "docs/topics/drafts/d.rst", "D\n")
     r = build_doc_graph(tmp_path)
     edges = set(r.graph.edges())
     assert {("docs/index.rst", "docs/topics/a.rst"), ("docs/index.rst", "docs/topics/b.rst")} <= edges
+    assert ("docs/index.rst", "docs/topics/drafts/d.rst") not in edges  # `*` stays in one dir
     assert ("docs/index.rst", "docs/sample.rst") not in edges
     assert r.broken_links == []
 
@@ -148,3 +150,23 @@ def test_unparsed_doc_format_is_named_beside_parsed_docs(tmp_path: Path) -> None
 def test_markdown_only_repo_reports_no_unparsed_format(tmp_path: Path) -> None:
     _write(tmp_path, "README.md", "hi\n")
     assert build_doc_graph(tmp_path).as_dict()["unparsed_doc_formats"] == []
+
+
+def test_glob_regex_reads_patterns_as_sphinx_does() -> None:
+    assert glob_regex("topics/*").fullmatch("topics/a")
+    assert not glob_regex("topics/*").fullmatch("topics/drafts/d")
+    assert glob_regex("topics/**").fullmatch("topics/drafts/d")
+    assert glob_regex("ref/?").fullmatch("ref/x")
+    assert glob_regex("ref/[!a]*").fullmatch("ref/bc")
+    assert not glob_regex("ref/[!a]*").fullmatch("ref/abc")
+    assert glob_regex("a.b").fullmatch("a.b") and not glob_regex("a.b").fullmatch("axb")
+
+
+def test_rst_under_build_is_not_a_doc(tmp_path: Path) -> None:
+    _write(tmp_path, "docs/conf.py", "")
+    _write(tmp_path, "docs/index.rst", "Home\n")
+    _write(tmp_path, "docs/_build/html/_sources/index.rst", "Home\n")
+    _write(tmp_path, "docs/_build/notes.md", "kept: markdown is not filtered here\n")
+    assert _rels(tmp_path, discover_doc_files(tmp_path)) == [
+        "docs/_build/notes.md", "docs/index.rst",
+    ]
