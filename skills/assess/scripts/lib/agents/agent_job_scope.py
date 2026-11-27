@@ -51,6 +51,7 @@ from collections.abc import Callable
 from typing import Any
 
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci.ci_step_paths import local_workflow
 from lib.counts_only.block_shapes import AgentJob
 
 READ_ONLY, WRITE, UNDECLARED, UNREAD = "read_only", "write", "undeclared", "unread"
@@ -130,7 +131,6 @@ def _spend_cap(lines: list[str]) -> bool:
 
 Scope = tuple[str, list[str]]
 ReadLocal = Callable[[str], "str | None"]
-_LOCAL_WORKFLOW = re.compile(r"""^["']?\./(\.github/workflows/[\w.-]+\.ya?ml)""")
 _RANK = (READ_ONLY, UNDECLARED, UNREAD, WRITE)
 
 
@@ -161,7 +161,7 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
     runs an agent (``lib.agents.agent_ops`` follows local actions and reusable workflows).
 
     A job that calls a local reusable workflow (``uses: ./.github/workflows/x.yml``, read through
-    ``read_local``) takes the worst scope of that workflow's agent jobs, each capped by the
+    ``read_local``; the path is the shared CI-step follower's ``lib.ci.ci_step_paths.local_workflow``, #845) takes the worst scope of that workflow's agent jobs, each capped by the
     caller's (``capped``); ``inherited`` is the caller's scope while reading a called workflow.
     A job that ``remote_of`` says calls an agent-named reusable workflow in another repository is
     an agent job read ``read_only`` when its own scope is read-only (the caller caps the callee);
@@ -200,17 +200,17 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
                     unsettled.append(name)
             continue
         uses = _child(tree, job, "uses")
-        local = _LOCAL_WORKFLOW.match(tree.lines[uses].value) if uses is not None else None
-        called = read_local(local.group(1)) if local and read_local and local.group(1) not in seen else None
+        local = local_workflow(tree.lines[uses].value) if uses is not None else None
+        called = read_local(local) if local and read_local and local not in seen else None
         # a split needs a job after this one that can write: a read-only follower writes nothing
         follower = any(name in needs[other] and scopes[other][0] in (WRITE, UNDECLARED)
                        for other in jobs if other != job)
         inner_split = False
         if called is not None and local is not None:
             before = len(readings) if readings is not None else 0
-            inner = workflow_jobs(local.group(1), called, signs_of, read_local, (scope, writes),
+            inner = workflow_jobs(local, called, signs_of, read_local, (scope, writes),
                                   seen | {rel}, alone=alone, readings=readings)
-            if inner and local.group(1) in alone and readings is not None:
+            if inner and local in alone and readings is not None:
                 # read on its own too: count the called jobs, not this one
                 readings += [j.copy() for j in inner]
                 inner = []

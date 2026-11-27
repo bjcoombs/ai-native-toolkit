@@ -282,3 +282,40 @@ def test_a_step_outside_the_checkout_or_unread_follows_nothing(tmp_path: Path, l
     follower = _repo(tmp_path, {"Makefile": "ci:\n\ttrue\n", "ci.sh": "true\n", "pom.xml": _POM,
                                 "build.gradle": "plugins { id 'java' }\n"})
     assert follower.step(line) == []
+
+
+_PARENT = """<project><artifactId>parent</artifactId><packaging>pom</packaging><build>
+<pluginManagement><plugins><plugin><artifactId>japicmp-maven-plugin</artifactId>
+<executions><execution><goals><goal>cmp</goal></goals></execution></executions>
+</plugin></plugins></pluginManagement></build></project>
+"""
+_CHILD = """<project><artifactId>{name}</artifactId><build><plugins>{plugins}</plugins></build></project>
+"""
+_JAPICMP = "<plugin><artifactId>japicmp-maven-plugin</artifactId></plugin>"
+
+
+def test_maven_reads_plugin_management_and_the_modules_pl_names(tmp_path: Path) -> None:
+    follower = _repo(tmp_path, {"pom.xml": _PARENT,
+                                "api/pom.xml": _CHILD.format(name="api", plugins=_JAPICMP),
+                                "core/pom.xml": _CHILD.format(name="core", plugins="")})
+    assert "japicmp-maven-plugin:cmp" in _one(follower, "mvn verify").tasks
+    core = _one(follower, "mvn -pl core verify")
+    assert core.paths == ("pom.xml", "core/pom.xml") and "japicmp-maven-plugin:cmp" not in core.tasks
+    assert core.unknown == ()
+    api = _one(follower, "mvn -pl :api,!core -am verify")
+    assert api.paths == ("pom.xml", "api/pom.xml") and "japicmp-maven-plugin:cmp" in api.tasks
+    assert api.unknown == ("-pl: !core", "-am")
+    assert _one(follower, "mvn -rf :core verify").unknown == ("-rf",)
+    assert _one(follower, "mvn -pl nope verify").unknown == ("-pl: nope",)
+
+
+def test_a_project_task_reads_the_shared_blocks_above_it(tmp_path: Path) -> None:
+    root = "plugins { id 'base' }\nsubprojects {\n    apply plugin: 'checkstyle'\n}\n"
+    follower = _repo(tmp_path, {"build.gradle": root, "app/build.gradle": "plugins { id 'java' }\n",
+                                "other/build.gradle": "plugins { id 'pmd' }\n"})
+    got = _one(follower, "./gradlew :app:check")
+    assert got.paths == ("build.gradle", "app/build.gradle")
+    assert set(got.plugins) == {"java", "checkstyle"} and "base" not in got.plugins
+    plain = _repo(tmp_path / "plain", {"build.gradle": "plugins { id 'base' }\n",
+                                       "app/build.gradle": "plugins { id 'java' }\n"})
+    assert _one(plain, "./gradlew :app:check").paths == ("app/build.gradle",)

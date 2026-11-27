@@ -13,7 +13,8 @@ is executed and no model or build tool is run: the build files are read as text.
   recipe line's ``@``, ``-`` and ``+`` prefixes are dropped. A named target with no rule, and
   an ``include`` the reader does not follow, land in ``unknown``.
 - **Gradle** (``gradle``, ``./gradlew``). Every tracked ``*.gradle`` / ``*.gradle.kts`` build
-  file (under ``-p dir``, or the project a ``:app:check`` path names) is read. ``tasks`` is the
+  file (under ``-p dir``, or the project a ``:app:check`` path names) is read, and the
+  ``subprojects {}`` / ``allprojects {}`` blocks of the build files in the directories above. ``tasks`` is the
   closure of the asked tasks over the edges the files declare (``check.dependsOn japicmp``,
   ``tasks.named("check") { dependsOn(...) }``, ``check { finalizedBy ... }``) and the
   lifecycle edges of the plugins they apply (``_GRADLE_PLUGIN_TASKS``: ``java`` binds ``test``
@@ -21,7 +22,10 @@ is executed and no model or build tool is run: the build files are read as text.
   is each applied plugin bound to a task in that closure: through the table, or because the
   plugin id's last segment names a reached task (``me.champeau.gradle.japicmp`` and a
   ``japicmp`` task). An ``apply from:`` script is not read and lands in ``unknown``.
-- **Maven** (``mvn``, ``./mvnw``). Every tracked ``pom.xml`` (or the one ``-f`` names) is read.
+- **Maven** (``mvn``, ``./mvnw``). Every tracked ``pom.xml`` (or the one ``-f`` names) is read;
+  ``-pl`` keeps the modules it names (by path or ``:artifactId``) and the root pom, and an entry
+  it cannot settle, ``-rf`` and ``-am`` / ``-amd`` land in ``unknown``. A plugin declared with no
+  executions takes those a ``<pluginManagement>`` in the poms read gives it.
   A phase resolves to every plugin execution bound to that phase or an earlier one of its
   lifecycle: an execution's ``<phase>``, else the goal's default phase from
   ``_MAVEN_GOAL_PHASES`` (``japicmp-maven-plugin:cmp`` is ``verify``), plus the packaging's
@@ -256,6 +260,7 @@ _EDGE_IN_BLOCK = re.compile(r"""\b(?:dependsOn|finalizedBy)\b\s*\(?([^\n]*)""")
 _TASK_ARG = re.compile(r"""["']([\w:.-]+)["']|\b([A-Za-z_]\w*)\b""")
 _NOT_TASK = frozenset({"tasks", "named", "getByName", "project", "provider", "it", "listOf",
                        "setOf", "arrayOf", "file", "files", "true", "false", "null"})
+_SHARED_BLOCK = re.compile(r"\b(?:subprojects|allprojects)\s*\{")
 _APPLY_FROM = re.compile(r"\bapply\s*\(?\s*from\s*[:=]")
 
 
@@ -295,8 +300,11 @@ def _gradle_edges(text: str) -> dict[str, list[str]]:
     return edges
 
 
-def _gradle_files(files: frozenset[str], words: list[str], cwd: str) -> list[str] | None:
-    """The build files a Gradle command reads: under ``-p`` or the asked project, else all."""
+def _gradle_files(files: frozenset[str], words: list[str],
+                  cwd: str) -> tuple[list[str], list[str]] | None:
+    """``(build files, ancestor build files)`` a Gradle command reads: those under ``-p`` or the
+    asked project (else all), and the build files of the directories above them, whose
+    ``subprojects {}`` / ``allprojects {}`` blocks also configure the project."""
     base = cwd
     if "-p" in words[:-1] or "--project-dir" in words[:-1]:
         flag = "-p" if "-p" in words[:-1] else "--project-dir"
@@ -306,9 +314,12 @@ def _gradle_files(files: frozenset[str], words: list[str], cwd: str) -> list[str
         base = "" if joined == "." else joined
     projects = {"/".join(p.strip(":").split(":")[:-1]) for p in gradle_task_paths(words[1:])}
     under = [posixpath.join(base, p) if p else base for p in projects] or [base]
-    return sorted(f for f in files if f.endswith((".gradle", ".gradle.kts"))
-                  and PurePosixPath(f).name not in ("settings.gradle", "settings.gradle.kts")
-                  and any(not d or d == "." or f.startswith(d.rstrip("/") + "/") for d in under))
+    builds = sorted(f for f in files if f.endswith((".gradle", ".gradle.kts"))
+                    and PurePosixPath(f).name not in ("settings.gradle", "settings.gradle.kts"))
+    own = [f for f in builds if any(not d or d == "." or f.startswith(d.rstrip("/") + "/") for d in under)]
+    above = {str(a) for d in under if d not in ("", ".") for a in PurePosixPath(d).parents}
+    ancestors = [f for f in builds if f not in own and posixpath.dirname(f) in {"" if a == "." else a for a in above}]
+    return own, ancestors
 
 
 def _gradle_closure(asked: list[str], edges: dict[str, list[str]]) -> list[str]:
@@ -328,19 +339,24 @@ def follow_gradle(words: list[str], read_local: ReadLocal, files: frozenset[str]
     """The plugins and tasks a Gradle command's tasks are bound to (module docstring)."""
     if not words or PurePosixPath(words[0]).name not in ("gradle", "gradlew"):
         return None
-    rels = _gradle_files(files, words, cwd)
-    if not rels:
+    found = _gradle_files(files, words, cwd)
+    if not found or not found[0]:
         return None
+    own, ancestors = found
     plugins: list[str] = []
     edges: dict[str, list[str]] = {name: list(on) for name, on in _LIFECYCLE.items()}
     unknown: list[str] = []
     read: list[str] = []
-    for rel in rels:
+    for rel in ancestors + own:
         text = read_local(rel)
         if text is None:
             continue
-        read.append(rel)
         text = _GRADLE_COMMENT.sub("", text)
+        if rel in ancestors:
+            text = "\n".join(_block(text, m.end()) for m in _SHARED_BLOCK.finditer(text))
+            if not text.strip():
+                continue
+        read.append(rel)
         unknown += ["apply from: " + rel] if _APPLY_FROM.search(text) else []
         plugins += _gradle_plugins(text)
         for task, on in _gradle_edges(text).items():
@@ -428,13 +444,19 @@ def _plugin_nodes(node: ET.Element | None) -> list[ET.Element]:
     return [p for p in plugins if _local(p.tag) == "plugin"] if plugins is not None else []
 
 
+_Bindings = tuple[list[tuple[str, str]], list[str]]   # ((phase, artifactId:goal), unknown)
+
+
 class _Pom(NamedTuple):
     bindings: list[tuple[str, str]]   # (phase, artifactId:goal)
     unknown: list[str]
     artifacts: list[str]
+    artifact_id: str = ""
+    managed: dict[str, _Bindings] = {}   # <pluginManagement> executions, by artifactId
+    bare: tuple[str, ...] = ()           # plugins declared with no executions of their own
 
 
-def _execution_bindings(plugin: ET.Element) -> tuple[list[tuple[str, str]], list[str]]:
+def _execution_bindings(plugin: ET.Element) -> _Bindings:
     artifact = _text(plugin, "artifactId")
     bindings: list[tuple[str, str]] = []
     unknown: list[str] = []
@@ -463,30 +485,85 @@ def _read_pom(text: str, rel: str) -> _Pom:
     bindings += list(_CLEAN_BINDINGS)
     unknown: list[str] = [] if packaging in _JAR_LIKE or packaging == "pom" else [f"packaging: {packaging}"]
     artifacts: list[str] = []
-    for plugin in _plugin_nodes(_child(project, "build")):
+    bare: list[str] = []
+    build = _child(project, "build")
+    for plugin in _plugin_nodes(build):
         artifacts.append(_text(plugin, "artifactId"))
         found, unread = _execution_bindings(plugin)
         bindings += found
         unknown += unread
+        bare += [] if found or unread else [artifacts[-1]]
+    management = _child(build, "pluginManagement") if build is not None else None
+    managed = {_text(p, "artifactId"): _execution_bindings(p) for p in _plugin_nodes(management)}
     profiles = _child(project, "profiles")
     for profile in [p for p in profiles if _local(p.tag) == "profile"] if profiles is not None else []:
         if _plugin_nodes(_child(profile, "build")):
             unknown.append("profile: " + (_text(profile, "id") or rel))
-    return _Pom(bindings, unknown, artifacts)
+    return _Pom(bindings, unknown, artifacts, _text(project, "artifactId"), managed, tuple(bare))
 
 
-def _maven_words(args: list[str]) -> tuple[str | None, list[str]]:
-    """``(-f value, goals and phases)``."""
-    pom, out, skip = None, [], ""
+class _MavenArgs(NamedTuple):
+    pom: str | None          # -f
+    projects: list[str]      # -pl entries
+    unread: list[str]        # options whose module selection is not read (-rf, -am)
+    asked: list[str]         # goals and phases
+
+
+def _maven_words(args: list[str]) -> _MavenArgs:
+    pom, projects, unread, out, skip = None, [], [], [], ""
     for word in args:
         if skip:
             pom = word if skip in ("-f", "--file") else pom
+            projects += [p for p in word.split(",") if p] if skip in ("-pl", "--projects") else []
+            unread += [skip] if skip in ("-rf", "--resume-from") else []
             skip = ""
         elif word.startswith("-"):
             skip = word if word in _MAVEN_VALUED else ""
+            unread += [word] if word in ("-am", "--also-make", "-amd", "--also-make-dependents") else []
         elif not word.startswith("$"):
             out.append(word)
-    return pom, out
+    return _MavenArgs(pom, projects, unread, out)
+
+
+def _select(poms: dict[str, _Pom], projects: list[str], cwd: str) -> tuple[list[str], list[str]]:
+    """``(pom paths, unknown)`` a ``-pl`` list builds: each module named by path or by
+    ``[group]:artifactId``, and the root pom its modules inherit from. An entry the reader
+    cannot settle (``!x`` exclusion, ``?x`` optional, no matching pom) is unknown."""
+    if not projects:
+        return list(poms), []
+    root = _relative(cwd, "pom.xml")
+    chosen = [root] if root in poms else []
+    unknown: list[str] = []
+    for entry in projects:
+        if entry[:1] in ("!", "?", "$"):
+            unknown.append(f"-pl: {entry}")
+            continue
+        if ":" in entry:
+            match = [rel for rel, pom in poms.items() if pom.artifact_id == entry.rsplit(":", 1)[-1]]
+        else:
+            path = _relative(cwd, entry)
+            match = [rel for rel in poms if path is not None and rel == posixpath.join(path, "pom.xml")]
+        chosen += [rel for rel in match if rel not in chosen]
+        unknown += [] if match else [f"-pl: {entry}"]
+    return chosen, unknown
+
+
+def _bindings(poms: list[_Pom]) -> tuple[list[tuple[str, str]], list[str]]:
+    """Each pom's bindings, with a plugin it declares bare taking the executions a
+    ``<pluginManagement>`` in the poms read gives it (a parent's, usually)."""
+    managed: dict[str, _Bindings] = {}
+    for pom in poms:
+        managed.update(pom.managed)
+    bindings: list[tuple[str, str]] = []
+    unknown: list[str] = []
+    for pom in poms:
+        bindings += pom.bindings
+        unknown += pom.unknown
+        for artifact in pom.bare:
+            found, unread = managed.get(artifact, ([], []))
+            bindings += found
+            unknown += unread
+    return bindings, unknown
 
 
 def _phases_upto(phase: str) -> tuple[str, ...] | None:
@@ -522,23 +599,24 @@ def follow_maven(words: list[str], read_local: ReadLocal, files: frozenset[str],
     """The plugins and goals a Maven command's phases and goals are bound to (module docstring)."""
     if not words or PurePosixPath(words[0]).name not in ("mvn", "mvnw", "mvnw.cmd"):
         return None
-    pom, asked = _maven_words(words[1:])
-    rels = _maven_poms(files, pom, cwd)
+    args = _maven_words(words[1:])
+    rels = _maven_poms(files, args.pom, cwd)
     if not rels:
         return None
-    read: list[str] = []
-    poms: list[_Pom] = []
+    parsed: dict[str, _Pom] = {}
     for rel in rels:
         text = read_local(rel)
         if text is not None:
-            read.append(rel)
-            poms.append(_read_pom(text, rel))
-    if not read:
+            parsed[rel] = _read_pom(text, rel)
+    if not parsed:
         return None
+    read, unknown = _select(parsed, args.projects, cwd)
+    poms = [parsed[rel] for rel in read]
+    bindings, unread = _bindings(poms)
+    unknown += unread + args.unread
     artifacts = [a for p in poms for a in p.artifacts]
-    unknown = [u for p in poms for u in p.unknown]
     tasks: list[str] = []
-    for word in asked:
+    for word in args.asked:
         if ":" in word:
             tasks.append(_goal_task(word, artifacts)[1])
             continue
@@ -546,7 +624,7 @@ def follow_maven(words: list[str], read_local: ReadLocal, files: frozenset[str],
         if phases is None:
             unknown.append(f"phase: {word}")
             continue
-        bound = [(phases.index(ph), goal) for p in poms for ph, goal in p.bindings if ph in phases]
+        bound = [(phases.index(ph), goal) for ph, goal in bindings if ph in phases]
         tasks += [goal for _, goal in sorted(bound, key=lambda b: b[0])]
     tasks = list(_uniq(tasks))
     plugins = _uniq(t.rsplit(":", 1)[0] for t in tasks)

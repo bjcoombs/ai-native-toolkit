@@ -33,8 +33,9 @@ the later parts are read from. A part that names nothing followable is skipped.
 
 The followers that existed before this module call it: ``lib.ci.ci_scripts`` (script path and
 body read), ``lib.ci.ci_composite`` (local action read), ``lib.ci.ci_triggers`` (local reusable
-workflow calls) and ``lib.agents.agent_ops`` (local workflows and actions) go through
-``lib.ci.ci_step_paths``; their readings did not change.
+workflow calls), ``lib.ci.ci_model_jobs`` and ``lib.agents.agent_ops`` /
+``lib.agents.agent_job_scope`` (local workflows and actions) go through ``lib.ci.ci_step_paths``;
+their readings did not change.
 
 Inward-only imports: ``lib.ci.ci_build_follower``, ``lib.ci.ci_composite``,
 ``lib.ci.ci_continuations``, ``lib.ci.ci_expressions``, ``lib.ci.ci_masking``,
