@@ -35,7 +35,7 @@ module has no allow-list to match.
 
 Pure, pytest-able surface (deterministic layer): `parse_contract_text`,
 `parse_contract_file`, `structural_floor_reasons`, `downgrade_reasons`,
-`evaluate_kill_test`, `contract_sha256`, `write_freeze_evidence`, and the
+`evaluate_kill_test`, `contract_sha256`, `contract_sha256_lf`, `write_freeze_evidence`, and the
 orchestrating `freeze`. Only the agent-driven kill-test outcomes cross the
 boundary as data.
 
@@ -332,7 +332,8 @@ def _result_map(kill_test: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def evaluate_kill_test(
-    contract: Contract, kill_test: Dict[str, Any], contract_hash: str
+    contract: Contract, kill_test: Dict[str, Any], contract_hash: str,
+    lf_hash: Optional[str] = None,
 ) -> Tuple[bool, List[str], Optional[bool]]:
     """Return (ok, reasons, sabotage_rejected).
 
@@ -340,6 +341,9 @@ def evaluate_kill_test(
 
     - The results must be bound to THIS contract by `contract_sha256`; a mismatch
       means stale or mismatched results and refuses (no self-attested default).
+      `lf_hash`, the hash of the same bytes with CRLF read as LF, also binds:
+      a kill test written against the LF file (`draft.py`) still binds the
+      CRLF copy a `core.autocrlf` checkout holds (#1565).
     - Every criterion must carry an explicit boolean `passed_against_null`;
       missing coverage or a non-boolean value refuses (fail closed on an
       unproven criterion).
@@ -352,7 +356,7 @@ def evaluate_kill_test(
     """
     reasons: List[str] = []
     declared = kill_test.get("contract_sha256")
-    if declared != contract_hash:
+    if declared != contract_hash and (lf_hash is None or declared != lf_hash):
         reasons.append(
             "kill-test results are not bound to this contract (contract_sha256 "
             "%r != %r): stale or mismatched results" % (declared, contract_hash)
@@ -411,6 +415,13 @@ def contract_sha256(path: Any) -> str:
     """sha256 hex digest of the contract file's raw bytes. The exit verifier
     re-hashes the same bytes (C5); a mid-run edit is a mismatch."""
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def contract_sha256_lf(path: Any) -> str:
+    """sha256 of the contract file with CRLF line endings read as LF: the hash
+    the file has in the repository when a `core.autocrlf` checkout holds CRLF.
+    Only the kill-test binding accepts it; evidence records the raw-bytes hash."""
+    return hashlib.sha256(Path(path).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _now_iso() -> str:
@@ -491,7 +502,8 @@ def freeze(
         return FreezeResult(False, [str(exc)], contract_hash=contract_hash)
 
     try:
-        ok, reasons, sabotage_rejected = evaluate_kill_test(contract, kill_test, contract_hash)
+        ok, reasons, sabotage_rejected = evaluate_kill_test(
+            contract, kill_test, contract_hash, contract_sha256_lf(contract_path))
     except KillTestError as exc:
         return FreezeResult(False, [str(exc)], contract_hash=contract_hash)
     if not ok:

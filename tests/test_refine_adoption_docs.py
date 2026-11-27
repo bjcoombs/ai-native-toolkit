@@ -137,3 +137,12 @@ def test_docs_state_what_the_oauth_token_costs(doc: Path) -> None:
     for claim in ("`CLAUDE_CODE_OAUTH_TOKEN`", "simplest", "usage limits", "no spend cap",
                   "own sessions", "recommended", "`REFINE_ANTHROPIC_API_KEY`", "spend limit"):
         assert claim in text, (doc.name, claim)
+
+
+def test_contract_draft_docs_say_where_the_filled_in_kill_test_lives() -> None:
+    """A filled-in kill test committed to the draft branch is reset by the next run (#1565)."""
+    text = (REPO / "docs" / "refine.md").read_text(encoding="utf-8")
+    section = text.split("## Contract draft", 1)[1].split("\n## ", 1)[0]
+    assert "**Where the filled-in kill test lives.**" in section
+    assert "Fill in a copy, never the committed `<run_id>.kill-test.json`" in section
+    assert "--kill-test-results" in section and "contract_sha256" in section
