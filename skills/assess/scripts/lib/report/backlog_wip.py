@@ -19,7 +19,8 @@ once. ``apply_wip(items, steps, existing, level, wip)`` takes the rendered items
 The open count is the open tracker items in the backlog: an item with a condition marker
 (``backlog_items.marker_key``), an unmarked one with ``label`` (``assess-finding``, the items
 ``plan_filing`` matches by title; no label is checked when ``label`` is empty), and any open
-item a step reuses. Two items that match the same closed item take one slot. Free slots are
+item a step reuses. `plan_filing` takes each item once per run; steps from another caller that
+name one closed item take one slot between them. Free slots are
 ``wip`` minus the open count, never below 0, so a tracker already over the limit gets no new
 item. Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``.
 """
@@ -104,8 +105,7 @@ def apply_wip(items: Sequence[Mapping[str, object]], steps: Sequence[FilingStep]
     wanting = [i for i, s in enumerate(steps) if not (s["action"] != "create" and _is_open(s))]
     for i in sorted(wanting, key=lambda i: TIERS.index(tiers[i])):
         number = steps[i].get("number")
-        # Reachable through plan_filing: a marker match without sub or part claims nothing, so two
-        # actions naming one condition both reuse the same closed item.
+        # Guards a caller that passes steps not from plan_filing, which takes each item once per run.
         if isinstance(number, int) and number in reopened:
             out[i]["decision"] = FILE
             continue
@@ -120,13 +120,18 @@ def apply_wip(items: Sequence[Mapping[str, object]], steps: Sequence[FilingStep]
 
 
 def next_up_markdown(items: Sequence[Mapping[str, object]], wip_steps: Sequence[WipStep],
-                     wip: int = DEFAULT_WIP) -> str:
-    """The report's "Next up" block for the items over the limit, in ranked order; ``""`` for none."""
+                     limit: int = DEFAULT_WIP) -> str:
+    """The report's "Next up" block for the items over the limit, in ranked order; ``""`` for none.
+
+    The header names ``limit``, the configured ``[backlog] wip``: on the split path the caller
+    plans with a smaller ``wip``, which is not the limit the reader set.
+    """
     held = [(TIERS.index(w["tier"]), n, item) for n, (item, w) in enumerate(zip(items, wip_steps, strict=True))
             if w["decision"] == NEXT_UP]
     if not held:
         return ""
-    lines = [f"**Next up** (not filed: the backlog holds {wip} open items at most, `[backlog] wip`):", ""]
+    noun = "item" if limit == 1 else "items"
+    lines = [f"**Next up** (not filed: the backlog holds at most {limit} open {noun}, the `[backlog] wip` limit):", ""]
     for _, _, item in sorted(held, key=lambda x: (x[0], x[1])):
         lines.append(f"- {item.get('title')}")
     return "\n".join(lines) + "\n"

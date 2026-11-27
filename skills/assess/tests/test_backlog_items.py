@@ -198,7 +198,30 @@ def test_items_split_from_one_action_keep_separate_items() -> None:
     tracker = FixtureTracker()
     assert tracker.file(parts) == [1, 2]
     assert tracker.file(parts) == [1, 2]
-    assert tracker.file(items) == [3]  # the unsplit action is a third key
+    assert tracker.file(items) == [1]  # filed whole again (#811): part 1 carries it, marker re-keyed
+    assert bi.marker_key(str(tracker.items[0]["body"])) == ("layer-5-ci", 1, "", 0)
+    assert len(tracker.items) == 2
+
+
+def test_an_action_filed_whole_prefers_the_part_whose_title_agrees() -> None:
+    base = _items(ENTRY)[0]
+    parts = [{"number": n, "title": f"Part {n}", "state": "OPEN",
+              "body": base["body"].replace(base["marker"], bi.condition_marker("layer-5-ci.1", MODEL, part=n))}
+             for n in (1, 2)]
+    parts[0]["state"] = "CLOSED"
+    assert bi.match_item("Part 2", base["body"], parts)["number"] == 2
+    assert bi.match_item("Other", base["body"], parts)["number"] == 2  # an open part before a closed one
+
+
+def test_two_actions_naming_one_condition_keep_their_own_items() -> None:
+    # #811: from the second run on, each action takes its own item, not both the first.
+    other = {**ENTRY, "rank": 2, "action": "Gate merges on CI"}
+    tracker = FixtureTracker()
+    assert tracker.file(_items(ENTRY, other)) == [1, 2]
+    assert tracker.file(_items(ENTRY, other)) == [1, 2]
+    assert tracker.file(_items(other, ENTRY)) == [2, 1]  # matched by title among the same key
+    reworded = {**other, "action": "Require CI before merge"}
+    assert tracker.file(_items(ENTRY, reworded)) == [1, 2]  # no title match: the next unclaimed item
 
 
 # The work-in-progress limit and the next-unlock ranking (#812).
@@ -250,7 +273,7 @@ def test_an_item_already_open_takes_no_new_slot() -> None:
     existing = [_marked(1, "row-a.1"), _marked(2, "old-2.1")]
     planned = _propose(_items(*NEW), existing)
     assert [p["wip"]["decision"] for p in planned] == [bw.OPEN, bw.FILE, bw.NEXT_UP]
-    assert bw.next_up_markdown(planned, [p["wip"] for p in planned], wip=3).count("\n- ") == 1
+    assert bw.next_up_markdown(planned, [p["wip"] for p in planned], limit=3).count("\n- ") == 1
 
 
 def test_a_lapse_recovery_outranks_a_new_gain() -> None:
@@ -285,10 +308,46 @@ def test_next_up_subcommand_reads_the_wip_from_config(tmp_path: Path, capsys: py
     assert capsys.readouterr().out == ""
 
 
-def test_two_actions_matching_one_closed_item_take_one_slot() -> None:
-    # A marker without sub or part claims nothing, so both actions reuse closed #9 (#811 note).
-    existing = [_marked(1, "old-1.1"), _marked(2, "old-2.1"), _marked(9, "row-a.1", state="CLOSED")]
+def test_two_actions_naming_one_closed_condition_each_take_a_slot() -> None:
+    # #811: plan takes each item once per run, so the second action is a create, not a second reopen.
+    existing = [_marked(1, "old-1.1"), _marked(9, "row-a.1", state="CLOSED")]
     twins = _items(_entry(1, "row-a.1"), _entry(2, "row-a.1"), _entry(3, "row-c.1"))
     planned = _propose(twins, existing)
-    assert [p["filing"].get("number") for p in planned[:2]] == [9, 9]
+    assert [p["filing"]["action"] for p in planned] == ["reuse", "create", "create"]
     assert [p["wip"]["decision"] for p in planned] == [bw.FILE, bw.FILE, bw.NEXT_UP]
+
+
+def test_steps_naming_one_closed_item_share_a_slot() -> None:
+    # The guard for a caller whose steps did not come from plan_filing.
+    items = _items(_entry(1, "row-a.1"), _entry(2, "row-a.1"), _entry(3, "row-c.1"))
+    steps: list[bi.FilingStep] = [{"action": "reuse", "number": 9, "state": "CLOSED"},
+                                  {"action": "reuse", "number": 9, "state": "CLOSED"}, {"action": "create"}]
+    got = bw.apply_wip(items, steps, [_marked(1, "old-1.1"), _marked(2, "old-2.1")])
+    assert [w["decision"] for w in got] == [bw.FILE, bw.FILE, bw.NEXT_UP]
+
+
+def test_next_up_header_names_the_configured_limit_and_agrees_in_number() -> None:
+    planned = _propose(_items(*NEW), [], wip=0)
+    steps = [p["wip"] for p in planned]
+    assert "at most 1 open item, the `[backlog] wip` limit" in bw.next_up_markdown(planned, steps, limit=1)
+    assert "at most 3 open items," in bw.next_up_markdown(planned, steps, limit=3)
+
+
+def test_next_up_header_keeps_the_configured_limit_under_a_reduced_wip(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assess = tmp_path / ".assess"
+    assess.mkdir()
+    (assess / "actions.json").write_text(json.dumps({"schema": 2, "actions": NEW}), encoding="utf-8")
+    (assess / "config.toml").write_text("[backlog]\nwip = 2\n", encoding="utf-8")
+    existing = tmp_path / "existing.json"
+    existing.write_text("[]", encoding="utf-8")
+    assert render.main([str(tmp_path), "next-up", "--existing", str(existing), "--wip", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "at most 2 open items" in out and "- Action 2\n- Action 3\n" in out
+
+
+@pytest.mark.parametrize("bad", ["-1", "two"])
+def test_a_negative_or_non_numeric_wip_fails_at_argparse(tmp_path: Path, bad: str) -> None:
+    with pytest.raises(SystemExit) as exc:
+        render.main([str(tmp_path), "plan", "--existing", "x.json", "--wip", bad])
+    assert exc.value.code == 2

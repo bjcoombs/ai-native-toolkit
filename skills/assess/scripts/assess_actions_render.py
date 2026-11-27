@@ -40,7 +40,18 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   need a slot taken in the next-unlock order (``next_unlock``, ``recovery``, ``gain``) read
   from ``run-context.json`` ``level``; rules: ``lib/report/backlog_wip.py``.
 - ``next-up --existing FILE [--label NAME] [--wip N]`` prints the report's "Next up" block,
-  the items ``plan`` holds back as ``next_up``, in ranked order; nothing when none are.
+  the items ``plan`` holds back as ``next_up``, in ranked order; nothing when none are. Pass
+  the same ``--label`` and ``--wip`` as ``plan``; the header names the configured
+  ``[backlog] wip`` limit, not a ``--wip`` reduced for split parts. A negative ``--wip``
+  fails at argument parsing.
+- ``reconcile --existing FILE [--label NAME] [--filed N,...] [--confirm all|N,...]`` (#811)
+  prints the propose-only reconcile of the tracker's items in ``FILE`` against
+  ``run-context.json``: ``{proposals, rules_changed, notes, summary}``, the close, reopen,
+  demote and superseded proposals and the batched summary to confirm. It writes nothing.
+  ``--filed`` names the items this run filed or reused, which are never proposed superseded.
+  With ``--confirm`` it prints only the writes of the confirmed item numbers (``all`` for
+  every proposal) as a JSON array. It needs no ``actions.json``; rules:
+  ``lib/report/backlog_reconcile.py``.
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
   ``run-context.json`` joined with `` / ``; the ``badge.json`` ``message`` when the run
   context has no headline lines; ``not known`` when neither file has one.
@@ -75,6 +86,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.assess_config import load_backlog_wip  # noqa: E402
 from lib.report.backlog_items import DEFAULT_LABEL, FilingStep, condition_marker, plan_filing  # noqa: E402
+from lib.report.backlog_reconcile import confirmed_writes, reconcile, run_facts  # noqa: E402
 from lib.report.backlog_wip import WipStep, apply_wip, next_up_markdown  # noqa: E402
 
 REQUIRED_KEYS = ("rank", "action", "done_when", "scope_fence")
@@ -379,12 +391,51 @@ def readiness(assess_dir: Path) -> str:
     return message if isinstance(message, str) and message else "not known"
 
 
+def parse_numbers(value: str) -> frozenset[int]:
+    """``3,4`` to ``{3, 4}``; argparse reports a bad value."""
+    parts = [x.strip().lstrip("#") for x in value.split(",") if x.strip()]
+    if not all(x.isdigit() for x in parts):
+        raise argparse.ArgumentTypeError(f"expected item numbers such as 3,4, got {value!r}")
+    return frozenset(int(x) for x in parts)
+
+
+def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
+    """The ``reconcile`` subcommand: proposals, or with ``--confirm`` the confirmed writes only."""
+    existing, context = _read_json(args.existing), _read_json(assess_dir / "run-context.json")
+    if not isinstance(existing, list):
+        print("assess_actions_render: --existing must hold a JSON array of tracker items", file=sys.stderr)
+        return 1
+    if not isinstance(context, dict):
+        print(f"assess_actions_render: no readable run-context.json in {assess_dir}", file=sys.stderr)
+        return 1
+    items = [x for x in existing if isinstance(x, dict)]
+    result = reconcile(items, run_facts(context), label=args.label, filed=args.filed)
+    if args.confirm is None:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    proposals = result["proposals"]
+    confirmed = {p["number"] for p in proposals} if args.confirm == "all" else parse_numbers(args.confirm)
+    print(json.dumps(confirmed_writes(proposals, confirmed), indent=2, ensure_ascii=False))
+    return 0
+
+
 def parse_issue(value: str) -> tuple[int, str]:
     """``RANK=REF`` to ``(rank, ref)``; argparse reports a bad value."""
     rank, sep, ref = value.partition("=")
     if not sep or not rank.strip().isdigit() or not ref.strip():
         raise argparse.ArgumentTypeError(f"expected RANK=REF, got {value!r}")
     return int(rank), ref.strip()
+
+
+def non_negative(value: str) -> int:
+    """``--wip``: a whole number of 0 or more; argparse reports anything else (#812)."""
+    try:
+        number = int(value)
+    except ValueError:
+        number = -1
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"expected a whole number of 0 or more, got {value!r}")
+    return number
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -405,7 +456,15 @@ def _parser() -> argparse.ArgumentParser:
     nu.add_argument("--existing", type=Path, required=True, help="the same file as plan --existing")
     nu.add_argument("--label", default=DEFAULT_LABEL, help="as for plan")
     for sp in (pl, nu):
-        sp.add_argument("--wip", type=int, help="open-item limit (default: .assess/config.toml [backlog] wip, else 3)")
+        sp.add_argument("--wip", type=non_negative, metavar="N",
+                        help="open-item limit (default: .assess/config.toml [backlog] wip, else 3)")
+    rc = sub.add_parser("reconcile", help="propose closing, reopening or demoting filed items; writes nothing")
+    rc.add_argument("--existing", type=Path, required=True,
+                    help="JSON array of the tracker's items (gh issue list --json number,title,body,state,labels)")
+    rc.add_argument("--label", default=DEFAULT_LABEL, help="label an item must carry; '' for none")
+    rc.add_argument("--filed", type=parse_numbers, default=frozenset(), metavar="N,...",
+                    help="items this run filed or reused: never proposed superseded")
+    rc.add_argument("--confirm", metavar="all|N,...", help="print only the writes of these confirmed items")
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p
 
@@ -416,6 +475,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "readiness":
         print(readiness(assess_dir))
         return 0
+    if args.command == "reconcile":
+        try:
+            return run_reconcile(assess_dir, args)
+        except argparse.ArgumentTypeError as exc:
+            print(f"assess_actions_render: {exc}", file=sys.stderr)
+            return 1
     try:
         entries = load_actions(assess_dir)
     except RenderError as exc:
@@ -426,14 +491,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     items = render_items(entries, getattr(args, "report_link", None), model_version(assess_dir))
     if args.command in ("plan", "next-up"):
-        wip = args.wip if args.wip is not None and args.wip >= 0 else load_backlog_wip(args.repo)
+        limit = load_backlog_wip(args.repo)
+        wip = args.wip if args.wip is not None else limit
         try:
             items = plan_items(items, _read_json(args.existing), args.label, run_level(assess_dir), wip)
         except RenderError as exc:
             print(f"assess_actions_render: {exc}", file=sys.stderr)
             return 1
         if args.command == "next-up":
-            sys.stdout.write(next_up_markdown(items, [i["wip"] for i in items if "wip" in i], wip))
+            sys.stdout.write(next_up_markdown(items, [i["wip"] for i in items if "wip" in i], limit))
             return 0
     print(json.dumps(items, indent=2, ensure_ascii=False))
     return 0
