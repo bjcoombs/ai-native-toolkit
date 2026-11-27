@@ -69,7 +69,8 @@ Called by `assess_actions_render.py reconcile`.
 `declined_by`, the close date as `declined_at` and the reason `closed as not planned`, and
 remembers the close under `not_planned` in the same file. The record then lapses like any
 other, so a model or state change brings the reopen back once, and only a new not-planned
-close (another `closedAt`) is read as a decline again. A close this run cannot read (no
+close (another `closedAt`) is read as a decline again. Once the item is listed open or with
+another close, the close is forgotten and the decline read from it is dropped. A close this run cannot read (no
 model, a condition its model does not list) is not remembered, so a later run reads it.
 GitLab lists no `stateReason`, so nothing is inferred there. A 6b offer the user declines
 is recorded the same way: a reopen offer for a closed match as `kind` `reopen` with the
@@ -425,6 +426,11 @@ def held_by(proposal: Mapping[str, object], live: Sequence[ProposalDecline],
     return next((r for r in live if _subject(r) == subject and r["state"] == state), None)
 
 
+def _inferred(r: ProposalDecline) -> bool:
+    """True for a reopen decline read from a not-planned close, not one a person gave."""
+    return r["kind"] == "reopen" and r["declined_by"] is None and r["reason"] == NOT_PLANNED_REASON
+
+
 def refresh_declines(assess_dir: Path, closes: Sequence[NotPlannedClose], listed: Collection[int],
                      conditions: Mapping[str, Mapping[str, object]] | None,
                      model: str | None) -> list[ProposalDecline]:
@@ -432,14 +438,17 @@ def refresh_declines(assess_dir: Path, closes: Sequence[NotPlannedClose], listed
 
     ``closes`` are the listing's marked items closed as not planned; ``listed`` every item
     number in the listing. A remembered close is forgotten once its item is listed with
-    another close or none, so a later not-planned close reads as a new decline. The file is
-    written only when something changed.
+    another close or none, and the decline read from it goes with it (a decline a person gave
+    stays), so a later not-planned close reads as a new decline and a completed one does not
+    hold the reopen back. The file is written only when something changed.
     """
     records, seen = read_proposal_declines(assess_dir), read_not_planned(assess_dir)
     current = {(c["number"], c["closed_at"]) for c in closes}
     kept = [c for c in seen if c["number"] not in listed or (c["number"], c["closed_at"]) in current]
     known = {(c["number"], c["closed_at"]) for c in kept}
-    live = live_proposal_declines(records, conditions, model)
+    forgotten = {c["number"] for c in seen if c not in kept}
+    live = [r for r in live_proposal_declines(records, conditions, model)
+            if not (r["number"] in forgotten and _inferred(r))]
     inferred: list[ProposalDecline] = []
     for c in closes:
         if (c["number"], c["closed_at"]) in known or model is None or _state_of(c["condition"], conditions) is None:

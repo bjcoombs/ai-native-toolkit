@@ -49,8 +49,8 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   names who declined it. ``--decline REF`` (repeatable) records the offer for ``REF`` as
   declined, with ``--declined-by``, ``--declined-at`` and ``--decline-reason REF=TEXT``, and
   prints the plan with it held back; a ``REF`` whose ``wip`` step is not ``file``, or that
-  ``--parts`` names, exits 1, and those three flags without ``--decline`` fail at argument
-  parsing.
+  ``--parts`` names, or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1,
+  and those three flags without ``--decline`` fail at argument parsing.
 - ``next-up --existing FILE [--label NAME] [--wip N] [--parts REF=N ...]`` prints the
   report's "Next up" block, the items and split parts ``plan`` holds back as ``next_up``, in
   ranked order; nothing when none are. Pass the same ``--label``, ``--wip`` and ``--parts``
@@ -459,6 +459,9 @@ def run_plan(assess_dir: Path, args: argparse.Namespace, items: Sequence[Tracker
     if not refs:
         return planned
     reasons, split = dict(args.decline_reason), {ref for ref, _ in args.parts}
+    stray = sorted(set(reasons) - set(refs))
+    if stray:
+        raise RenderError(f"--decline-reason {', '.join(stray)} names no --decline item")
     new: list[ProposalDecline] = []
     for ref in refs:
         item = planned[_item_index(items, ref, "--decline")]

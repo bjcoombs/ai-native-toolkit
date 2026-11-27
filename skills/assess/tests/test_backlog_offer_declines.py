@@ -121,6 +121,27 @@ def test_a_completed_or_gitlab_close_is_reopened(
     assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()
 
 
+def test_a_not_planned_close_later_closed_completed_is_reopened(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _setup(tmp_path, [_item(5, LINT, "CLOSED", "NOT_PLANNED", CLOSED_AT)], _condition(LINT, "unmet"))
+    assert _numbers(_reconcile(tmp_path, existing, capsys)) == []
+    # Reopened, then closed as completed: the inferred decline goes with the close it came from.
+    _setup(tmp_path, [_item(5, LINT, "CLOSED", "COMPLETED", "2026-11-26T09:00:00Z")], _condition(LINT, "unmet"))
+    out = _reconcile(tmp_path, existing, capsys)
+    assert _numbers(out) == [5] and out["declined"] == []
+    assert read_proposal_declines(tmp_path / ".assess") == [] and read_not_planned(tmp_path / ".assess") == []
+
+
+def test_an_explicit_reopen_decline_outlives_a_forgotten_not_planned_close(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _setup(tmp_path, [_item(5, LINT, "CLOSED", "COMPLETED", CLOSED_AT)], _condition(LINT, "unmet"))
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--confirm", "none",
+                        "--record-declines", "--declined-by", "ben", "--declined-at", "2026-11-27"]) == 0
+    capsys.readouterr()
+    assert _numbers(_reconcile(tmp_path, existing, capsys)) == []
+    assert [r["declined_by"] for r in read_proposal_declines(tmp_path / ".assess")] == ["ben"]
+
+
 def test_a_not_planned_reopen_keeps_no_wip_slot(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     items = [_item(1, DOCS, "OPEN"), _item(2, "layer-2-open.1", "OPEN"),
              _item(5, LINT, "CLOSED", "NOT_PLANNED", CLOSED_AT), _item(6, CI, "CLOSED", "COMPLETED", CLOSED_AT)]
@@ -188,6 +209,9 @@ def test_decline_names_only_an_offered_item(tmp_path: Path, capsys: pytest.Captu
     assert "1 is not offered" in capsys.readouterr().err
     assert render.main([str(tmp_path), "plan", "--existing", str(existing), "--decline", "7"]) == 1
     assert "names no item 7" in capsys.readouterr().err
+    assert render.main([str(tmp_path), "plan", "--existing", str(existing), "--decline", "2",
+                        "--decline-reason", "3=not this one"]) == 1
+    assert "--decline-reason 3 names no --decline item" in capsys.readouterr().err
     assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()
 
 
