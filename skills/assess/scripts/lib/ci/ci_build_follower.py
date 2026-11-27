@@ -18,8 +18,9 @@ is executed and no model or build tool is run: the build files are read as text.
   ``allprojects {}`` blocks of the projects above it. A build file the settings do not include
   (a test fixture) is never read; an ``includeBuild``, a ``projectDir`` or ``buildFileName``
   override, and an asked project the settings do not include land in ``unknown``. A task
-  ``-x`` excludes is left out of the closure; ``-x :app:test`` (one project) lands in ``unknown``. ``tasks`` is the
-  closure of the asked tasks over the edges the files declare (``check.dependsOn japicmp``,
+  ``-x`` excludes is left out of the closure; ``-x :app:test`` (one project) lands in ``unknown``. With no
+  tracked-file list (``files`` empty), a settings or build file is found through the reader
+  instead. ``tasks`` is the closure of the asked tasks over the edges the files declare (``check.dependsOn japicmp``,
   ``tasks.named("check") { dependsOn(...) }``, ``check { finalizedBy ... }``) and the
   lifecycle edges of the plugins they apply (``_GRADLE_PLUGIN_TASKS``: ``java`` binds ``test``
   to ``check``, ``checkstyle`` binds ``checkstyleMain``, ``build`` runs ``check``). ``plugins``
@@ -28,6 +29,8 @@ is executed and no model or build tool is run: the build files are read as text.
   ``japicmp`` task). An ``apply from:`` script is not read and lands in ``unknown``.
 - **Maven** (``mvn``, ``./mvnw``). The root ``pom.xml`` (or the one ``-f`` names) and the
   closure of its ``<modules>`` are read, so a pom no module names (a test fixture) never is;
+  A phase or goal given as a property (``${goals}``, ``$GOALS``) and a phase outside the
+  default and clean lifecycles (``site``) land in ``unknown`` as ``phase: <word>``.
   ``-pl`` keeps the modules it names (by path or ``:artifactId``) and the root pom, and an entry
   it cannot settle, ``-rf``, ``-am`` / ``-amd`` and a ``-D`` property that skips a goal
   (``-DskipTests``, ``-Dcheckstyle.skip``) land in ``unknown``; ``-N`` reads the root pom alone. A plugin declared with no
@@ -319,11 +322,16 @@ def _gradle_base(words: list[str], cwd: str) -> str | None:
     return cwd
 
 
+def _present(files: frozenset[str], read_local: ReadLocal, rel: str) -> bool:
+    """Whether ``rel`` is a file of the build: in ``files``, or, with no list, one the reader reads."""
+    return rel in files if files else read_local(rel) is not None
+
+
 def _gradle_projects(files: frozenset[str], read_local: ReadLocal, base: str) -> tuple[list[str], list[str]]:
     """``(project directories relative to base, unknown)`` from ``settings.gradle[.kts]``: the root
     (``""``) and each ``include``; with no settings file the build is the root project alone."""
     settings = next((r for r in (posixpath.join(base, n) for n in ("settings.gradle", "settings.gradle.kts"))
-                     if r in files), None)
+                     if _present(files, read_local, r)), None)
     text = read_local(settings) if settings is not None else None
     if text is None:
         return [""], ([f"unread: {settings}"] if settings is not None else [])
@@ -352,7 +360,8 @@ def _gradle_files(files: frozenset[str], read_local: ReadLocal, words: list[str]
     scoped = [d for d in projects if None in asked or not asked or d in asked]
 
     def build(d: str) -> list[str]:
-        return [r for r in (posixpath.join(base, d, n) for n in ("build.gradle", "build.gradle.kts")) if r in files]
+        return [r for r in (posixpath.join(base, d, n) for n in ("build.gradle", "build.gradle.kts"))
+                if _present(files, read_local, r)]
     above = {"" if str(a) == "." else str(a) for d in scoped if d for a in PurePosixPath(d).parents}
     own = [f for d in scoped for f in build(d)]
     ancestors = [f for d in projects if d in above for f in build(d) if f not in own]
@@ -583,7 +592,7 @@ def _maven_words(args: list[str]) -> _MavenArgs:
             unread += [word] if word in ("-am", "--also-make", "-amd", "--also-make-dependents") else []
             unread += _skip_property(word[2:]) if word.startswith("-D") and len(word) > 2 else []
             unread += [word] if word in ("-N", "--non-recursive") else []
-        elif not word.startswith("$"):
+        else:
             out.append(word)
     return _MavenArgs(pom, projects, unread, out)
 
@@ -675,8 +684,7 @@ def _goal_task(word: str, artifacts: list[str]) -> tuple[str, str]:
     return artifact, f"{artifact}:{goal}"
 
 
-def follow_maven(words: list[str], read_local: ReadLocal, files: frozenset[str],
-                 cwd: str = "") -> Followed | None:
+def follow_maven(words: list[str], read_local: ReadLocal, cwd: str = "") -> Followed | None:
     """The plugins and goals a Maven command's phases and goals are bound to (module docstring)."""
     if not words or PurePosixPath(words[0]).name not in ("mvn", "mvnw", "mvnw.cmd"):
         return None
@@ -695,6 +703,9 @@ def follow_maven(words: list[str], read_local: ReadLocal, files: frozenset[str],
     artifacts = [a for p in poms for a in p.artifacts]
     tasks: list[str] = []
     for word in args.asked:
+        if "$" in word:
+            unknown.append(f"phase: {word}")   # a property (``${goals}``): its value is not read
+            continue
         if ":" in word:
             tasks.append(_goal_task(word, artifacts)[1])
             continue
