@@ -22,9 +22,11 @@ example, and the noise would bury real findings.
   whose value is at least 20 characters with a letter, a digit or both cases, and 3.5 bits of
   entropy per character (2.8 for an all-hex value). A placeholder such as ``xxx``,
   ``<...>``, ``your_...``, a short ``sk-`` stub, a run of one character, an ascending run such
-  as ``1234``, a placeholder word, the jwt.io sample, GitHub's, Slack's or Stripe's published example token
+  as ``1234``, a hand-typed value (an ascending run in every other character, as in ``1a2b3c``, or
+  one block repeated; #1522), a placeholder word, the jwt.io sample, GitHub's, Slack's or Stripe's published example token
   (an exact match), a URL or path, or a reference to a secret held elsewhere
-  (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is not a finding. An
+  (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``, or a dotted attribute
+  path in code such as ``this.configService.anthropicKey``, #1522) is not a finding. An
   assignment the instruction-file scan matches and this rule sets aside, such as
   ``password: hunter2``, is counted in ``credential_candidates`` for information only. The
   labelled fixture set and its precision gate are in ``tests/test_skill_credentials.py``),
@@ -224,6 +226,10 @@ _LONG_REPEAT = re.compile(r"(.)\1{7}")
 # A value that names a place, not a secret: a URL, a path or a file name.
 _LOCATION = re.compile(r"://|^[~.]?/|\.(?:ya?ml|json|toml|txt|md|env|pem|key|cfg|ini)$", re.IGNORECASE)
 # A value with a bracket is code (``_strip_anchor(m.group(1))``, ``cfg["key"]``), not a literal.
+# A dotted identifier path (``this.configService.anthropicKey``, ``settings.openaiApiKey2``) is code
+# too: a reference to a value held elsewhere (#1522). Each segment is letters with at most trailing
+# digits, so a JWT or a provider key, whose segments mix digits in, stays a value.
+_ATTRIBUTE_PATH = re.compile(r"^[A-Za-z_$][A-Za-z_$]*\d*(?:\.[A-Za-z_$][A-Za-z_$]*\d*)+[,;]?$")
 _CODE = re.compile(r"[()\[\]{}]")
 # The host after a URL's user part: ``ghs_abc123@github.com/a`` holds the short value before ``@``.
 _AT_HOST = re.compile(r"@[\w-]+\.[A-Za-z]")
@@ -256,6 +262,16 @@ def _dummy(value: str) -> bool:
     return bool(_DUMMY_WORD.search(value) or _REPEAT.search(value)) or _ascending(value.lower())
 
 
+def _hand_typed(value: str) -> bool:
+    """A value typed by hand (#1522): an ascending run of six in every other character (``1a2b3c...``)
+    or one block repeated (``Kq7Wm2Xp9Rz4`` twice). A random alphanumeric value is either about once in
+    a million and a random 40-character hex value about once in 30,000, so the check runs on assigned
+    values as well as provider key bodies."""
+    low = value.lower()
+    return (any(_ascending(part, 6) for part in (low[0::2], low[1::2]))
+            or any(value[p:] == value[:-p] for p in range(1, len(value) // 2 + 1)))
+
+
 def _entropy(value: str) -> float:
     counts = [value.count(c) for c in set(value)]
     return -sum(n / len(value) * math.log2(n / len(value)) for n in counts)
@@ -273,7 +289,7 @@ def _high_entropy(value: str) -> bool:
     threshold = _MIN_ENTROPY_HEX if _HEX.fullmatch(value) else _MIN_ENTROPY
     return (len(value) >= _MIN_SECRET_LEN and any(c.isalpha() for c in value) and mixed
             and _entropy(value) >= threshold and value not in _PUBLISHED_SAMPLES and not _LOCATION.search(value)
-            and not _CODE.search(value) and not _dummy(value))
+            and not _CODE.search(value) and not _dummy(value) and not _hand_typed(value))
 
 
 def _concrete(value: str) -> bool:
@@ -281,7 +297,8 @@ def _concrete(value: str) -> bool:
     schema value and not a reference to a secret held elsewhere. Decided per value, so a placeholder
     beside a reference reads clean, as each does alone."""
     return (bool(value) and not CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
-            and not _SCHEMA_VALUE.match(value) and not _PLACEHOLDER_SECRET.match(value))
+            and not _SCHEMA_VALUE.match(value) and not _PLACEHOLDER_SECRET.match(value)
+            and not _ATTRIBUTE_PATH.match(value))
 
 
 def _literal_secret(value: str) -> bool:
