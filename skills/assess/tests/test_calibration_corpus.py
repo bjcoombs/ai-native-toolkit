@@ -225,3 +225,16 @@ def test_the_default_model_states_cover_every_condition() -> None:
     states = cc.states_of(model, row)
     assert set(states) == set(condition_ids(model))
     assert set(states.values()) <= {"met", "unmet", "not_applicable", "not_measured", "declined"}
+
+
+def test_seed_refuses_a_root_with_no_clones_and_names_each_key_it_writes(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(cli, "default_model", _model)
+    (tmp_path / "typo").mkdir()
+    assert cli.main(["seed", str(tmp_path / "typo"), "--corpus", str(tmp_path / "c")], scan=fake_scan) == 2
+    assert "no clones under" in capsys.readouterr().err and not (tmp_path / "c").exists()
+    for name in ("r1", "r2"):
+        _clone(tmp_path / "clones", name, {"a": True})
+    code, lines = _run(["seed", str(tmp_path / "clones"), "--corpus", str(tmp_path / "c")], capsys)
+    keys = sorted(cc.repo_key(f"org/{n}").removeprefix("h:") for n in ("r1", "r2"))
+    assert code == 0 and lines[:2] == [f"wrote {k}" for k in keys]

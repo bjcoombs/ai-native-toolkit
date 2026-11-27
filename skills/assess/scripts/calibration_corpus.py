@@ -15,7 +15,8 @@ ghsync layout (``<root>/<path>/<repo>/<repo>-main``). The logic is in
   toolkit's run.
 - ``report`` prints the non-discriminating conditions of the expected files alone.
 
-``diff`` and ``report`` refuse a corpus directory with no expected-state files.
+``diff`` and ``report`` refuse a corpus directory with no expected-state files, and ``seed``
+a clone root with no clones; ``seed`` prints each key it writes.
 
 Exit codes: 0 no diff (or written, or reported), 1 diff lines printed, 2 refused or a usage
 error.
@@ -69,12 +70,17 @@ def main(argv: list[str] | None = None, scan: ScanFn = scan_target) -> int:
     targets = discover_root(args.clone_root)
     model = default_model()
     if args.command == "seed":
+        if not targets:
+            print(f"error: no clones under {args.clone_root} (ghsync layout <path>/<repo>/<repo>-main)",
+                  file=sys.stderr)
+            return 2
         observed, refused = cc.observe(targets, model, args.jobs, scan)
         if refused:
             _print(cc.refusal_lines(refused))
             return 2
         for entry in cc.seed(observed, model):
-            cc.write_expected(args.corpus, entry)
+            path = cc.write_expected(args.corpus, entry)
+            print(f"wrote {path.stem}")
         print(f"wrote {len(observed)} expected-state files to {args.corpus}")
         return 0
     refused = cc.commit_refusals(expected, targets)
