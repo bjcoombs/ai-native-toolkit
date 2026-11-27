@@ -824,7 +824,7 @@
               "text": "Production source file size at the 95th percentile: is at most 500",
               "title": "95% of production source files are 500 lines or fewer",
               "fix": "Split the largest files along their natural seams.",
-              "why": "With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.",
+              "why": "With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file. Generated-header files are left out; Elixir @moduledoc and @doc lines do not count.",
               "why_source": "",
               "input_class": "head_structure",
               "grade": "measured",
