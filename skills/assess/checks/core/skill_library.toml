@@ -1,0 +1,47 @@
+# Check manifest fragment: the skill_library collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.skill_library"
+kind = "collector"
+title = "Committed skill library"
+summary = "Each committed SKILL.md in a known skill location, with frontmatter that names it and says when to use it. A known location is a skills/ folder at the root, in a harness folder such as .claude or .agents, or in plugins/<name>/. Files under node_modules, vendored or fixture folders do not count. Nor do symlinks that leave the repository. A symlink that shares one skill tree, a skills-lock.json and a hashed manifest are evidence."
+issues = [848]
+callable = "lib.skill_library:scan_skill_library"
+publishes = ["skill_library"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "post_offers"
+headless = { skill_library = "registered" }
+whys.skill_library = "A committed skill library gives every clone and every harness the team's procedures, loaded when a task needs them. Skills kept in one person's home folder reach nobody else, so each session restates them."
+shapes = [
+  { path = "skill_library", type = "lib.skill_library:SkillLibraryBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "skill_library.reason" = "reason"
+  "skill_library.skills.path" = "path"
+  "skill_library.skills.location" = "path"
+  "skill_library.invalid_files" = "path"
+  "skill_library.shared_by_symlink.path" = "path"
+  "skill_library.shared_by_symlink.target" = "path"
+  "skill_library.lock_files" = "path"
+  "skill_library.hashed_manifests" = "path"
+
+[[entries]]
+id = "core:skill_library.present"
+kind = "signal"
+title = "A skill library is committed: a valid SKILL.md in a known skill location"
+collector = "core.skill_library"
+path = "skill_library.present"
+type = "bool"
+evidence = "head_structure"
+null_means = "not_a_git_repository: the committed files cannot be listed, so a skill library cannot be told apart from untracked files"
+
+[[entries]]
+id = "core.cond.skill-library.1.present"
+kind = "condition"
+title = "A skill library is committed"
+key = "skill-library.1:skill_library.present"
+why = "A committed skill library gives every clone and every harness the team's procedures, loaded when a task needs them. Skills kept in one person's home folder reach nobody else, so each session restates them."
+why_source = "https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview"
+fix = "Commit a skills/<name>/SKILL.md (or .claude/skills/<name>/SKILL.md) for a procedure the team repeats, with frontmatter giving a name and a description of when to use it. To share one tree with other harnesses, link .agents/skills to it."

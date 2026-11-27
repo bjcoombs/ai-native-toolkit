@@ -353,6 +353,10 @@
       "revision": 1
     },
     {
+      "id": "core.skill_library",
+      "revision": 1
+    },
+    {
       "id": "core.skill_personal_data",
       "revision": 3
     },

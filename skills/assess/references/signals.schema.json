@@ -136,6 +136,7 @@
           "secrets_guard",
           "shared_tooling",
           "skill_disclosure",
+          "skill_library",
           "skill_personal_data",
           "skill_script_tests",
           "stats_summary",

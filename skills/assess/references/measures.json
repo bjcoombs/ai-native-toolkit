@@ -1370,6 +1370,50 @@
       ]
     },
     {
+      "id": "skill-library",
+      "title": "Skill library",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "skill-library.1",
+          "truth": [
+            "agent_context"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "skill-library.1:skill_library.present",
+              "signal": "skill_library.present",
+              "producer": {
+                "scan": "skill_library",
+                "collector": "core.skill_library"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A skill library is committed: a valid SKILL.md in a known skill location: is true",
+              "title": "A skill library is committed",
+              "fix": "Commit a skills/<name>/SKILL.md (or .claude/skills/<name>/SKILL.md) for a procedure the team repeats, with frontmatter giving a name and a description of when to use it. To share one tree with other harnesses, link .agents/skills to it.",
+              "why": "A committed skill library gives every clone and every harness the team's procedures, loaded when a task needs them. Skills kept in one person's home folder reach nobody else, so each session restates them.",
+              "why_source": "https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "skill-personal-data",
       "title": "Personal data in skill text",
       "scope": "team",
@@ -1540,7 +1584,8 @@
         "guardrails-stated.2",
         "layer-0-instructions.1",
         "layer-0-instructions.2",
-        "skill-disclosure.1"
+        "skill-disclosure.1",
+        "skill-library.1"
       ],
       "listed": [
         "agent-consistency.1",
@@ -1549,7 +1594,8 @@
         "guardrails-stated.2",
         "layer-0-instructions.1",
         "layer-0-instructions.2",
-        "skill-disclosure.1"
+        "skill-disclosure.1",
+        "skill-library.1"
       ],
       "shared": [
         "layer-0-instructions.2"
@@ -4356,6 +4402,55 @@
       "why_source": "https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices"
     },
     {
+      "name": "skill_library",
+      "title": "Committed skill library",
+      "summary": "Each committed SKILL.md in a known skill location, with frontmatter that names it and says when to use it. A known location is a skills/ folder at the root, in a harness folder such as .claude or .agents, or in plugins/<name>/. Files under node_modules, vendored or fixture folders do not count. Nor do symlinks that leave the repository. A symlink that shares one skill tree, a skills-lock.json and a hashed manifest are evidence.",
+      "collector": "core.skill_library",
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "skill_library.hashed_manifests": "path",
+          "skill_library.invalid_files": "path",
+          "skill_library.lock_files": "path",
+          "skill_library.reason": "reason",
+          "skill_library.shared_by_symlink.path": "path",
+          "skill_library.shared_by_symlink.target": "path",
+          "skill_library.skills.location": "path",
+          "skill_library.skills.path": "path"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "skill-library"
+        ],
+        "conditions": [
+          "skill-library.1:skill_library.present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "skill_library.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A committed skill library gives every clone and every harness the team's procedures, loaded when a task needs them. Skills kept in one person's home folder reach nobody else, so each session restates them.",
+      "why_source": ""
+    },
+    {
       "name": "skill_personal_data",
       "title": "Personal data in skill text",
       "summary": "Each SKILL.md, agent definition and skill references/ file, scanned for emails, phone numbers, home paths, IP addresses, SSH logins, keys and credentials. A finding names the file and the kind, never the data. An example credential value is counted for information only. Personal names are not detected.",
@@ -5761,6 +5856,7 @@
         "review_reality",
         "secrets_guard",
         "skill_disclosure",
+        "skill_library",
         "skill_personal_data",
         "skill_script_tests",
         "stats_summary",
@@ -6154,6 +6250,20 @@
       "private": false
     },
     {
+      "name": "skill_library",
+      "title": "Committed skill library",
+      "publishes": [
+        "skill_library"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "skill_personal_data",
       "title": "Personal data in skill text",
       "publishes": [
@@ -6336,6 +6446,7 @@
         "review_reality",
         "secrets_guard",
         "skill_disclosure",
+        "skill_library",
         "skill_personal_data",
         "skill_script_tests",
         "stats_summary",
@@ -6701,6 +6812,15 @@
       "input_class": "head_structure",
       "grade": "measured",
       "null_means": "no_skill_files: the repository, or the skill unit, holds no SKILL.md or agent definition (files_considered 0), so there is nothing to measure"
+    },
+    {
+      "path": "skill_library.present",
+      "title": "A skill library is committed: a valid SKILL.md in a known skill location",
+      "type": "bool",
+      "collector": "core.skill_library",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "not_a_git_repository: the committed files cannot be listed, so a skill library cannot be told apart from untracked files"
     },
     {
       "path": "skill_personal_data.files_with_personal_data",

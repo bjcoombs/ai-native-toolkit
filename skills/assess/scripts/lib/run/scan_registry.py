@@ -106,6 +106,7 @@ from lib.secrets_guard import scan_secrets_guard
 from lib.backlog_ready import scan_backlog_ready
 from lib.skill_script_tests import scan_skill_script_tests
 from lib.skill_personal_data import scan_skill_personal_data
+from lib.skill_library import scan_skill_library
 from lib.ci.ci_model_jobs import scan_ci_model_jobs
 from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
 from lib.pack_checks import collect as collect_packs
@@ -546,6 +547,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # Personal data in skill text (issue #1045): the kinds found in each skill and agent file and
     # its skill's references/, never the data. Scoped per skill unit (unit_kinds = ["skill"]).
     _spec("skill_personal_data", scan_skill_personal_data),
+    # Committed skill library (issue #848): valid SKILL.md files in a known skill location, with
+    # shared symlinks, a skills-lock.json and hashed manifests as evidence. Feeds the skill-library row.
+    _spec("skill_library", scan_skill_library),
     # Model-backed CI jobs (issue #1242): each job that calls a model API (an eval harness, an
     # agent action or CLI, a model-provider secret) and whether a gate limits it. Feeds the
     # model-ci-gated row.
