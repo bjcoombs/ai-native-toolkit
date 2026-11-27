@@ -35,7 +35,27 @@ def _plugin_version() -> str:
     return version
 
 
+_REPO = Path(__file__).parent.parent
 VERSION = _plugin_version()
+
+
+def _sub_skill_references(subs: tuple[str, ...], host: str, reserved: tuple[str, ...] = ()) -> dict[str, str]:
+    """Map each sub-skill's references/*.md to references/<name> in the host's ZIP.
+
+    The files share one folder in the ZIP, so a name that two sub-skills use, or that
+    the host skill's own references/ already holds, or that another bundle entry
+    writes (``reserved``, the vendored sub-skill bodies), would overwrite a file without
+    a word. Refuse it at config load instead.
+    """
+    taken = {p.name for p in (_REPO / "skills" / host / "references").glob("*.md")} | set(reserved)
+    out: dict[str, str] = {}
+    for sub in subs:
+        for ref in sorted((_REPO / "skills" / sub / "references").glob("*.md")):
+            if ref.name in taken:
+                raise ValueError(f"{sub} reference {ref.name} clashes with another file in {host}/references/")
+            taken.add(ref.name)
+            out[f"references/{ref.name}"] = ref.relative_to(_REPO).as_posix()
+    return out
 RELEASES_URL = "https://github.com/bjcoombs/ai-native-toolkit/releases"
 VERSION_SUFFIX = (
     f" Standalone build v{VERSION} — check {RELEASES_URL} for updates and "
@@ -198,6 +218,12 @@ SKILLS: dict[str, dict[str, Any]] = {
             "references/assess-layer-scorer.md": "agents/assess-layer-scorer.md",
             "references/assess-findings.md": "skills/assess-findings/SKILL.md",
             "references/assess-pr.md": "skills/assess-pr/SKILL.md",
+            # The two sub-skills point at their own references/ files (#1408). Each
+            # lands beside its sub-skill body, so the pointer resolves unchanged.
+            **_sub_skill_references(
+                ("assess-findings", "assess-pr"), host="assess",
+                reserved=("assess-layer-scorer.md", "assess-findings.md", "assess-pr.md"),
+            ),
         },
     },
     "huddle": {

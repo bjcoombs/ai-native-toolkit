@@ -22,7 +22,7 @@ name: Backlog reconcile (reusable)
 #   file             also a missing status comment, and one new item per
 #                    unfiled gate of the next Step, under `[backlog] wip`
 #   file-and-close   also closes an item whose condition now holds
-# Reference: skills/assess-pr/SKILL.md, "6g: Scheduled reconcile".
+# Reference: skills/assess-pr/references/offer-issue-tracking.md, "6g: The scheduled reconcile".
 #
 # Permissions: grant `contents: read` and `issues: write` in the caller.
 # Each job declares its own, so neither runs with more, whatever the caller
