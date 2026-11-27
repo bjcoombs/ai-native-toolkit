@@ -13,8 +13,10 @@ or a backticked command or path. One rule, applied in two places:
 - ``carries_evidence(text)``: True when ``text`` holds a digit, a link or a backticked span;
 - ``lint_errors(paragraphs)``: the paragraphs that carry none, in order;
 - ``done_when_warnings(actions)``: one warning per action whose string ``done_when`` carries
-  none; an entry that is not a mapping, or has no string ``done_when``, is skipped. Finalize
-  passes only the entries it writes to ``actions.json``, so a dropped entry is not linted.
+  none, then one per item of its ``sub_items`` list (#1263) that carries none, named by the
+  parent's rank and the sub-item's ``label`` (#1518); an entry or sub-item that is not a
+  mapping, or has no string ``done_when``, is skipped. Finalize passes only the entries it
+  writes to ``actions.json``, with only the sub-items it keeps, so a dropped one is not linted.
 
 Tests: ``tests/test_card_lint.py``, ``tests/test_card_construction.py``.
 """
@@ -41,16 +43,24 @@ def lint_errors(paragraphs: Sequence[str]) -> list[str]:
 
 
 def done_when_warnings(actions: Sequence[object]) -> list[str]:
-    """One warning per action whose ``done_when`` gives the reader nothing to check."""
+    """One warning per action, then per sub-item, whose ``done_when`` gives the reader nothing to check."""
     warnings: list[str] = []
     for a in actions:
         if not isinstance(a, Mapping):
             continue
-        done_when = a.get("done_when")
-        if not isinstance(done_when, str) or carries_evidence(done_when):
-            continue
-        warnings.append(
-            f"action rank {a.get('rank', '?')} ({a.get('action', '?')!r}): done_when "
-            f"{done_when!r} has no backticked command or path, link or number"
-        )
+        rank = a.get("rank", "?")
+        warnings += _warning(a, f"action rank {rank}")
+        subs = a.get("sub_items")
+        for sub in subs if isinstance(subs, list) else []:
+            if isinstance(sub, Mapping):
+                warnings += _warning(sub, f"action rank {rank} sub-item {sub.get('label', '?')!r}")
     return warnings
+
+
+def _warning(item: Mapping[str, object], name: str) -> list[str]:
+    """The one warning for ``item`` when its string ``done_when`` carries no evidence, else none."""
+    done_when = item.get("done_when")
+    if not isinstance(done_when, str) or carries_evidence(done_when):
+        return []
+    return [f"{name} ({item.get('action', '?')!r}): done_when "
+            f"{done_when!r} has no backticked command or path, link or number"]
