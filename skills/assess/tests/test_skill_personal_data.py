@@ -208,6 +208,12 @@ def test_a_credential_is_a_finding_and_an_example_value_is_information_only(tmp_
     assert _state(block) == ("unmet", None)
 
 
+@pytest.mark.parametrize("text", ["token: ${{ secrets.GH_TOKEN }}", "password=os.environ['PW']", "api_key=sk-..."])
+def test_a_reference_or_placeholder_is_not_counted_as_a_candidate(tmp_path: Path, text: str) -> None:
+    block = scan_skill_personal_data(_plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", text)}))
+    assert block["files"] == [] and block["credential_candidates"] == 0
+
+
 @pytest.mark.parametrize("value", ["xxxxxxxx", "******", "<your-token>", "${API_KEY}", "your_token_here",
                                    "your-key", "example123", "dummy-pass", "placeholder_value", "sk-abc123"])
 def test_a_placeholder_credential_value_is_not_a_candidate(value: str) -> None:

@@ -72,6 +72,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
@@ -247,13 +248,17 @@ def _high_entropy(value: str) -> bool:
             and _entropy(value) >= _MIN_ENTROPY and not _LOCATION.search(value) and not _CODE.search(value) and not _dummy(value))
 
 
-def _literal_secret(value: str) -> bool:
-    """Whether a credential value is a literal secret: not empty, not a placeholder the grader skips,
-    not a reference to a secret held elsewhere, and high in entropy (#1196). Decided per value, so a
-    placeholder beside a reference reads clean, as each does alone."""
+def _concrete(value: str) -> bool:
+    """Whether a credential value is concrete: not empty, not a placeholder the grader skips, not a
+    schema value and not a reference to a secret held elsewhere. Decided per value, so a placeholder
+    beside a reference reads clean, as each does alone."""
     return (bool(value) and not CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
-            and not _SCHEMA_VALUE.match(value) and not _PLACEHOLDER_SECRET.match(value)
-            and _high_entropy(value))
+            and not _SCHEMA_VALUE.match(value) and not _PLACEHOLDER_SECRET.match(value))
+
+
+def _literal_secret(value: str) -> bool:
+    """Whether a credential value is a literal secret: concrete and high in entropy (#1196)."""
+    return _concrete(value) and _high_entropy(value)
 
 
 def _provider_key(text: str) -> bool:
@@ -268,17 +273,18 @@ _PROSE_AFTER = re.compile(r"[ \t]+[A-Za-z]")
 _SECRET_SHAPED = re.compile(r"[\d_]")
 
 
-def _assigned_secret(m: re.Match[str]) -> bool:
-    """Whether a credential assignment holds a literal secret. A typed field is decided by its default:
-    ``password: str = "hunter2"`` and ``secret: bool=hunter2`` hold one, ``token: str`` does not."""
+def _assigned_secret(m: re.Match[str], holds: Callable[[str], bool] = _literal_secret) -> bool:
+    """Whether a credential assignment holds a value ``holds`` accepts, a literal secret by default. A
+    typed field is decided by its default: ``password: str = "hunter2"`` and ``secret: bool=hunter2``
+    hold one, ``token: str`` does not."""
     value = m.group(2).strip("\"'")
     if m.group(1) == ":" and m.group(2)[:1] not in "\"'" and _PROSE_AFTER.match(m.string, m.end(2)) \
             and not _SECRET_SHAPED.search(value):
         return False  # ``Token: The value from step 2``: a label then prose; ``=`` stays an assignment
     if not _SCHEMA_VALUE.match(value):
-        return _literal_secret(value)
+        return holds(value)
     default = m.group(3) or (value.split("=", 1)[1] if "=" in value else None)
-    return default is not None and _literal_secret(default.strip("\"'"))
+    return default is not None and holds(default.strip("\"'"))
 
 
 def kinds_in(text: str) -> list[str]:
@@ -287,12 +293,15 @@ def kinds_in(text: str) -> list[str]:
 
 
 def _scan(text: str) -> tuple[list[str], bool]:
-    """The kinds in ``text``, and whether a credential-shaped assignment was set aside as no finding."""
+    """The kinds in ``text``, and whether a concrete credential assignment was set aside as an example
+    value (``password: hunter2``). A reference or a placeholder is neither a finding nor set aside."""
     found = {f["category"] for f in scan_sensitive_content(text)}
     loose = "credential" in found
     found.discard("credential")
     if _provider_key(text) or (loose and any(_assigned_secret(m) for m in _CREDENTIAL.finditer(text))):
         found.add("credential")
+    set_aside = ("credential" not in found and loose
+                 and any(_assigned_secret(m, _concrete) for m in _CREDENTIAL.finditer(text)))
     if "home_path" in found and not any((m.group(1) or m.group(2)).lower() not in _PLACEHOLDER_HOME
                                          for m in _HOME.finditer(text)):
         found.discard("home_path")
@@ -311,7 +320,7 @@ def _scan(text: str) -> tuple[list[str], bool]:
         found.add("email")
     if _has_phone(text):
         found.add("phone")
-    return [k for k in KINDS if k in found], loose and "credential" not in found
+    return [k for k in KINDS if k in found], set_aside
 
 
 def _files(repo: Path, scope: Scope | None, excludes: tuple[set[str], list[str]] | None) -> list[Path]:
