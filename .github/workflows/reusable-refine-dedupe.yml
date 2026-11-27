@@ -75,6 +75,7 @@ jobs:
       model: ${{ steps.route.outputs.model }}
       planned: ${{ steps.save.outputs.planned }}
       verdict_sha256: ${{ steps.digest.outputs.sha256 }}
+      artifact: ${{ steps.artifact.outputs.name }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -120,6 +121,15 @@ jobs:
           sparse-checkout: |
             skills/refine/
             docs/contributing/definition-of-ready.md
+
+      # The artifact's name is a job output, so a re-run of `apply` alone
+      # downloads the artifact this attempt uploaded: `github.run_attempt`
+      # moves on in the re-run, while upstream job outputs carry over.
+      - name: Name the plan artifact
+        id: artifact
+        env:
+          NAME: refine-dedupe-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
+        run: echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
       - name: Write the deterministic verdict
         timeout-minutes: 5
@@ -227,7 +237,7 @@ jobs:
       - name: Hand the verdict and plan to the apply job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
-          name: refine-dedupe-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
+          name: ${{ steps.artifact.outputs.name }}
           path: .refine/
           if-no-files-found: error
           # upload-artifact skips hidden files by default, and .refine/ is one.
@@ -243,8 +253,15 @@ jobs:
     permissions:
       contents: read
       issues: write
+    # An exact-pair close shares one repository-wide group with the sweep, so
+    # two runs never read the weekly close count at once and both close (#1345).
+    # GitHub keeps one pending run per group and cancels an older pending one;
+    # a close dropped that way is still an exact, closable pair, and the next
+    # sweep closes it. Naming candidates closes nothing, so it keeps a
+    # per-issue group.
     concurrency:
-      group: refine-dedupe-apply-${{ github.repository }}-${{ inputs.issue_number }}
+      group: >-
+        ${{ needs.plan.outputs.model == 'false' && format('refine-close-{0}', github.repository) || format('refine-dedupe-apply-{0}-{1}', github.repository, inputs.issue_number) }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
@@ -297,7 +314,7 @@ jobs:
       - name: Fetch the verdict and plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
-          name: refine-dedupe-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
+          name: ${{ needs.plan.outputs.artifact }}
           path: .refine
 
       - name: Check the verdict is the one written before the model ran

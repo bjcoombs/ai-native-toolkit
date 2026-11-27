@@ -15,9 +15,10 @@ makes every change through `refine_write.Writer`, which holds the rules.
     refine_apply.py sweep  --verdict V
     refine_apply.py summary                          # actions log as markdown
 
-- **route.** The model runs only for an issue the script left unsettled.
+- **route.** The model runs only for an issue the script left unsettled, and
+  never for the questions issue (`REFINE_QUESTIONS_ISSUE`) itself (#1345).
 - **settled.** A `ready` verdict gets the ready label; anything else is left
-  for a person or a later run.
+  for a person or a later run. The questions issue is skipped.
 - **triage.** Size marker, blocked-by edges, labels (the ready label only
   through the plan's `ready` and the rule in `refine_write.ready_blocker`),
   then the plan's questions in one batch. The ready label is withheld when
@@ -28,7 +29,12 @@ makes every change through `refine_write.Writer`, which holds the rules.
   never closed. `dedupe-route` makes the same decision with no write, for the
   read-only job that runs the model.
 - **sweep.** The scheduled run: ready label on settled `ready` issues, exact
-  duplicate closes under the weekly cap, and the ready-buffer report.
+  duplicate closes under the weekly cap, and the ready-buffer report. The
+  report lists the unsettled issues, oldest first, with their open judgement
+  items, so each reaches a maintainer instead of waiting unseen (#1345); the
+  sweep runs no model. The questions issue is skipped throughout.
+- **summary.** The actions log as a table, then any questions and the
+  ready-buffer report that had no questions issue to go to.
 
 A plan that fails validation is refused whole: nothing in it is applied.
 Exit codes as in `refine_write.py`, plus 5 for an invalid plan.
@@ -114,15 +120,20 @@ def load_plan(kind: str, text: str, issue: int) -> Json:
     return dict(plan)
 
 
-def route(verdict: Json, issue: int) -> bool:
+UNSETTLED_LISTED = 10  # the most unsettled issues the ready-buffer report names
+
+
+def route(verdict: Json, issue: int, questions_issue: Optional[int] = None) -> bool:
     """Does this issue need the model? Only when the script left it unsettled."""
+    if issue == questions_issue:
+        return False
     entry = verdict_entry(verdict, issue)
     return entry is not None and entry.get("settled") is False
 
 
 def apply_settled(w: Writer, verdict: Json, issue: int) -> None:
     entry = verdict_entry(verdict, issue)
-    if entry is None or entry.get("verdict") != "ready":
+    if issue == w.s.questions_issue or entry is None or entry.get("verdict") != "ready":
         return
     if w.s.ready_label in entry.get("labels", []):
         return
@@ -192,8 +203,24 @@ def apply_dedupe(w: Writer, issue: int, plan: Json) -> None:
         _attempt(w, w.comment_on_duplicates, issue, plan["candidates"])
 
 
-def report_body(verdict: Json) -> str:
-    """The ready-buffer report, from refine.py's buffer and critical path."""
+def unsettled_line(verdict: Json, skip: Optional[int] = None) -> str:
+    """The report line naming the unsettled issues, oldest first, or "" when there are none."""
+    entries = sorted((e for e in verdict.get("issues", [])
+                      if e.get("settled") is False and e.get("number") != skip),
+                     key=lambda e: (str(e.get("created_at", "")), int(e.get("number", 0))))
+    if not entries:
+        return ""
+    named = []
+    for e in entries[:UNSETTLED_LISTED]:
+        items = [str(i.get("id")) for i in e.get("checklist", []) if i.get("status") == "needs_judgement"]
+        named.append(f"#{e.get('number')}" + (f" ({', '.join(items)})" if items else ""))
+    more = len(entries) - len(named)
+    return (f"- **Unsettled:** {len(entries)} issue(s) need a maintainer's call on the open item(s), oldest "
+            f"first: {', '.join(named)}{f', and {more} more' if more else ''}.")
+
+
+def report_body(verdict: Json, skip: Optional[int] = None) -> str:
+    """The ready-buffer report, from refine.py's buffer, critical path and unsettled issues."""
     buf = verdict.get("buffer", {})
     path = verdict.get("critical_path", {})
     chain = " -> ".join(f"#{n}" for n in path.get("issues", [])) or "none"
@@ -208,18 +235,24 @@ def report_body(verdict: Json) -> str:
     ]
     if path.get("cycle_members"):
         lines.append("- **Dependency cycle:** " + ", ".join(f"#{n}" for n in path["cycle_members"]) + ".")
+    unsettled = unsettled_line(verdict, skip)
+    if unsettled:
+        lines.append(unsettled)
     lines += ["", f"Generated {verdict.get('generated_at', '')} for {verdict.get('repository', '')}."]
     return "\n".join(lines)
 
 
 def apply_sweep(w: Writer, verdict: Json) -> None:
+    skip = w.s.questions_issue
     for entry in verdict.get("issues", []):
+        if entry.get("number") == skip:
+            continue
         if entry.get("settled") and entry.get("verdict") == "ready" and w.s.ready_label not in entry.get("labels", []):
             _attempt(w, w.edit_labels, int(entry["number"]), [w.s.ready_label], [], verdict, None)
     for pair in verdict.get("duplicates", []):
-        if pair.get("kind") == "exact" and pair.get("closable") is True:
+        if pair.get("kind") == "exact" and pair.get("closable") is True and skip not in (pair.get("duplicate"), pair.get("kept")):
             _attempt(w, w.close_duplicate, int(pair["duplicate"]), int(pair["kept"]), verdict)
-    _attempt(w, w.post_report, report_body(verdict))
+    _attempt(w, w.post_report, report_body(verdict, skip))
 
 
 def summary(settings: Settings) -> str:
@@ -231,12 +264,25 @@ def summary(settings: Settings) -> str:
                 rows.append(json.loads(line))
     mode = "live" if settings.live else "dry-run (nothing was written)"
     out = ["## Refiner actions", "", f"Mode: {mode}", ""]
+    # With no questions issue set, the questions and the report are recorded for this summary (#1345).
+    questions = [r for r in rows if r.get("action") == "question"]
+    reports = [r for r in rows if r.get("action") == "report"]
+    rows = [r for r in rows if r.get("action") not in ("question", "report")]
     if not rows:
-        return "\n".join(out + ["No actions."])
-    out += ["| Script | Action | Issue | Detail |", "|---|---|---|---|"]
-    for r in rows:
-        detail = str(r.get("detail", "")).replace("|", "\\|")
-        out.append(f"| {r.get('script')} | {r.get('action')} | #{r.get('issue')} | {detail} |")
+        out.append("No actions.")
+    else:
+        out += ["| Script | Action | Issue | Detail |", "|---|---|---|---|"]
+        for r in rows:
+            detail = str(r.get("detail", "")).replace("|", "\\|")
+            out.append(f"| {r.get('script')} | {r.get('action')} | #{r.get('issue')} | {detail} |")
+    if questions:
+        out += ["", "## Questions for the maintainer", "",
+                "No questions issue is set (`questions_issue`), so the questions are listed here.", ""]
+        out += [f"- #{r.get('issue')}: {r.get('detail')}" for r in questions]
+    for r in reports[-1:]:
+        out += ["", "## Ready-buffer report", "",
+                "No questions issue is set (`questions_issue`), so the report is shown here.", "",
+                str(r.get("detail", ""))]
     return "\n".join(out)
 
 
@@ -268,7 +314,7 @@ def run(args: argparse.Namespace, runner: Optional[Runner]) -> int:
         return 0
     verdict = _read(args.verdict)
     if args.command == "route":
-        print(f"model={'true' if route(verdict, args.issue) else 'false'}")
+        print(f"model={'true' if route(verdict, args.issue, settings.questions_issue) else 'false'}")
         return 0
     if args.command == "dedupe-route":
         print(f"model={'false' if exact_pair(verdict, args.issue) else 'true'}")

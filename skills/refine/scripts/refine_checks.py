@@ -51,6 +51,7 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, Iterator, List, Optional, Set, Tuple
 
+from refine_definition import marker_line
 from refine_types import ChecklistResult, Definition, Issue, Overlap, PullRequest
 
 CLARIFIED_MARKER = "<!-- triage:clarified-scope -->"
@@ -150,8 +151,7 @@ def size_reading(issue: Issue, definition: Definition) -> Tuple[Optional[int], O
         found.append((issue["created_at"], 0, int(body_matches[-1].group(1)), "body"))
     marker = re.compile(definition["size_marker"])
     for order, comment in enumerate(issue["comments"], 1):
-        lines = comment["body"].strip().splitlines()
-        match = marker.fullmatch(lines[0].strip()) if lines else None
+        match = marker.fullmatch(marker_line(comment["body"]))
         if match and comment["trusted"]:
             found.append((comment["created_at"], order, int(match.group(1)), "marker"))
     if not found:

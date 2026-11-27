@@ -22,6 +22,9 @@ right type, so a renamed key fails loudly instead of disabling a check.
 under the current directory, then under this toolkit checkout. `size_limit`
 (after `parse_override`) gives the write scripts the `max_points` the verdict records (#1439 follow-up): an explicit
 `REFINE_MAX_POINTS` above 0 overrides it, otherwise the definition decides.
+`marker_line` is the one reading of a comment's first line that both the
+verdict (`refine_checks.size_reading`) and the writer
+(`refine_write.Writer.current_size`) match a size marker against (#1345).
 
 Python 3.8 compatible and stdlib only.
 """
@@ -29,7 +32,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from refine_types import ChecklistEntry, Definition, Labels
 
@@ -234,7 +237,7 @@ def parse_override(raw: str) -> int:
     return int(text)
 
 
-def size_limit(override: int, fallback: int, ref: Any = None) -> int:
+def size_limit(override: int, fallback: int, ref: Optional[Mapping[str, object]] = None) -> int:
     """The largest size that can be ready: the `max_points` `refine.py`'s `sized` check used.
 
     `override` (`parse_override` of `REFINE_MAX_POINTS`) wins when above 0;
@@ -247,10 +250,20 @@ def size_limit(override: int, fallback: int, ref: Any = None) -> int:
     """
     if override:
         return override
-    recorded = ref.get("max_points") if isinstance(ref, dict) else None
+    recorded = ref.get("max_points") if isinstance(ref, Mapping) else None
     if isinstance(recorded, int) and not isinstance(recorded, bool) and recorded >= 1:
         return recorded
     path = resolve_path()
     if not path.is_file():
         return fallback
     return int(load_definition(path)["max_points"])
+
+
+def marker_line(body: str) -> str:
+    """The line a size marker must fill: the first non-blank line of a comment, stripped.
+
+    Leading blank lines are skipped, so a marker comment that starts with an
+    empty line reads the same to the verdict and to the writer.
+    """
+    lines = body.strip().splitlines()
+    return lines[0].strip() if lines else ""

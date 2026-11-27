@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 
 import pytest
 import yaml  # required: the plugin contract job installs pyyaml
+from refine_workflow_expr import github_caps
 
 REPO = Path(__file__).resolve().parent.parent
 WORKFLOWS = REPO / ".github" / "workflows"
@@ -167,6 +168,9 @@ def test_callers_pass_the_claude_code_oauth_token(caller: str) -> None:
     assert secrets["claude_code_oauth_token"] == "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
 
 
+CLOSE_GROUP = "refine-close-${{ github.repository }}"
+
+
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
 def test_per_issue_concurrency(name: str) -> None:
     for job_id, job in _load(name)["jobs"].items():
@@ -174,9 +178,37 @@ def test_per_issue_concurrency(name: str) -> None:
         if name == "reusable-refine-sweep.yml":
             assert job["concurrency"]["cancel-in-progress"] is False
             continue
-        assert "${{ inputs.issue_number }}" in group, job_id
+        assert "inputs.issue_number" in group, job_id
         # The plan job is cancelled by a newer event; a job that writes never is.
         assert job["concurrency"]["cancel-in-progress"] is (job_id == "plan")
+
+
+def test_every_duplicate_close_path_shares_one_repository_wide_group() -> None:
+    """Two runs that each read the weekly close count must not close at once (#1345).
+
+    Decision: the dedupe apply job takes the repository-wide group only on the
+    exact-pair route, the one that calls close-duplicate.sh; naming candidates
+    keeps its per-issue group. GitHub keeps one pending run per group, so an
+    older pending close can be dropped; the pair stays exact and closable, and
+    the sweep, in the same group, closes it on its next run.
+    """
+    closers = {(name, job_id): job for name in sorted(CALLERS.values())
+               for job_id, job in _load(name)["jobs"].items()
+               if "close-duplicate.sh" in job.get("env", {}).get("CLAUDE_CODE_SCRIPT_CAPS", "")}
+    assert set(closers) == {("reusable-refine-dedupe.yml", "apply"), ("reusable-refine-sweep.yml", "sweep")}
+    for job in closers.values():
+        assert job["concurrency"]["cancel-in-progress"] is False, "a close in progress is never cancelled"
+    assert closers[("reusable-refine-sweep.yml", "sweep")]["concurrency"]["group"] == CLOSE_GROUP
+    dedupe = closers[("reusable-refine-dedupe.yml", "apply")]["concurrency"]["group"]
+    assert dedupe == ("${{ needs.plan.outputs.model == 'false' "
+                      "&& format('refine-close-{0}', github.repository) "
+                      "|| format('refine-dedupe-apply-{0}-{1}', github.repository, inputs.issue_number) }}")
+    # model == 'false' is the exact-pair route: the only step that closes runs under it.
+    steps = closers[("reusable-refine-dedupe.yml", "apply")]["steps"]
+    close = next(s for s in steps if "dedupe-exact" in str(s.get("run", "")))
+    assert close["if"] == "needs.plan.outputs.model == 'false'"
+    named = next(s for s in steps if s.get("if") == "needs.plan.outputs.planned == 'true'")
+    assert '"$APPLY" dedupe --' in named["run"] and "dedupe-exact" not in named["run"]
 
 
 @pytest.mark.parametrize("name", MODEL_WORKFLOWS)
@@ -218,13 +250,22 @@ def test_write_script_caps_name_real_scripts(name: str) -> None:
         if job_id in ("plan", "project"):
             assert "CLAUDE_CODE_SCRIPT_CAPS" not in job["env"], f"the {job_id} job runs no write script"
             continue
-        caps = json.loads(job["env"]["CLAUDE_CODE_SCRIPT_CAPS"])
+        caps = json.loads(github_caps(job["env"]["CLAUDE_CODE_SCRIPT_CAPS"], 10))
         assert caps and set(caps) <= WRITE_SCRIPTS
         assert all(isinstance(v, int) and v >= 1 for v in caps.values())
     if name != "reusable-refine-triage.yml":
         job_id = "apply" if name == "reusable-refine-dedupe.yml" else "sweep"
-        close = json.loads(_load(name)["jobs"][job_id]["env"]["CLAUDE_CODE_SCRIPT_CAPS"])
+        close = json.loads(github_caps(_load(name)["jobs"][job_id]["env"]["CLAUDE_CODE_SCRIPT_CAPS"], 10))
         assert close["close-duplicate.sh"] <= 10
+
+
+@pytest.mark.parametrize("close_cap", [1, 10, 25])
+def test_sweep_close_cap_is_built_from_the_close_cap_input(close_cap: int) -> None:
+    """An adopter who sets close_cap: 25 gets 25 closes per sweep, not 10 (#1345)."""
+    doc = _load("reusable-refine-sweep.yml")
+    assert doc["on"]["workflow_call"]["inputs"]["close_cap"]["default"] == 10
+    caps = json.loads(github_caps(doc["jobs"]["sweep"]["env"]["CLAUDE_CODE_SCRIPT_CAPS"], close_cap))
+    assert caps == {"edit-issue-labels.sh": 30, "close-duplicate.sh": close_cap, "post-buffer-report.sh": 1}
 
 
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
@@ -408,7 +449,9 @@ def test_apply_job_runs_no_model_and_reads_the_plan_artifact(name: str) -> None:
     assert not any("claude-code-action" in str(s.get("uses", "")) for s in apply["steps"])
     upload = next(s for s in jobs["plan"]["steps"] if str(s.get("uses", "")).startswith("actions/upload-artifact@"))
     download = next(s for s in apply["steps"] if str(s.get("uses", "")).startswith("actions/download-artifact@"))
-    assert upload["with"]["name"] == download["with"]["name"]
+    assert upload["with"]["name"] == "${{ steps.artifact.outputs.name }}"
+    assert jobs["plan"]["outputs"]["artifact"] == "${{ steps.artifact.outputs.name }}"
+    assert download["with"]["name"] == "${{ needs.plan.outputs.artifact }}"
     assert re.fullmatch(r"actions/download-artifact@[0-9a-f]{40}", download["uses"])
     runs = " ".join(str(s.get("run", "")) for s in apply["steps"])
     assert "--plan .refine/plan.json" in runs, "the plan is validated by refine_apply.py before any write"
@@ -511,13 +554,44 @@ def test_plan_schema_is_safe_inside_single_quotes(tmp_path: Path, name: str) -> 
     assert passed == {k: v for k, v in source.items() if k != "$schema"}
 
 
-@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
-def test_plan_upload_includes_the_hidden_refine_directory(name: str) -> None:
-    """upload-artifact skips hidden files by default, so `.refine/` uploaded nothing (issue #1478)."""
+@pytest.mark.parametrize("name", sorted(CALLERS.values()))
+def test_every_refine_upload_includes_the_hidden_refine_directory(name: str) -> None:
+    """upload-artifact skips hidden files by default, so `.refine/` uploaded nothing (issues #1478, #1345).
+
+    `.refine/` holds the verdict and, on the model paths, the plan, so every
+    upload that names it must carry hidden files, the sweep's included.
+    """
     uploads = [s for s in _steps(_load(name)) if str(s.get("uses", "")).startswith("actions/upload-artifact@")
-               and s["with"]["path"].startswith(".")]
-    assert len(uploads) == 1 and uploads[0]["with"]["path"] == ".refine/"
+               and ".refine/" in str(s["with"]["path"]).splitlines()]
+    assert len(uploads) == 1
     assert uploads[0]["with"]["include-hidden-files"] is True
+
+
+@needs_bash
+@pytest.mark.parametrize("name, kind", [("reusable-refine-triage.yml", "triage"),
+                                        ("reusable-refine-dedupe.yml", "dedupe")])
+def test_plan_artifact_name_is_a_job_output_for_a_rerun_of_apply(tmp_path: Path, name: str, kind: str) -> None:
+    """A re-run of a failed `apply` alone has a new run_attempt, so it must not rebuild the name (#1345)."""
+    jobs = _load(name)["jobs"]
+    step = next(s for s in jobs["plan"]["steps"] if s.get("id") == "artifact")
+    assert step["env"]["NAME"] == f"refine-{kind}-plan-${{{{ inputs.issue_number }}}}-${{{{ github.run_attempt }}}}"
+    out = tmp_path / "out"
+    out.write_text("", encoding="utf-8")
+    env = {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out), "NAME": f"refine-{kind}-plan-7-1"}
+    subprocess.run(["bash", "-e", "-c", step["run"]], env=env, check=True)
+    assert out.read_text(encoding="utf-8") == f"name=refine-{kind}-plan-7-1\n"
+    plan_steps = [s.get("id") for s in jobs["plan"]["steps"]]
+    assert plan_steps.index("artifact") < plan_steps.index("digest")
+    download = next(s for s in jobs["apply"]["steps"] if str(s.get("uses", "")).startswith("actions/download-artifact@"))
+    assert "run_attempt" not in json.dumps(download), "apply reads the name from plan's outputs only"
+
+
+def test_the_questions_issue_is_never_triaged() -> None:
+    """A reply on the questions issue must not start a model run about it (#1345)."""
+    plan = _load("reusable-refine-triage.yml")["jobs"]["plan"]
+    assert "inputs.questions_issue != format('{0}', inputs.issue_number)" in plan["if"]
+    assert "inputs.questions_issue != format('#{0}', inputs.issue_number)" in plan["if"]
+    assert plan["env"]["REFINE_QUESTIONS_ISSUE"] == "${{ inputs.questions_issue }}", "route skips it too"
 
 
 def test_dispatched_issue_number_is_passed_as_a_number() -> None:
