@@ -416,6 +416,17 @@ def _resolve_ref(
     return set()
 
 
+def _doc_ref_key(ref: str, doc_rel: str) -> str:
+    """The repo-relative path a ``./`` or ``../`` link in ``doc_rel`` names; any other ref as is.
+
+    ``architecture_boundaries`` compares these keys, so one module linked from its doc
+    (``../src/core``) and named from the root (``src/core``) counts once (#1231).
+    """
+    if not ref.startswith(("./", "../")):
+        return ref
+    return posixpath.normpath(posixpath.join(posixpath.dirname(doc_rel), ref))
+
+
 def _resolve_doc_ref(
     ref: str, doc_rel: str, repo_root: Path, rel_paths: set[str],
 ) -> set[Path]:

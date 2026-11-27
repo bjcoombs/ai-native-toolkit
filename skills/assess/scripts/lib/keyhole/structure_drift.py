@@ -89,7 +89,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from lib.docs.ownership_parser import (
-    _discover_arch_docs,
+    _discover_arch_docs, _doc_ref_key,
     _extract_path_refs,
     _FENCE_RE,
     _HEADER_RE,
@@ -302,7 +302,7 @@ def _declared_refs_in_doc(
             if files:
                 matched += 1
             if is_boundary_pattern(ref, files):
-                boundary.append(ref)
+                boundary.append(_doc_ref_key(ref, doc_rel))
 
     for line in body.splitlines():
         if _HEADER_RE.match(line):
