@@ -42,10 +42,10 @@ That is the only workflow the end-of-run offers emit (`--fix` and `--starter` ca
 
 ## 4. Remove decline markers
 
-Permanent-decline markers (`.assess/.no-mutmut`, `.assess/.no-scc`, `.assess/.no-<tool>`) live inside `.assess/`, so step 1 already removed them. Only if the user chose to keep `.assess/` (e.g. to preserve the report) remove the markers explicitly so a future re-install starts from a clean slate:
+Permanent-decline markers (`.assess/.no-mutmut`, `.assess/.no-scc`, `.assess/.no-<tool>`) and the declined backlog proposals (`.assess/backlog-declines.json`) live inside `.assess/`, so step 1 already removed them. Only if the user chose to keep `.assess/` (e.g. to preserve the report) remove the markers explicitly so a future re-install starts from a clean slate:
 
 ```bash
-rm -f "$REPO_ROOT"/.assess/.no-*
+rm -f "$REPO_ROOT"/.assess/.no-* "$REPO_ROOT/.assess/backlog-declines.json"
 ```
 
 ## 5. Remove archetype override markers from instruction files

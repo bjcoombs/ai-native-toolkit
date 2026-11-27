@@ -373,12 +373,16 @@ Use the same `--label ""` and GitLab mapping as 6c. The output holds `proposals`
 - **Demote to informational**: the item can no longer move, because its finding keys on commit origin (`self_referential_tests`) or its condition reads not applicable. An item whose condition this run's model does not list (a `--profile` or `--pack` difference) is left as it is, with a note. The write adds the `assess-informational` label and keeps the item's state; a later run passes the item over. With `--label ""` the label cannot be written, so no demote is proposed and a note counts the skipped ones.
 - **Close as superseded**: a part of an action that is no longer split, beside the item that now carries the action.
 - **Rules changed**: a move that only the new maturity model caused (the model changed, the repository did not) reads `rules changed: your repo did not` under "No change proposed". It is never a proposal and never progress or regression.
+- **Declined before**: a proposal the user declined on an earlier run is not proposed again while its condition reads the same state under the same maturity model. It is listed under `declined` and at the foot of `summary`, naming who declined it, when and why. Once the state or the model changes, the proposal comes back once. To be asked again sooner, delete its entry from `.assess/backlog-declines.json`.
 
-Show `summary` verbatim as one batched message, then ask with multi-select AskUserQuestion questions of three proposals each, one option per proposal (named by its item number and kind) and "none" as the fourth, all in one call (up to four questions, so twelve proposals; past twelve, a second call for the rest). Print the writes for the confirmed numbers only, and run each. Every comment holds backticks, so it goes through a file, never a quoted argument:
+Show `summary` verbatim as one batched message, then ask with multi-select AskUserQuestion questions of three proposals each, one option per proposal (named by its item number and kind) and "none" as the fourth, all in one call (up to four questions, so twelve proposals; past twelve, a second call for the rest). Print the writes for the confirmed numbers only (`none` when the user picked "none" everywhere), record the rest as declined, and run each write. Every comment holds backticks, so it goes through a file, never a quoted argument:
 
 ```bash
 WRITES=$(mktemp); COMMENT=$(mktemp)   # outside the repository
-uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same numbers>" --confirm "<confirmed numbers, or all>" > "$WRITES"
+WHO=$(git -C "$REPO_ROOT" config user.name 2>/dev/null || echo "${USER:-unknown}")
+uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same numbers>" \
+  --confirm "<confirmed numbers, all or none>" --record-declines --declined-by "$WHO" \
+  --declined-at "$(date +%Y-%m-%d)" > "$WRITES"
 while read -r w; do
   n=$(jq -r '.number' <<<"$w"); jq -r '.comment' <<<"$w" > "$COMMENT"
   case "$(jq -r '.op' <<<"$w")" in
@@ -391,7 +395,7 @@ while read -r w; do
 done < <(jq -c '.[]' "$WRITES")
 ```
 
-On GitLab use `glab issue close`, `glab issue reopen` and `glab issue update --label`. A proposal the user leaves unconfirmed is not written and not recorded; the next run proposes it again. Other trackers: show the same summary and make the confirmed changes with their own tooling.
+On GitLab use `glab issue close`, `glab issue reopen` and `glab issue update --label`. Each proposal the user answered and left unconfirmed is recorded in `.assess/backlog-declines.json` with who declined it, when, the model and the evidence line, and the next run holds it back until the condition's state or the model changes. Add one `--decline-reason "<number>=<text>"` for each declined item the user gave a reason for, and none for the others. When the user dismissed the questions without answering, skip the `--confirm` call: nothing is written to the tracker or newly recorded, and the next run proposes the same changes again. Other trackers: show the same summary and make the confirmed changes with their own tooling.
 
 ### 6f: Report back to the user
 

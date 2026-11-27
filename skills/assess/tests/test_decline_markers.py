@@ -1,12 +1,23 @@
-"""Tests for decline-marker provenance + re-offer-on-major-bump (Task 12)."""
+"""Tests for decline-marker provenance + re-offer-on-major-bump (Task 12), and declined backlog proposals (#813)."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
+import pytest
+
+import assess_actions_render as render
+from lib.report import backlog_items as bi
 from lib.run.decline_markers import (
+    PROPOSAL_DECLINES,
     build_decline_block,
+    decline_record,
+    live_proposal_declines,
+    proposal_disclosure,
+    read_proposal_declines,
     read_decline_markers,
+    split_declined,
 )
 
 
@@ -182,3 +193,154 @@ def test_malformed_version_no_reoffer(tmp_path: Path) -> None:
     })
     block = build_decline_block(d, "2.0.0")
     assert block["reoffer_mutation"] is False
+
+
+# ── declined backlog proposals (#813) ───────────────────────────────────────
+
+MODEL = "default-2026.11.24"
+NEW_MODEL = "default-2026.12.01"
+HEAD = "a" * 40
+CID = "layer-5-ci.1"
+
+
+def _tracker(tmp_path: Path) -> Path:
+    """One open item marked for ``CID``: a close proposal whenever the condition reads met."""
+    body = f"**Condition:** `{CID}`\n\n{bi.condition_marker(CID, MODEL)}\n"
+    item = {"number": 7, "title": "Run the tests in CI", "body": body, "state": "OPEN",
+            "labels": [{"name": bi.DEFAULT_LABEL}]}
+    existing = tmp_path / "existing.json"
+    existing.write_text(json.dumps([item]), encoding="utf-8")
+    return existing
+
+
+def _run_context(tmp_path: Path, state: str, model: str = MODEL) -> None:
+    ctx = {
+        "interactive": True,
+        "level": {"levels_version": model, "conditions": [
+            {"id": CID, "row": "layer-5-ci", "level": 1, "grade": "verified", "counted": True, "state": state,
+             "why": "CI runs the suite on every push"}]},
+        "measured_commit": {"head_sha": HEAD, "dirty": False},
+        "since_last_run": {"previous_commit": "b" * 40},
+        "prior_level": {"prior_level_version": 3, "levels_version": model, "tags": []},
+    }
+    d = _assess(tmp_path)
+    (d / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
+
+
+def _proposed(tmp_path: Path, existing: Path, capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing)]) == 0
+    out: dict[str, Any] = json.loads(capsys.readouterr().out)
+    return out
+
+
+def _decline_all(tmp_path: Path, existing: Path, capsys: pytest.CaptureFixture[str], *extra: str) -> None:
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--confirm", "none",
+                        "--record-declines", "--declined-by", "ben", "--declined-at", "2026-11-27", *extra]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def _kinds(out: dict[str, Any]) -> list[tuple[str, int]]:
+    return [(p["kind"], p["number"]) for p in out["proposals"]]
+
+
+def test_a_declined_close_is_not_proposed_on_the_next_run(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _tracker(tmp_path)
+    _run_context(tmp_path, "met")
+    assert _kinds(_proposed(tmp_path, existing, capsys)) == [("close", 7)]
+    _decline_all(tmp_path, existing, capsys)
+    out = _proposed(tmp_path, existing, capsys)
+    assert out["proposals"] == []
+    assert len(out["declined"]) == 1 and out["declined"][0].startswith("close #7 (`layer-5-ci.1`) declined by ben")
+    assert "Declined before" in out["summary"] and "close #7" in out["summary"]
+
+
+def test_a_model_bump_reproposes_once_and_a_second_decline_suppresses_it(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _tracker(tmp_path)
+    _run_context(tmp_path, "met")
+    _decline_all(tmp_path, existing, capsys)
+    _run_context(tmp_path, "met", model=NEW_MODEL)
+    assert _kinds(_proposed(tmp_path, existing, capsys)) == [("close", 7)]
+    _decline_all(tmp_path, existing, capsys)
+    assert _proposed(tmp_path, existing, capsys)["proposals"] == []
+    [record] = read_proposal_declines(tmp_path / ".assess")
+    assert record["model"] == NEW_MODEL
+
+
+def test_a_change_in_the_condition_state_reproposes_it(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _tracker(tmp_path)
+    _run_context(tmp_path, "met")
+    _decline_all(tmp_path, existing, capsys)
+    _run_context(tmp_path, "unmet")  # the condition lapsed: no close, and the decline no longer holds
+    assert _proposed(tmp_path, existing, capsys)["proposals"] == []
+    assert read_proposal_declines(tmp_path / ".assess") == []
+    _run_context(tmp_path, "met")  # it holds again: new evidence, so the close comes back
+    assert _kinds(_proposed(tmp_path, existing, capsys)) == [("close", 7)]
+
+
+def test_the_record_carries_who_when_the_model_and_why(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _tracker(tmp_path)
+    _run_context(tmp_path, "met")
+    _decline_all(tmp_path, existing, capsys, "--decline-reason", "7=the CI job is not trusted yet",
+                 "--decline-reason", "8=a reason for another item")
+    raw = json.loads((tmp_path / ".assess" / PROPOSAL_DECLINES).read_text(encoding="utf-8"))
+    [record] = raw["declines"]
+    assert record["declined_by"] == "ben"
+    assert record["declined_at"] == "2026-11-27"
+    assert record["model"] == MODEL
+    assert (record["kind"], record["number"], record["condition"], record["state"]) == ("close", 7, CID, "met")
+    assert record["evidence"].startswith("`layer-5-ci.1` reads met (verified)")
+    assert record["reason"] == "the CI job is not trusted yet"
+    assert "reason: the CI job is not trusted yet" in proposal_disclosure(read_proposal_declines(tmp_path / ".assess")[0])
+
+
+def test_a_confirmed_proposal_is_not_recorded_and_no_flag_writes_nothing(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _tracker(tmp_path)
+    _run_context(tmp_path, "met")
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--confirm", "none"]) == 0
+    capsys.readouterr()
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--confirm", "7",
+                        "--record-declines"]) == 0
+    assert [w["number"] for w in json.loads(capsys.readouterr().out)] == [7]
+    assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()
+
+
+def test_proposal_declines_degrade_and_keep_what_the_run_cannot_read(tmp_path: Path) -> None:
+    d = _assess(tmp_path)
+    assert read_proposal_declines(d) == []
+    (d / PROPOSAL_DECLINES).write_text("not json", encoding="utf-8")
+    assert read_proposal_declines(d) == []
+    (d / PROPOSAL_DECLINES).write_text(json.dumps({"declines": [{"kind": "close"}, "x", {
+        "kind": "demote", "number": 4, "finding": "self_referential_tests", "model": MODEL}]}), encoding="utf-8")
+    [record] = read_proposal_declines(d)
+    assert record["finding"] == "self_referential_tests" and record["declined_by"] is None
+    assert "an unknown user on an unknown date" in proposal_disclosure(record)
+    # No level result, or a condition this run's model does not list: the record stands.
+    assert live_proposal_declines([record], None, None) == [record]
+    cond = decline_record({"kind": "close", "number": 7, "condition": CID}, {CID: {"state": "met"}}, MODEL,
+                          declined_by="ben", declined_at="2026-11-27")
+    assert cond is not None and live_proposal_declines([cond], {}, MODEL) == [cond]
+    assert decline_record({"number": 7}, None, MODEL, declined_by=None, declined_at=None) is None
+    kept, held = split_declined([{"kind": "demote", "number": 4, "finding": "self_referential_tests"}],
+                                [record], None, MODEL)
+    assert kept == [] and held == [record]
+
+
+def test_a_record_for_an_item_missing_from_the_listing_stays(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _tracker(tmp_path)
+    _run_context(tmp_path, "met")
+    _decline_all(tmp_path, existing, capsys)
+    existing.write_text("[]", encoding="utf-8")  # a truncated or author-filtered listing
+    assert _proposed(tmp_path, existing, capsys)["proposals"] == []
+    assert len(read_proposal_declines(tmp_path / ".assess")) == 1
+
+
+def test_a_bad_decline_reason_names_the_expected_form(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        render.main(["repo", "reconcile", "--existing", "x.json", "--decline-reason", "no-number"])
+    assert "expected N=TEXT" in capsys.readouterr().err
