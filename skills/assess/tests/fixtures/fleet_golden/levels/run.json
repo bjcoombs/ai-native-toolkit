@@ -81,6 +81,10 @@
       "revision": 1
     },
     {
+      "id": "core.concurrency",
+      "revision": 1
+    },
+    {
       "id": "core.config_drift",
       "revision": 1
     },

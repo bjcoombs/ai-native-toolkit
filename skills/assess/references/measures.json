@@ -2674,6 +2674,79 @@
       "why_source": "https://code.claude.com/docs/en/skills.md"
     },
     {
+      "name": "concurrency",
+      "title": "Concurrency readiness",
+      "summary": "",
+      "collector": "core.concurrency",
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "concurrency.fan_in_null_reason": "token",
+          "concurrency.hot_files": "drop",
+          "concurrency.limits": "drop",
+          "concurrency.reason": "reason",
+          "concurrency.since": "drop",
+          "concurrency.window": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "short_history",
+          "means": "The window holds fewer than 10 first-parent commits, too few for a share to mean anything.",
+          "next_step": "Nothing to change in the repository; a longer --window, or more history, lets the scan read it."
+        },
+        {
+          "code": "shallow_clone",
+          "means": "The checkout is a shallow clone, so the merges read are cut short.",
+          "next_step": "Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it."
+        },
+        {
+          "code": "shallow_unknown",
+          "means": "Git could not confirm the checkout is a full clone.",
+          "next_step": "Nothing to change in the repository; run the scan on a full clone."
+        },
+        {
+          "code": "not_a_repo",
+          "means": "The path is not a git repository, or one with no commits.",
+          "next_step": "Nothing to change: there is no history to read."
+        },
+        {
+          "code": "no_git",
+          "means": "git is not installed where the scan ran.",
+          "next_step": "Install git where the scan runs."
+        },
+        {
+          "code": "git_failed",
+          "means": "A git read after the first (the merge log or the attribute read) failed on a repository the first read could open.",
+          "next_step": "Nothing to change in the repository; re-run the scan, and report the failure if it repeats."
+        },
+        {
+          "code": "git_timeout",
+          "means": "A git read took longer than the scan allows.",
+          "next_step": "Nothing to change in the repository; a shorter --window reads less history."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "No other scan says whether many agents can change the repository at once; this records how often the same files, generated ones included, change across merges, the files every parallel change would conflict on. Listed, not counted: nothing scores it.",
+      "why_source": ""
+    },
+    {
       "name": "config_drift",
       "title": "Configuration drift",
       "summary": "",
@@ -5137,6 +5210,20 @@
         "repo_root",
         "scope",
         "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "concurrency",
+      "title": "Concurrency readiness",
+      "publishes": [
+        "concurrency"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window"
       ],
       "network": false,
       "private": false
