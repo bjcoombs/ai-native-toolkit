@@ -476,6 +476,10 @@ _WORDING: dict[str, Wording] = {
         "Jenkinsfile and the poms; quarantine a flaky test by name instead.",
         "No CI file, Jenkinsfile, `.mvn/maven.config`, reactor pom or followed CI step sets "
         "`maven.test.failure.ignore` or `testFailureIgnore` to true."),
+    "ci_hazards.instructions_unchecked": _flag_count(
+        "Remove the instruction files from `paths-ignore`, or add them to the `paths` filter, in at "
+        "least one workflow that runs checks on pull requests.",
+        "Every instruction file is on the paths of a workflow that runs checks on pull requests."),
     "secrets_guard.configured": _flag(
         "Add a secrets hook to `.pre-commit-config.yaml` (gitleaks or detect-secrets), or a secrets "
         "scan step to CI.",
