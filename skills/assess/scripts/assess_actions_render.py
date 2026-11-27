@@ -19,12 +19,20 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   and ``files``, or the ``condition`` when there is no ``finding``, or the ``files`` alone,
   or nothing when the entry has none of them; then ``first_step``, ``done_when``, ``scope_fence``, and a Context block
   with ``layer``, ``effort`` and the full-report link when given, then a one-line footer).
+  An entry's optional ``sub_items`` (#1263: the report's lettered sub-actions, each
+  ``{label, action, done_when}`` with an optional ``first_step`` and ``scope_fence``) each
+  follow their parent as one more item: the same ``rank``, a ``label`` (``2a``: the entry's
+  rank, then only the label's letters), the title ``2a. <action>``, and a body that names the parent action and takes the parent's finding,
+  scope fence and Context unless the sub-item sets its own. The table keeps one row per
+  entry; a filed sub-item's reference goes in its parent's Issue cell.
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
   ``run-context.json`` joined with `` / ``; the ``badge.json`` ``message`` when the run
   context has no headline lines; ``not known`` when neither file has one.
 
 An entry missing ``rank``, ``action``, ``done_when`` or ``scope_fence`` is skipped with a
-warning on stderr, the same rule ``assess_finalize.py`` applies on write. A missing or
+warning on stderr, the same rule ``assess_finalize.py`` applies on write. A sub-item missing
+``label``, ``action`` or ``done_when``, or whose label is empty or repeats another's once
+normalized, is skipped the same way, and its parent still renders. A missing or
 unreadable ``actions.json`` exits 1 with a message, never an empty table. A missing optional
 field renders as ``-``. Prose fields escape Markdown punctuation (``\\ * _ [ ] < >``) outside
 backtick code spans, so a command such as ``rg -n "^[a-z_]+\\(\\)"`` reads as written on GitHub.
@@ -45,9 +53,10 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 REQUIRED_KEYS = ("rank", "action", "done_when", "scope_fence")
+SUB_ITEM_KEYS = ("label", "action", "done_when")
 TABLE_HEADER = (
     "| # | Action | Layer | Effort | Command / First Step | Done when | Scope fence | Files | Issue |\n"
     "|---|--------|-------|--------|----------------------|-----------|-------------|-------|-------|"
@@ -64,11 +73,12 @@ _MD_PUNCT = re.compile(r"([\\*_\[\]<>])")
 
 
 class TrackerItem(TypedDict):
-    """One tracker item: its rank, title and Markdown body."""
+    """One tracker item: its rank, title and Markdown body; a sub-item also carries its label (``2a``)."""
 
     rank: int
     title: str
     body: str
+    label: NotRequired[str]
 
 
 class RenderError(Exception):
@@ -187,10 +197,15 @@ def _finding_line(entry: Entry) -> str:
     return f"{head} in {files}" if files else head
 
 
-def render_item_body(entry: Entry, report_link: str | None = None) -> str:
-    """One tracker item's body: the finding first, then the change, its exit and fence, then context."""
+def render_item_body(entry: Entry, report_link: str | None = None, *, parent: str = "") -> str:
+    """One tracker item's body: the finding first, then the change, its exit and fence, then context.
+
+    ``parent`` is set for a sub-item: a line naming the parent action follows the finding.
+    """
     lead = _finding_line(entry)
     parts = [lead, ""] if lead else []
+    if parent:
+        parts += [parent, ""]
     first_step = _text(entry, "first_step")
     if first_step:
         parts += ["### First step", _md(first_step), ""]
@@ -203,12 +218,66 @@ def render_item_body(entry: Entry, report_link: str | None = None) -> str:
     return "\n".join(parts) + "\n"
 
 
+def _title(entry: Entry) -> str:
+    return " ".join(_text(entry, "action").split())
+
+
+def sub_items(entry: Entry) -> list[Entry]:
+    """The well-formed ``sub_items`` of an entry, in the order written; a malformed one is skipped with a warning."""
+    raw = entry.get("sub_items")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        print(f"actions.json: rank {_rank(entry)} sub_items is not a list; ignoring it", file=sys.stderr)
+        return []
+    out: list[Entry] = []
+    seen: set[str] = set()
+    for sub in raw:
+        missing = [k for k in SUB_ITEM_KEYS if not isinstance(sub, dict) or sub.get(k) in (None, "")]
+        label = _norm_label(sub) if isinstance(sub, dict) else ""
+        if not missing and not label:
+            missing = ["label"]
+        if missing:
+            print(f"actions.json: rank {_rank(entry)} skipping sub-item missing {missing}", file=sys.stderr)
+            continue
+        if label in seen:
+            print(f"actions.json: rank {_rank(entry)} skipping repeated sub-item label {label!r}", file=sys.stderr)
+            continue
+        seen.add(label)
+        out.append({**sub, "label": label})
+    return out
+
+
+def _norm_label(sub: Entry) -> str:
+    """The letters of a label, lower-cased: ``a`` from ``a``, ``2a``, ``a.``, ``a)`` or ``(a)``; ``""`` with none."""
+    return re.sub(r"[^a-z]", "", _text(sub, "label").lower())
+
+
+def _sub_label(entry: Entry, sub: Entry) -> str:
+    """``2a`` from rank 2 and a normalized label ``a``."""
+    return f"{_rank(entry)}{_text(sub, 'label')}"
+
+
+def _sub_item(entry: Entry, sub: Entry, report_link: str | None) -> TrackerItem:
+    """One sub-item as its own item: its own change and exit, the parent's finding, fence and context."""
+    label = _sub_label(entry, sub)
+    merged = {
+        **entry, "action": _text(sub, "action"), "done_when": _text(sub, "done_when"),
+        "first_step": _text(sub, "first_step"),
+        "scope_fence": _text(sub, "scope_fence") or _text(entry, "scope_fence"),
+    }
+    parent = f"**Sub-action {_md(label)} of action {_rank(entry)}:** {_md(_title(entry))}"
+    return TrackerItem(rank=_rank(entry), label=label, title=f"{label}. {_title(sub)}",
+                       body=render_item_body(merged, report_link, parent=parent))
+
+
 def render_items(entries: Sequence[Entry], report_link: str | None = None) -> list[TrackerItem]:
-    """One tracker item per entry: ``rank``, ``title`` (the action) and ``body``."""
-    return [
-        TrackerItem(rank=_rank(e), title=" ".join(_text(e, "action").split()), body=render_item_body(e, report_link))
-        for e in entries
-    ]
+    """One tracker item per entry (``rank``, ``title``, ``body``), each followed by one per sub-item."""
+    items: list[TrackerItem] = []
+    for e in entries:
+        items.append(TrackerItem(rank=_rank(e), title=_title(e), body=render_item_body(e, report_link)))
+        items += [_sub_item(e, sub, report_link) for sub in sub_items(e)]
+    return items
 
 
 def _read_json(path: Path) -> object:

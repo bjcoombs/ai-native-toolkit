@@ -272,7 +272,7 @@ Once the tracker is known, use its native tooling. The skill doesn't enumerate e
 | Linear (via CLI) | `linear issue create ...` |
 | Anything else | follow the user's documented convention |
 
-**Build the items from `actions.json`, never from the report.** One command renders every item, one per `actions` entry in `rank` order, as a JSON array of `{rank, title, body}`:
+**Build the items from `actions.json`, never from the report.** One command renders every item, one per `actions` entry in `rank` order, each followed by one item per entry in its `sub_items` (the report's lettered sub-actions, such as `2a`), as a JSON array of `{rank, title, body}`; a sub-item's object also carries its `label` (`2a`):
 
 ```bash
 <!-- chat-replace:uv-actions-render -->
@@ -280,11 +280,11 @@ RENDER="${CLAUDE_SKILL_DIR}/../assess/scripts/assess_actions_render.py"   # set 
 uv run "$RENDER" "$REPO_ROOT" items --report-link "<full-report link>"   # omit --report-link when there is none
 ```
 
-- **Title**: the entry's `action`, as `title` gives it.
+- **Title**: the entry's `action`, as `title` gives it; a sub-item's title is its label and action (`2a. <action>`).
 - **Body**: `body` as given: the finding and its files first (the `condition` when the entry has no `finding`), then the First step, the **Done when** criterion, the Scope fence, a Context block (Layer, Effort, the full-report link) and last a one-line footer linking back to the plugin. Write each body to a file and pass it with `--body-file` (or the tracker's equivalent); do not reword it.
 - **Tag / Label / Category** that supports idempotency (see 6c)
 
-**One concern per item.** Each item carries one change a maintainer can accept or decline on its own. `actions.json` holds one entry per rank. If an entry's `action` still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), file each change as its own item with its own one-line title. Start each split item from the entry's body and narrow its First step, Done when and Scope fence to that one change, so each item closes on its own change alone; keep the finding line and the Context block as rendered. The parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it. List every reference for that rank in its Issue cell (6d).
+**One concern per item.** Each item carries one change a maintainer can accept or decline on its own. `actions.json` holds one entry per rank, and each lettered sub-action is already its own item. If an entry's `action` still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), file each change as its own item with its own one-line title. Start each split item from the entry's body and narrow its First step, Done when and Scope fence to that one change, so each item closes on its own change alone; keep the finding line and the Context block as rendered. The parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it. List every reference for that rank, its sub-items' included, in its Issue cell (6d).
 
 **Done when** is the entry's `done_when`, written in the repository's own terms when the report was assembled (`assess-findings`): a command that passes, a file state or a CI result first, the `/assess` re-run criterion after it, marked optional.
 
@@ -296,6 +296,8 @@ The body the renderer writes:
 
 ```markdown
 **Finding:** `<finding>` in `<file>`, `<file>`   (without a finding: **Condition:** `<condition>`, else **Files:** alone)
+
+**Sub-action <label> of action <rank>:** <parent action>   (a sub-item only; <label> is the item's `label`, already rank plus letter, such as `2a`)
 
 ### First step
 <first_step>
@@ -325,6 +327,8 @@ Re-running `/assess` on the same repo must not create duplicate tracking items. 
 - **Search-based** (Jira via JQL, Notion, Linear queries): search the tracker for items with the action title. Match → reuse.
 - **Hierarchical** (Task Master): list the current tag's tasks; compare titles. Match → reuse.
 - **Free-form** (Apple Notes, Google Docs, plain markdown files): no reliable structured dedup. In this case, list existing items the user can see, **show them, and ask before re-creating**: "I see 3 existing items that look like these. Re-create, skip, or update? "
+
+A sub-item's title starts with its rank and label (`2a. `), which move when its parent changes rank between runs: match a sub-item on the title text after that prefix, so `1a. Pin ruff` reuses the item filed as `2a. Pin ruff`. The match crosses parents on purpose: the same change under another action is the same work. When a sub-item is promoted to its own ranked action, match it on the action text without the label, so `Pin ruff` reuses the item filed as `2a. Pin ruff`.
 
 In all cases, before creating: search first. If a match is found (open or closed in trackers that have state), reuse it. If a match was previously closed (the gap was once resolved but has re-emerged), flag this to the user in the chat output - don't silently re-open or duplicate.
 
