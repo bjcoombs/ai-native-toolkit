@@ -42,11 +42,14 @@ which needs no ``user`` declaration, and it records no viewer id.
 (``fleet-view.html`` with the live data source, ``fleet_page_live.py``). The same inputs give
 the same bytes. A plan that does not fit one artifact writes no batch and removes an earlier
 plan's batches, so nothing oversized is left to send. ``record_url`` keeps the artifact's URL in the fleet's history directory
-(``<history>/<org>/publish.json``) so a later run publishes to the same artifact.
+(``<history>/<org>/publish.json``) so a later run publishes to the same artifact;
+``recorded_url`` reads it back. A ``publish.json`` that is not ``{url, runs}`` is refused, never
+overwritten.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -105,6 +108,11 @@ class Strays(TypedDict):
     count: int  # stray documents in the exports the session saved
     collections: list[str]  # the collections they are in, sorted
     targets: int  # stored targets documents (each counts against the document cap)
+
+
+class Registry(TypedDict):
+    url: str
+    runs: list[str]
 
 
 class PlanSummary(TypedDict):
@@ -251,26 +259,46 @@ def write_plan(out: Path, summary: PlanSummary, batches: Sequence[Sequence[Pinne
     return folder
 
 
+def read_registry(history_org_dir: Path) -> Registry | None:
+    """What ``<history>/<org>/publish.json`` records, or ``None`` when there is no file yet. A file
+    that is not ``{"url": <str>, "runs": [<str>, ...]}`` raises ``PublishError`` naming the file and
+    never its content, so a damaged record is never overwritten or taken for a first publish."""
+    path = history_org_dir / REGISTRY_FILE
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError) as e:
+        raise PublishError(f"{REGISTRY_FILE} is not readable; fix or remove it ({type(e).__name__})") from e
+    try:
+        found = json.loads(text)
+    except ValueError:
+        found = None
+    if (not isinstance(found, dict) or not isinstance(found.get("url"), str)
+            or not isinstance(found.get("runs", []), list)
+            or not all(isinstance(r, str) for r in found.get("runs", []))):
+        raise PublishError(f"{REGISTRY_FILE} is not {{url, runs}}; fix or remove it")
+    return {"url": found["url"], "runs": list(found.get("runs", []))}
+
+
 def record_url(history_org_dir: Path, url: str, run_id: str) -> Path:
-    """Keep the artifact URL and the runs published to it in ``<history>/<org>/publish.json``."""
+    """Keep the artifact URL and the runs published to it in ``<history>/<org>/publish.json``,
+    written through a temp file so a failed write leaves the earlier record whole."""
     if not url.startswith("https://claude.ai/"):
         raise PublishError("the artifact URL must be a https://claude.ai/ link")
-    path = history_org_dir / REGISTRY_FILE
-    runs: list[str] = []
-    if path.is_file():
-        old = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(old, dict) and old.get("url") not in (None, url):
-            raise PublishError(f"{REGISTRY_FILE} already records another artifact; remove it to publish anew")
-        runs = [r for r in (old.get("runs") or []) if isinstance(r, str)] if isinstance(old, dict) else []
+    old = read_registry(history_org_dir)
+    if old is not None and old["url"] != url:
+        raise PublishError(f"{REGISTRY_FILE} already records another artifact; remove it to publish anew")
+    runs = old["runs"] if old is not None else []
     history_org_dir.mkdir(parents=True, exist_ok=True)
-    path.write_text(dumps({"url": url, "runs": sorted(set(runs) | {run_id})}), encoding="utf-8", newline="\n")
+    path = history_org_dir / REGISTRY_FILE
+    temp = path.with_name(f".{REGISTRY_FILE}.tmp")
+    temp.write_text(dumps({"url": url, "runs": sorted(set(runs) | {run_id})}), encoding="utf-8", newline="\n")
+    os.replace(temp, path)
     return path
 
 
 def recorded_url(history_org_dir: Path) -> str | None:
-    path = history_org_dir / REGISTRY_FILE
-    try:
-        found = json.loads(path.read_text(encoding="utf-8")).get("url")
-    except (OSError, ValueError, AttributeError):
-        return None
-    return found if isinstance(found, str) else None
+    """The recorded artifact URL, or ``None`` before the first publish (``read_registry``)."""
+    found = read_registry(history_org_dir)
+    return found["url"] if found is not None else None

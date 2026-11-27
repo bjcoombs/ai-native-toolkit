@@ -27,6 +27,11 @@ replaces the full-fleet entry). Otherwise the entry is kept and the run goes to 
 run); stderr names the kept entry, why, and where this run went. A failed
 history write never loses the `--out` results.
 
+One more file can sit beside the dated entries: `<history>/<org>/publish.json`, the URL of the
+artifact the fleet page is published to and the runs sent there. `fleet.py` never writes or
+reads it; only the opt-in publish step does
+([publish.md](publish.md#publishing-the-page)).
+
 Put `ROOT` before `--compare`: `fleet.py ROOT --out DIR --compare [RUN_DIR]`.
 Since `RUN_DIR` is optional, `fleet.py --compare ROOT ...` would read `ROOT` as
 the earlier run; the command refuses a `--compare` directory holding neither
