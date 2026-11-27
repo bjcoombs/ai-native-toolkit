@@ -16,9 +16,10 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
 - ``required_form_field``: an issue form (``.github/ISSUE_TEMPLATE/*.yml`` or ``*.yaml``, not
   ``config.yml``) has a ``body`` item whose ``validations`` sets ``required: true``, or a GitLab
   issue template (``.gitlab/issue_templates/*.md``) has a heading for each of the six
-  definition-of-ready sections (#1406, ``lib.backlog_ready_gitlab``). Null ``form_unreadable``
-  when neither holds and a form or template could not be read (a template over the size cap) (a tab indent, an unclosed flow collection, no
-  top-level ``body`` list).
+  definition-of-ready sections (#1406, ``lib.backlog_ready_gitlab``). When neither holds, null
+  ``form_unreadable`` if a form could not be read (a tab indent, an unclosed flow collection, no
+  top-level ``body`` list), else null ``gitlab_template_unreadable`` if a GitLab template could
+  not be read (over the size cap), so the advice names the host that holds the file (#1587).
 - ``untriaged_on_open``: a workflow (directly under ``.github/workflows/``) triggered by
   ``issues`` with type ``opened`` (no ``types`` means every type) has a step that names an
   untriaged label as the argument of a label-adding call (``--add-label``, ``addLabels``, an ``add-labels``
@@ -35,7 +36,7 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
   drops ``.assess/``, ``tests/fixtures/`` and the like) has a heading or paragraph naming a ready
   label with a list under it: a list item in the heading's section, or one after the paragraph.
   Fenced code is skipped. A label counts only in backticks or quotes, or as a GitLab label
-  reference (``~agent-ready``), so prose ("the ready label",
+  reference (``~agent-ready``, ``~"ready"``), so prose ("the ready label",
   "make the code agent-ready") is no label; a one-word label counts only in backticks and keeps its
   case (a quoted "ready" or a `READY` constant is not ``ready``). A GitLab scoped label (``refine::ready``) is one token.
 - ``stale_job_safe``: true when no step uses ``actions/stale``, or every such step leaves ready
@@ -82,6 +83,7 @@ UNTRIAGED_LABELS = ("needs-triage", "needs triage", "untriaged", "triage", "stat
 READY_LABELS = ("agent-ready", "ready", "triage/accepted", "status: ready", "refine::ready")
 
 REASON_FORM = "form_unreadable"
+REASON_TEMPLATE = "gitlab_template_unreadable"
 REASON_WORKFLOW = "workflow_unreadable"
 REASON_STALE = "stale_input_unresolved"
 
@@ -133,11 +135,11 @@ def _token(label: str) -> re.Pattern[str]:
 
 def _named(label: str) -> re.Pattern[str]:
     """A label as written in documentation: in backticks or quotes, or as a GitLab label reference
-    (``~agent-ready``, ``~"needs triage"``). A one-word label must sit in backticks or follow
-    ``~`` and keep its case, so neither a quoted word ("ready") nor a constant (`READY`) is the
-    label ``ready``; any other label ignores case."""
+    (``~agent-ready``, ``~"needs triage"``, ``~"ready"``). A one-word label must sit in backticks
+    or follow ``~`` and keep its case, so neither a quoted word ("ready") nor a constant (`READY`)
+    is the label ``ready``; any other label ignores case."""
     word = re.escape(label)
-    ref = rf"(?<![\w~])~{word}(?![\w:/-])" if not re.search(r"\s", label) else "(?!)"
+    ref = rf"(?<![\w~])~(?:{word}(?![\w:/-])|\"{word}\")" if not re.search(r"\s", label) else "(?!)"
     if re.search(r"[-/:\s]", label):
         return re.compile(rf"[`'\"]{word}[`'\"]|{ref}", re.I)
     return re.compile(rf"`{word}`|{ref}")
@@ -438,8 +440,10 @@ def scan_backlog_ready(repo_root: Path) -> BacklogReadyBlock:
     unread = [rel for rel, text in texts.items() if not text and _size(root / rel) > 0]
     if "required" in states or any(template_has_sections(text) for text in texts.values()):
         block["required_form_field"] = True
-    elif "unreadable" in states or unread:
+    elif "unreadable" in states:
         block["required_form_field_reason"] = REASON_FORM
+    elif unread:
+        block["required_form_field_reason"] = REASON_TEMPLATE
     else:
         block["required_form_field"] = False
     block["untriaged_on_open"], reason = _untriaged(workflows, untriaged)

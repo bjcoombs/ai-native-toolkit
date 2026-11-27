@@ -2759,8 +2759,13 @@
       "unknown_reasons": [
         {
           "code": "form_unreadable",
-          "means": "No issue form read has a required field, and a form or GitLab template could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.",
+          "means": "No issue form read has a required field, and a GitHub issue form could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.",
           "next_step": "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue."
+        },
+        {
+          "code": "gitlab_template_unreadable",
+          "means": "No form or template read meets the bar. A GitLab issue template could not be read: it is too large or could not be opened.",
+          "next_step": "Nothing to change if the template has the six sections; a GitLab issue template under the size limit lets the scan read its headings."
         },
         {
           "code": "gitlab_ci_unreadable",
@@ -7158,7 +7163,7 @@
       "collector": "core.backlog_ready",
       "input_class": "config_text",
       "grade": "config_only",
-      "null_means": "form_unreadable: a form or GitLab template could not be read, none read has a required field and no template read has the six sections"
+      "null_means": "form_unreadable: an issue form could not be read, none read has a required field and no template read has the six sections; gitlab_template_unreadable: the same, with a GitLab template unread instead"
     },
     {
       "path": "backlog_ready.stale_job_safe",
