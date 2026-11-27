@@ -19,7 +19,7 @@ whys.backlog_ready = "An agent handed an issue with no structure, never triaged 
 shapes = [
   { path = "backlog_ready", type = "lib.backlog_ready_outcomes:BacklogReadyOutcomesBlock" },
 ]
-revision = 3
+revision = 4
 unknown_reasons = [
   { code = "form_unreadable", block = "backlog_ready", means = "No issue form read has a required field, and a GitHub issue form could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.", next_step = "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue." },
   { code = "gitlab_template_unreadable", block = "backlog_ready", means = "No form or template read meets the bar. A GitLab issue template could not be read: it is too large or could not be opened.", next_step = "Nothing to change if the template has the six sections; a GitLab issue template under the size limit lets the scan read its headings." },
@@ -33,7 +33,7 @@ unknown_reasons = [
   { code = "platform_error", block = "backlog_ready", means = "A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error.", next_step = "Run again later." },
   { code = "empty_window", block = "backlog_ready", means = "The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days.", next_step = "Nothing to change; the metric reads once there are issues to measure." },
   { code = "response_unread", block = "backlog_ready", means = "A first response may exist that was not read: a long timeline, the note cap or an unclassified account.", next_step = "Run again with gh or glab signed in as an account that can read users; the caps are fixed." },
-  { code = "window_truncated", block = "backlog_ready", means = "The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken.", next_step = "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window." },
+  { code = "window_truncated", block = "backlog_ready", means = "The window's issue list passed the read cap, so issues may be missing: the ratio is not taken, nor the median when no issue read was answered.", next_step = "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window." },
   { code = "open_truncated", block = "backlog_ready", means = "The open-issue list passed the read cap, so the untriaged share would cover only part of it and is not taken.", next_step = "Nothing to change; close or triage old open issues to bring the list under the cap." },
   { code = "no_response", block = "backlog_ready", means = "No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days.", next_step = "Answer, label or close new issues within first_response_max_days." },
 ]
@@ -43,7 +43,7 @@ unknown_reasons = [
   "backlog_ready.stale_job_safe_reason" = "token"
   "backlog_ready.first_response_median_days_reason" = "token"
   "backlog_ready.untriaged_after_7d_share_reason" = "token"
-  "backlog_ready.close_open_ratio_90d_reason" = "token"
+  "backlog_ready.close_open_ratio_reason" = "token"
   "backlog_ready.outcomes.reason" = "token"
 
 [[entries]]
@@ -93,7 +93,7 @@ collector = "core.backlog_ready"
 path = "backlog_ready.first_response_median_days"
 type = "number"
 evidence = "platform"
-null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response could not be read; no_response: none did and each has waited past the threshold"
+null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response was not read; window_truncated: none read did, the list capped; no_response: none did, all past the threshold"
 
 [[entries]]
 id = "core:backlog_ready.untriaged_after_7d_share"
@@ -106,11 +106,11 @@ evidence = "platform"
 null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no open issue is older than 7 days; open_truncated: the open-issue list hit its page cap"
 
 [[entries]]
-id = "core:backlog_ready.close_open_ratio_90d"
+id = "core:backlog_ready.close_open_ratio"
 kind = "signal"
-title = "Issues closed over issues opened in the window"
+title = "Issues closed over issues opened in the window of window_days (default 90)"
 collector = "core.backlog_ready"
-path = "backlog_ready.close_open_ratio_90d"
+path = "backlog_ready.close_open_ratio"
 type = "number"
 evidence = "platform"
 null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window; window_truncated: the window list hit its page cap"
@@ -143,4 +143,4 @@ collector = "core.backlog_ready"
 path = "backlog_ready.close_open_met"
 type = "bool"
 evidence = "platform"
-null_means = "close_open_ratio_90d is not measured; its reason says why"
+null_means = "close_open_ratio is not measured; its reason says why"

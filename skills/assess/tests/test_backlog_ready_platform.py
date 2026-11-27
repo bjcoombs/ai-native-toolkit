@@ -10,7 +10,7 @@ import copy
 import json
 import shutil
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,7 @@ import lib.hosting.issue_outcomes as io
 import lib.hosting.issue_outcomes_gitlab as iog
 import lib.scoring.level_tally as lt
 from lib.assess_config import BacklogThresholds, load_backlog_ready_thresholds
+from lib.backlog_issue_read import Issue, IssueRead
 from lib.backlog_ready_outcomes import outcome_fields, scan_backlog_ready_outcomes
 from lib.counts_only.content_free import counts_only
 from lib.hosting.gh_cli import GithubRepo
@@ -35,7 +36,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "backlog_ready"
 PLATFORM = FIXTURES / "platform"
 NOW = datetime(2026, 11, 25, 12, 0, tzinfo=timezone.utc)
 L2 = "backlog-ready.2"
-METRICS = ("first_response_median_days", "untriaged_after_7d_share", "close_open_ratio_90d")
+METRICS = ("first_response_median_days", "untriaged_after_7d_share", "close_open_ratio")
 MET = ("first_response_met", "untriaged_met", "close_open_met")
 
 
@@ -209,6 +210,7 @@ def test_a_long_timeline_with_no_response_read_is_unsettled(tmp_path: Path, gh: 
     node["timelineItems"] = {"pageInfo": {"hasNextPage": True}, "nodes": []}
     block = _block(_repo(tmp_path))
     assert (block["outcomes"]["responded"], block["outcomes"]["response_unread"]) == (2, 1)
+    assert block["outcomes"]["truncated"] is True  # the timeline cap was hit (#1591)
 
 
 def test_a_page_cap_is_truncated_and_still_measured(tmp_path: Path, gh: FakeGh,
@@ -219,8 +221,8 @@ def test_a_page_cap_is_truncated_and_still_measured(tmp_path: Path, gh: FakeGh,
     assert block["outcomes"]["truncated"] is True
     assert block["first_response_met"] is True and len(gh.calls) == 2
     # The dropped rows are the oldest, which could only add closes: the ratio is not taken.
-    assert (block["close_open_ratio_90d"], block["close_open_met"]) == (None, None)
-    assert block["close_open_ratio_90d_reason"] == "window_truncated"
+    assert (block["close_open_ratio"], block["close_open_met"]) == (None, None)
+    assert block["close_open_ratio_reason"] == "window_truncated"
 
 
 def test_a_capped_window_that_drops_window_issues_leaves_first_response_null(
@@ -516,7 +518,7 @@ def _own_notes(start: str, n: int) -> list[dict[str, Any]]:
 @pytest.mark.parametrize(("other", "responded", "unread"), [
     (None, 2, 1),  # a full page: an unread note on page 2 may come before the close
     ("01", 3, 0),  # a response on the page, before any note page 2 could hold
-])
+])  # either way the full page is a cap hit, so the read is truncated (#1591)
 def test_gitlab_a_full_notes_page_leaves_a_later_close_unread(
         tmp_path: Path, glab: FakeGlab, monkeypatch: pytest.MonkeyPatch, other: str | None,
         responded: int, unread: int) -> None:
@@ -526,8 +528,10 @@ def test_gitlab_a_full_notes_page_leaves_a_later_close_unread(
         notes[0] = {**notes[0], "author": {"id": 5, "username": "erin-fixture"}, "created_at": "2026-09-15T01:30:00Z"}
     glab.notes["303"] = notes
     glab.issues[2]["user_notes_count"] = 9
+    glab.open = glab.open[:4]  # under the page, so only the notes page can truncate the read
     block = _block(_repo(tmp_path))
     assert (block["outcomes"]["responded"], block["outcomes"]["response_unread"]) == (responded, unread)
+    assert block["outcomes"]["truncated"] is True
 
 
 def _self_closed(created: str) -> dict[str, Any]:
@@ -595,3 +599,52 @@ def test_an_issue_its_author_closed_after_the_limit_stays_overdue(tmp_path: Path
         node["timelineItems"]["nodes"][0]["createdAt"] = late
         gh.nodes().append(node)
     assert _block(_repo(tmp_path))["first_response_met"] is False
+
+
+# --- #1591: loose ends left by #1323 ---------------------------------------------------
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-nan"])
+def test_a_non_finite_threshold_keeps_its_default(tmp_path: Path, value: str) -> None:
+    root = _repo(tmp_path, f"[backlog_ready]\nfirst_response_max_days = {value}\n"
+                           f"untriaged_max_share = {value}\nclose_open_min_ratio = {value}\n")
+    assert load_backlog_ready_thresholds(root) == (BacklogThresholds(), False)
+
+
+@pytest.mark.parametrize(("days", "want"), [(3650, 3650), (3651, 90), (2 ** 62, 90)])
+def test_a_window_past_the_bound_keeps_its_default(tmp_path: Path, gh: FakeGh, days: int, want: int) -> None:
+    root = _repo(tmp_path, f"[backlog_ready]\nwindow_days = {days}\n")
+    assert load_backlog_ready_thresholds(root)[0].window_days == want
+    assert _block(root)["outcomes"]["window_days"] == want  # the date maths never overflows
+
+
+def _read(recent: list[Issue], window_truncated: bool = False) -> IssueRead:
+    return IssueRead("github", NOW - timedelta(days=90), NOW, tuple(recent), (), window_truncated,
+                     window_truncated)
+
+
+def test_an_unanswered_issue_waits_at_least_its_age() -> None:
+    answered = Issue(NOW - timedelta(days=10), None, (), NOW - timedelta(days=7.5))  # waited 2.5 days
+    fresh = Issue(NOW - timedelta(days=1.9), None, ())  # unanswered, 1.9 days old
+    fields = outcome_fields(_read([answered, fresh]), BacklogThresholds(), False, ())
+    # its best case is 1.9 days, not 0: the median of (1.9, 2.5) is past the 2-day limit either way
+    assert (fields["first_response_median_days"], fields["first_response_met"]) == (2.5, False)
+
+
+def test_a_capped_window_with_no_answer_reads_window_truncated() -> None:
+    fields = outcome_fields(_read([], window_truncated=True), BacklogThresholds(), False, ())
+    assert fields["first_response_median_days"] is None and fields["first_response_met"] is None
+    assert fields["first_response_median_days_reason"] == "window_truncated"
+
+
+def test_a_capped_timeline_with_a_response_is_truncated(tmp_path: Path, gh: FakeGh) -> None:
+    gh.nodes()[0]["timelineItems"]["pageInfo"]["hasNextPage"] = True
+    block = _block(_repo(tmp_path))
+    assert block["outcomes"]["responded"] == 3 and block["outcomes"]["truncated"] is True
+
+
+@pytest.mark.parametrize("field", ["author", "actor"])
+def test_a_response_with_no_actor_counts_as_a_person(tmp_path: Path, gh: FakeGh, field: str) -> None:
+    kind = "IssueComment" if field == "author" else "LabeledEvent"
+    gh.nodes()[0]["timelineItems"]["nodes"] = [{"__typename": kind, "createdAt": "2026-11-01T06:00:00Z", field: None}]
+    block = _block(_repo(tmp_path))
+    assert (block["outcomes"]["responded"], block["outcomes"]["no_response_count"]) == (3, 0)
