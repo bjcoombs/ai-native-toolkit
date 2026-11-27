@@ -123,7 +123,8 @@
 #   file nested_instructions discovers (layer_grades.instruction_presence root
 #   or nested_only, #821: harnesses load a nested AGENTS.md where the agent
 #   works). "No instruction file" (none) is level 0, as /assess scores a null
-#   instructions_grade Missing; the flag is null, and the level unknown, only
+#   instructions_grade Missing, and so is a stub (#922: every root file holds
+#   only headings and blank lines, and no nested file exists); the flag is null, and the level unknown, only
 #   when there is no root file and nested_instructions did not run, and a
 #   missing layer_grades block is unknown. A nested-only repository's advice
 #   is the gap_actions layer_grades entry: add a root file that names the
@@ -145,9 +146,11 @@
 #   prerequisite whose recipe runs only true, :, exit 0 or echo lines (with
 #   nothing chained after the echo) exists but runs nothing, so it does not
 #   count (#922).
-# - Layer 1 reads the observability rung from committed files (telemetry
-#   dependencies, a runbook or OBSERVABILITY.md, a logs or metrics MCP server
-#   or skill). A headless run builds it too (lib/run/headless_static.py, #699), so
+# - Layer 1 reads the observability rung from committed files (a logger or
+#   telemetry library import, a launcher such as opentelemetry-instrument or a
+#   telemetry -javaagent, a collector config, a runbook or OBSERVABILITY.md, a
+#   logs or metrics MCP server or skill). A telemetry dependency alone is
+#   declared, not counted (#922). A headless run builds it too (lib/run/headless_static.py, #699), so
 #   an uninstrumented repository reads level 0 there, not unknown.
 # - Documentation freshness reads doc_staleness.summary.stale_pct: the share
 #   of docs with a code subject of their own whose subject outran them (a
@@ -163,7 +166,8 @@
 #   action or GitLab review component, a [review] ai_review_components entry,
 #   or an AI review app's config file, git-tracked only) or a reviewed merged
 #   change (review_reality.reviewed_share > 0). It is unknown when no AI review
-#   step is committed and review_reality is unread. Level 2 reads
+#   step is committed and review_reality is unread, and so is a review app's
+#   config file alone (#922: the app may not be installed). Level 2 reads
 #   review_reality, which needs GitHub or GitLab through gh or glab: a headless
 #   run without --platform makes no network calls, so a repository with an AI
 #   review step reads "at least 1" there, and one without reads unknown.

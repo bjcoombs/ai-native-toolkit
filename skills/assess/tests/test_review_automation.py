@@ -273,7 +273,6 @@ def _reality(share: float | None) -> dict[str, Any]:
     (AUTO_NO, _reality(0.5), True),
     (AUTO_UNKNOWN, _reality(0.5), True),
     (AUTO_NO, _reality(0.0), False),
-    (AUTO_CONFIG, OFFLINE, True),  # nothing measured: the config file counts
     (AUTO_CONFIG, _reality(0.0), False),  # measured 0: a config file alone is contradicted
     (AUTO_CONFIG, {"available": True, "reviewed_share": 0.0, "bot_review_share": 0.3}, True),
     (AUTO_NO, {"available": True, "reviewed_share": None, "approved_share": 0.4}, True),
@@ -285,6 +284,8 @@ def test_review_evidence_known(automation: dict[str, Any], reality: dict[str, An
 
 @pytest.mark.parametrize(("automation", "reality", "code"), [
     (AUTO_NO, OFFLINE, "network"),
+    (AUTO_CONFIG, OFFLINE, "network"),  # #922: a config file alone waits for fleet --platform
+    (AUTO_CONFIG, _reality(None), "not_measured"),
     (AUTO_UNKNOWN, OFFLINE, "network"),
     (AUTO_NO, _reality(None), "not_measured"),
     (AUTO_NO, {"available": True, "reviewed_share": None, "approved_share": 0.0}, "not_measured"),
@@ -295,6 +296,18 @@ def test_review_evidence_unknown_carries_the_reason(automation: Any, reality: An
     block = review_evidence(automation, reality)
     assert block["available"] is False and block["present"] is None
     assert block["reason"].split(":", 1)[0] == code
+
+
+def test_a_review_config_file_alone_reads_not_measured_until_review_reality_is_read() -> None:
+    """#922: the app may not be installed, so the file alone is no evidence offline; the
+    reason is review_reality's network code, which the tally turns into the fleet
+    --platform hint. A CI step beside it still counts."""
+    block = review_evidence(AUTO_CONFIG, OFFLINE)
+    assert (block["available"], block["present"], block["ai_review_in_ci"]) == (False, None, True)
+    assert block["reason"] == NETWORK_REASON and "--platform" in block["reason"]
+    both = {**AUTO_CONFIG, "kinds": ["ci_action", "config_file"]}
+    assert review_evidence(both, OFFLINE)["present"] is True
+    assert review_evidence(AUTO_CONFIG, _reality(0.4))["present"] is True
 
 
 def test_review_evidence_is_registered_after_its_inputs_and_rebuilt_by_platform() -> None:

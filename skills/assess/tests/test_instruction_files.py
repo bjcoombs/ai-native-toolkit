@@ -296,3 +296,31 @@ def test_scans_docs_subdirectory(tmp_path: Path, fixtures_dir: Path) -> None:
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "docs/CLAUDE.md" in ctx["instruction_files"]
+
+
+def test_a_heading_only_file_is_a_stub() -> None:
+    """#922: nothing beyond headings, setext underlines and blank lines."""
+    from lib.instructions.instruction_files import is_heading_only
+    assert is_heading_only("# x\n")
+    assert is_heading_only("# Guide\n\n## Build\n\nTitle\n=====\n")
+    assert is_heading_only("")
+    assert not is_heading_only("# Guide\n\nRun `make test` before pushing.\n")
+    assert not is_heading_only("@AGENTS.md\n")
+
+
+def test_an_alias_inherits_its_targets_stub_flag() -> None:
+    from lib.instructions.instruction_files import _resolve_alias_grades
+    found = {"CLAUDE.md": {"grade": "F", "score": 0, "heading_only": True},
+             "AGENTS.md": {"grade": "D", "score": 9, "heading_only": False,
+                           "alias_target_basename": "CLAUDE.md"}}
+    _resolve_alias_grades(found)
+    assert found["AGENTS.md"]["heading_only"] is True
+
+
+def test_graded_files_carry_the_stub_flag(git_repo) -> None:
+    repo, commit = git_repo
+    _seed_assess(repo)
+    (repo / "CLAUDE.md").write_text("# x\n", encoding="utf-8")
+    commit("stub CLAUDE.md")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
+    assert ctx["instruction_files"]["CLAUDE.md"]["heading_only"] is True

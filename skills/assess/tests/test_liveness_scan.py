@@ -24,6 +24,12 @@ def _write(root: Path, rel: str, text: str) -> None:
     p.write_text(text, encoding="utf-8")
 
 
+def _instrumented(root: Path) -> None:
+    """Rung 1: a logging dependency and its import (a dependency alone is declared, #922)."""
+    _write(root, "requirements.txt", "structlog\n")
+    _write(root, "app/log.py", "import structlog\n")
+
+
 # ── dead-code parsers ──────────────────────────────────────────────────────
 
 def test_parse_vulture() -> None:
@@ -174,6 +180,7 @@ def test_observability_none(tmp_path: Path) -> None:
 def test_instrumented_but_human_only_is_rung_2(tmp_path: Path) -> None:
     """The meridian case: telemetry + a prose runbook, but no agent-invokable path."""
     _write(tmp_path, "package.json", '{"dependencies":{"prom-client":"1","winston":"3"}}')
+    _write(tmp_path, "src/log.js", "const winston = require('winston');\n")
     _write(tmp_path, "OBSERVABILITY.md",
            "Dashboards live in Grafana. SLOs are tracked by the platform team.")
     r = scan_observability(tmp_path).as_dict()
@@ -198,6 +205,7 @@ def test_agent_queryable_is_rung_3_via_mcp_and_runbook(tmp_path: Path) -> None:
 def test_prose_mention_of_grafana_does_not_reach_rung_3(tmp_path: Path) -> None:
     """A runbook that merely *names* a dashboard tool isn't agent-reachable."""
     _write(tmp_path, "go.mod", "require go.opentelemetry.io/otel v1.0.0")
+    _write(tmp_path, "main.go", 'package main\nimport "go.opentelemetry.io/otel"\n')
     _write(tmp_path, "runbooks/notes.md",
            "We use Grafana and Datadog. Ask the on-call engineer for access.")
     r = scan_observability(tmp_path)
@@ -205,7 +213,7 @@ def test_prose_mention_of_grafana_does_not_reach_rung_3(tmp_path: Path) -> None:
 
 
 def test_repo_skill_for_logs_is_reachable(tmp_path: Path) -> None:
-    _write(tmp_path, "requirements.txt", "structlog\n")
+    _instrumented(tmp_path)
     _write(tmp_path, ".claude/skills/tail-logs/SKILL.md", "# tail logs")
     r = scan_observability(tmp_path)
     assert r.rung == 3
@@ -214,7 +222,7 @@ def test_repo_skill_for_logs_is_reachable(tmp_path: Path) -> None:
 
 def test_overloaded_token_names_do_not_reach_rung_3(tmp_path: Path) -> None:
     """changelog/blog/login etc. must not be mistaken for telemetry channels."""
-    _write(tmp_path, "requirements.txt", "structlog\n")  # rung 1 instrumentation
+    _instrumented(tmp_path)  # rung 1 instrumentation
     _write(tmp_path, ".mcp.json", '{"mcpServers":{"changelog-bot":{"command":"x"},"login":{"command":"y"}}}')
     _write(tmp_path, "skills/blog-publisher/SKILL.md", "# blog")
     _write(tmp_path, "skills/catalog-search/SKILL.md", "# catalog")
@@ -225,7 +233,7 @@ def test_overloaded_token_names_do_not_reach_rung_3(tmp_path: Path) -> None:
 
 def test_observ_substring_does_not_reach_rung_3(tmp_path: Path) -> None:
     """`observer`/`observation` are not observability tooling; only `observab*` is."""
-    _write(tmp_path, "requirements.txt", "structlog\n")
+    _instrumented(tmp_path)
     _write(tmp_path, ".mcp.json", '{"mcpServers":{"observer-service":{"command":"x"}}}')
     assert scan_observability(tmp_path).rung == 1  # observer != observability
 
@@ -244,7 +252,7 @@ def test_two_body_tokens_reach_discoverable(tmp_path: Path) -> None:
     # Instrumentation present so the discoverable doc can elevate the rung -
     # this test isolates the 2-distinct-token threshold for *discoverable*
     # detection, not the rung floor (see test_docs_only_without_instrumentation).
-    _write(tmp_path, "requirements.txt", "structlog\n")
+    _instrumented(tmp_path)
     _write(tmp_path, "ops.md",
            "We watch SLOs in Grafana and page via alerting when budgets burn.")
     r = scan_observability(tmp_path)
@@ -289,7 +297,7 @@ def test_mcp_tooling_reaches_rung_3_without_instrumentation(tmp_path: Path) -> N
 def test_a_word_containing_on_call_is_not_a_runbook(tmp_path: Path, rel: str) -> None:
     """#823: the on-call name pattern is anchored on word or segment boundaries.
     These paths classify as source, so only the pattern keeps them out."""
-    _write(tmp_path, "requirements.txt", "structlog\n")
+    _instrumented(tmp_path)
     _write(tmp_path, rel, "# A lint rule\n")
     r = scan_observability(tmp_path)
     assert r.discoverable == []
@@ -302,7 +310,7 @@ def test_a_word_containing_on_call_is_not_a_runbook(tmp_path: Path, rel: str) ->
     "PagerOnCall/escalation.md",
 ])
 def test_an_on_call_doc_is_a_runbook(tmp_path: Path, rel: str) -> None:
-    _write(tmp_path, "requirements.txt", "structlog\n")
+    _instrumented(tmp_path)
     _write(tmp_path, rel, "# Paging\n")
     assert scan_observability(tmp_path).rung == 2
 
@@ -315,7 +323,7 @@ def test_a_runbook_under_a_test_or_fixture_path_is_not_discoverable(tmp_path: Pa
                                                                     rel: str) -> None:
     """#823: the shared path classifier sets test and fixture docs aside, for the
     name signal and for the body-content fallback alike."""
-    _write(tmp_path, "requirements.txt", "structlog\n")
+    _instrumented(tmp_path)
     _write(tmp_path, rel, "We watch SLOs in Grafana and page via alerting.\n")
     r = scan_observability(tmp_path)
     assert r.discoverable == []
@@ -325,6 +333,9 @@ def test_a_runbook_under_a_test_or_fixture_path_is_not_discoverable(tmp_path: Pa
 def test_instrumented_kinds_ride_on_the_block(tmp_path: Path) -> None:
     _write(tmp_path, "package.json", '{"dependencies":{"winston":"3"}}')
     assert scan_observability(tmp_path).as_dict()["instrumented"]["kinds"] == ["dependency"]
+    _write(tmp_path, "Procfile", "web: opentelemetry-instrument node app.js\n")
+    assert scan_observability(tmp_path).as_dict()["instrumented"]["kinds"] == [
+        "dependency", "launcher"]
     (tmp_path / "empty").mkdir()
     assert scan_observability(tmp_path / "empty").as_dict()["instrumented"] == {
         "present": False, "signals": [], "kinds": []}

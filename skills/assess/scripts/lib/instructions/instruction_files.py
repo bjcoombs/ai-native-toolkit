@@ -16,7 +16,9 @@ the best grade (`None` when no committed file exists, distinct from `F`).
 `broken_instruction_refs` adds doc links to a missing instruction file;
 `detect_ancestor_instructions` names the ancestor and global files a clone never sees
 (#57); `instruction_file_size` feeds the size signal (line and word counts, always-on
-lines, `bloat_penalty`). Files are graded against `instruction_placement.skill_texts`, so
+lines, `bloat_penalty`). Each graded entry carries `heading_only` (#922, `is_heading_only`):
+true when the file holds nothing beyond headings and blank lines, a stub `layer_grades`
+does not count; an alias inherits its target's value. Files are graded against `instruction_placement.skill_texts`, so
 a grade rests on the same always-on split as the file's `instruction_placement` record. Each graded entry carries the
 grader's `findings` (unresolved commands, stale paths and symbols), graded against an
 `instruction_content.RepoContext`; `grade_instruction_files` and `nested_instruction_surface`
@@ -31,6 +33,7 @@ placement record counts.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -163,6 +166,7 @@ def grade_instruction_files(
             "freshness_days": freshness,
             "line_count": len(text.splitlines()),
             "present": True,
+            "heading_only": is_heading_only(text),
         }
         # Alias detection (issue #57): a committed AGENTS.md/GEMINI.md that is a
         # symlink to - or a thin stub pointing at - a canonical instruction file
@@ -178,6 +182,17 @@ def grade_instruction_files(
     best = (max(found.values(), key=lambda v: GRADE_RANK.get(v["grade"], 0))["grade"]
             if found else None)
     return found, best, untracked, dangling_refs, skills_info, sensitive
+
+
+_SETEXT_UNDERLINE = re.compile(r"^[ \t]*(?:=+|-+)[ \t]*$")
+
+
+def is_heading_only(text: str) -> bool:
+    """A stub (#922): no line beyond ATX headings, setext underlines and blank lines."""
+    lines = text.splitlines()
+    nxt = lines[1:] + [""]
+    return all(not line.strip() or line.lstrip().startswith("#") or _SETEXT_UNDERLINE.match(line)
+               or (_SETEXT_UNDERLINE.match(after) and after.strip()) for line, after in zip(lines, nxt))
 
 
 # Basenames (lowercased) of the known instruction files, for cross-referencing
@@ -235,6 +250,7 @@ def _resolve_alias_grades(found: dict[str, dict[str, Any]]) -> None:
             # points at, and carries no maintenance burden of its own.
             meta["grade"] = target_meta["grade"]
             meta["score"] = target_meta["score"]
+            meta["heading_only"] = target_meta.get("heading_only", False)
 
 
 def detect_ancestor_instructions(repo_root: Path) -> list[str]:

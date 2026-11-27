@@ -15,7 +15,8 @@ the report: static reachability proves "nothing in *this* repo calls it", never
 **Observability tier (the decisive one), scored by three rungs:**
   1. **Instrumented** -- telemetry is emitted (OpenTelemetry, Prometheus,
      Datadog/APM, structured logging, or a standard-library logger in use in
-     production source; ``lib.keyhole.instrumentation_scan`` records which kind matched).
+     production source; ``lib.keyhole.instrumentation_scan`` records which kind matched;
+     a manifest dependency alone is declared, not counted, #922).
      Necessary, not sufficient.
   2. **Discoverable** -- an ``OBSERVABILITY.md`` / runbook tells the agent where
      runtime truth lives. Orients, but grants no access. Docs under a test or
@@ -44,7 +45,8 @@ from pathlib import Path
 from typing import NotRequired, TypedDict
 
 from lib.docs.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
-from lib.keyhole.instrumentation_scan import InstrumentationKind, detect_instrumented
+from lib.keyhole.instrumentation_scan import (InstrumentationKind, counts_as_instrumented,
+                                               detect_instrumented)
 from lib.path_classes import path_class
 from lib.run.run_scope import Scope, scope_roots
 from lib.run_context_types import (
@@ -629,7 +631,8 @@ class ObservabilityResult:
     def as_dict(self) -> ObservabilityBlock:
         return {
             "rung": self.rung,
-            "instrumented": {"present": bool(self.instrumented), "signals": self.instrumented,
+            "instrumented": {"present": counts_as_instrumented(self.instrumented_kinds),
+                             "signals": self.instrumented,
                              "kinds": self.instrumented_kinds},
             "discoverable": {"present": bool(self.discoverable), "signals": self.discoverable},
             "reachable": {"present": bool(self.reachable), "signals": self.reachable},
@@ -667,7 +670,7 @@ def scan_observability(repo_root: Path,
                       if s.startswith(("MCP server", "repo skill"))]
     if tool_reachable:
         rung = 3
-    elif instrumented:
+    elif counts_as_instrumented(kinds):  # a dependency alone is declared (#922)
         rung = 3 if reachable else 2 if discoverable else 1
     else:
         rung = 0
