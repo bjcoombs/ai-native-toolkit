@@ -10,7 +10,7 @@ Each entry in SKILLS maps a skill name to:
                            in the Skills UI and know where to check for updates.
   source_dir             — path relative to repo root
   replacements           — dict mapping chat-replace:KEY → replacement text
-  exclude_dirs           — subdirectories omitted from the ZIP
+  exclude_dirs           — subdirectories (or file names) omitted from the ZIP
   bundle_files           — optional dict mapping ZIP-relative dest paths → source
                            paths (relative to repo root). Markdown files have their
                            YAML frontmatter stripped during bundling.
@@ -237,7 +237,10 @@ SKILLS: dict[str, dict[str, Any]] = {
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/huddle",
-        "exclude_dirs": set(),
+        # The team-mode member prompt (#1410) is read only from a chat-skip block of
+        # SKILL.md, and team mode does not exist in this build, so it stays out of
+        # the ZIP. The build matches every path part, so a file name works here.
+        "exclude_dirs": {"member-prompt.md"},
         "replacements": {
             "hat-source": (
                 "**Hat methodologies** (`white-hat`, `red-hat`, `black-hat`, "

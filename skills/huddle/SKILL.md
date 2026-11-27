@@ -217,65 +217,7 @@ Agent(
 
 **Member prompt template:**
 
-```
-You are a [PROFESSIONAL ROLE] participating in a Six Thinking Hats team meeting about:
-
-[TOPIC]
-
-## Your Identity
-
-You are a [ROLE] with deep expertise in [DOMAIN]. This identity persists across ALL phases of the meeting. You see everything through the lens of your professional experience.
-
-## Your Teammates
-
-[ROSTER — the chair lists every other member's name slug here, e.g. "security-eng, product-mgr, sre".] You share findings by sending one `SendMessage` per teammate name; there is no broadcast. If this roster is missing, do NOT address the chair as `"main"` — for a background teammate `"main"` resolves to your own sub-session and is rejected ("you are the main conversation"), which can make you silently give up on reporting. Reach the chair as `SendMessage(to: "team-lead", ...)` — the `teammate_id` under which your spawn instructions arrived — and ask for the peer list. If you would rather self-discover, read the team config at `~/.claude/teams/<session-team>/config.json` and take the other `members[].name` entries.
-
-## IMMEDIATE FIRST TASK
-
-Read [SOURCE FILES]. Then immediately begin the [FIRST HAT COLOR] Hat phase:
-
-1. Spawn the [hat-color]-hat agent: Agent(subagent_type="[hat-color]-hat", prompt="As a [ROLE] investigating [TOPIC], focus on [SPECIFIC LENS-SHAPED QUESTIONS]. Read [SOURCE FILES] and investigate: [2-3 CONCRETE QUESTIONS FROM YOUR LENS].")
-
-2. When the agent returns, share your key findings with each teammate individually — one `SendMessage(to: "<teammate-name>", …)` per name on your roster (broadcast is unsupported). Lead with what's most important from your professional perspective.
-
-3. Read what other team members share. Respond directly to specific members via SendMessage when you see something they missed, want to build on their observation, disagree based on your expertise, or have a question.
-
-4. After peer discussion, wait for Blue Hat to announce the next phase.
-
-## How Subsequent Phases Work
-
-Blue Hat (the team lead) will announce each new phase. When announced:
-
-1. **Spawn the hat agent** with a prompt shaped by YOUR professional lens
-2. **Share findings** with each teammate individually — one `SendMessage` per name on your roster (no broadcast)
-3. **Engage the tension Blue raises** — Blue will name a specific disagreement and ask you to respond to a specific peer. Answer it *from your lens*: rebut, qualify, or build on their point with NEW reasoning your discipline supplies. 2-3 substantive messages max per phase.
-4. **Follow Blue's direction** — when Blue says move on, move on
-
-## Communication Style
-
-- Be direct and substantive. This is a professional meeting, not a report.
-- Reference specific findings from your hat agent investigation.
-- Challenge other members respectfully when your expertise says otherwise.
-- Build on others' observations — "Adding to what [member] said..."
-- **Stay in your lens — don't merge into the group voice.** Argue *from* your named profession. When you agree, say *why* from your expertise, or what your discipline would still flag; never collapse into a generic "I agree." The friction your specialty adds is your entire value here.
-- Keep exchanges focused — 2-3 substantive messages per phase, not endless back-and-forth.
-- **Never re-broadcast findings you already shared.** If Blue or a peer asks you to elaborate, add NEW detail or nuance.
-- When Blue announces a new phase, commit fully to the new hat. Don't continue cross-discussing the prior phase.
-
-## Hat Agent Prompts
-
-Shape every hat agent prompt through your lens:
-- DON'T: "Investigate the facts about X" (generic)
-- DO: "As a security engineer investigating X, I need you to focus on authentication flows, token handling, and access control. What are the facts about [specific security concern]?" (lens-shaped)
-
-Your professional lens determines WHAT you ask each hat to investigate. The hat methodology determines HOW it investigates.
-
-**Lane discipline**: Stay within the hat's defined methodology. Each hat has a "Not My Job" section — respect those boundaries. Don't duplicate other hats' concerns.
-
-## Hat Agent Output Format
-
-Every hat agent returns its findings as a Hat Findings object (the schema in the skill): `{lens, hat, claims: [{claim, severity_or_value, evidence}]}`. When you share findings, the body of each `SendMessage` IS that structured object — `SendMessage(to: "<teammate>", message: JSON.stringify({lens, hat, claims}), summary: "...")` — so peers and the chair consume claims, not prose.
-```
+Write each member's prompt from the template in `references/member-prompt.md` (relative to this skill dir), filling in the role, topic, roster of teammate names, source files and first hat phase.
 <!-- chat-skip:end -->
 
 <!-- chat-skip:start -->
@@ -440,36 +382,7 @@ Once every teammate has reported or acknowledged shutdown, the huddle is complet
 
 ## Discovery Mode: Loop-Until-Dry
 
-For topics classified **discovery** in Step 1 only. Black Hat (and Green Hat where the topic is about generating options, not just risks) repeats until it stops surfacing anything new, instead of running once. A single risk-surfacing pass under-counts a long tail; one more round almost always finds another failure mode. Deliberation topics never enter this loop.
-
-**Termination - whichever comes first:**
-1. **Convergence**: two consecutive rounds add no new claims to the findings.
-2. **Hard cap**: 5 rounds per hat.
-
-```
-round = 1
-prev_empty = false
-while round <= 5:
-    run_hat_phase(hat)              # discovery semantics: "what have we NOT yet named?"
-    new_claims = claims this round absent from the accumulated findings
-    if new_claims == [] and prev_empty:   # two consecutive empty rounds
-        break                              # converged
-    prev_empty = (new_claims == [])
-    round += 1
-if round > 5:
-    record "hard cap" in the verdict
-```
-
-**What counts as a new claim** (reuse the Hat Findings `claim` field):
-- Restating a prior claim in different words - **not new**.
-- Elaborating a prior claim with additional evidence - **new** (adds information).
-- Introducing a new risk/opportunity - **new**.
-
-**Verdict disclosure.** If the hard cap stops the loop before convergence, the verdict must say so - no silent truncation: e.g. "Discovery loop: Black Hat ran 5 rounds (hard cap), did not fully converge - additional risks may exist." On convergence, record the round count plainly.
-
-This loop applies in every mode - solo (Blue Hat re-runs the hat agent), phased (re-spawn the hat sub-agent per round with the running synopsis), and team (re-announce the hat phase to members each round). In all modes the chair runs the new-claim test against the accumulated findings.
-
-**Non-discovery topics retain single-pass behaviour, unchanged.** This mode adds behaviour only to discovery-classified topics; every deliberation huddle runs exactly as it did before, save for the new Coverage line from the completeness-critic pass.
+For topics classified **discovery** in Step 1 only: before the first Black (or Green) round, read `references/loop-until-dry.md` (relative to this skill dir) for the loop, its termination (convergence or the 5-round hard cap), what counts as a new claim, and the verdict disclosure.
 
 ## Facilitation Principles
 
