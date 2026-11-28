@@ -45,7 +45,10 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
   var CONFIRM = "Not measured means this run could not read it, never that it is unmet. "
     + "A full assessment run on the repository confirms it.";
   function measuredNote(html) {
-    return /not measured/i.test(html) ? html + "<p class=\"muted\">" + esc(CONFIRM) + "</p>" : html;
+    // once per section, in its visible text: a condition's hover lines, listed in the drill-down,
+    // may carry it already; a cell's title attribute does not count, since it shows only on hover
+    var shown = html.replace(/<[^>]*>/g, " ");
+    return /not measured/i.test(shown) && shown.indexOf(esc(CONFIRM)) < 0 ? html + "<p class=\"muted\">" + esc(CONFIRM) + "</p>" : html;
   }
   function esc(s) {
     return String(s === null || s === undefined ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")

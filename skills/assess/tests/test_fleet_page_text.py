@@ -84,15 +84,15 @@ def test_reasons_a_comparison_gives_name_no_tool_limitation() -> None:
 
 @pytest.mark.parametrize("name", sorted(fx.VARIANTS))
 def test_every_not_measured_reading_names_how_to_confirm_it(name: str) -> None:
-    """Each section that shows a not-measured reading, and each hover that reads one, says how
-    to confirm it."""
+    """Each section that shows a not-measured reading says how to confirm it once, in its visible
+    text, and each hover that reads one says it too."""
     out = _rendered(name)
     sections = 0
     for page in out["pages"]:
         for section in re.split(r"(?=<h2>)", page):
             if re.search(r"not measured", _text(section), re.I):
                 sections += 1
-                assert CONFIRM in section, _text(section)[:200]
+                assert _text(section).count(CONFIRM) == 1, _text(section)[:200]
     titles = [t["title"] for t in out["titles"] if re.search(r"not measured", t["title"], re.I)]
     assert sections and titles  # the fixture fleet has a not-measured cell and a failed scan
     for title in titles:
@@ -116,3 +116,18 @@ def test_the_packs_section_carries_the_note_only_when_a_pack_check_was_not_measu
                           capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
     packs = page.split("<h2>Practice packs</h2>")[1].split("<h2>")[0]
     assert (CONFIRM in packs) == bool(unread)
+
+
+def test_a_not_measured_condition_s_drill_down_says_how_to_confirm_it_once() -> None:
+    """The condition tier lists the hover's lines, which carry the confirmation already."""
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    script, bundle = _parts(fx.goldens()["expected-full.html"])
+    state = {"view": "ownership", "unit": "grp/other", "repo": "grp/other/proj3", "tag": "docs",
+             "cond": {"row": 0, "level": 1}}
+    runner = RUNNER.split("const out")[0] + "process.stdout.write(api.renderPage(b, input.state, b.targets, false));"
+    page = subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle, "state": state}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
+    drill = page.split("<h2>Drill-down</h2>")[1].split("<h2>")[0]
+    assert "State: not measured" in drill
+    assert _text(drill).count(CONFIRM) == 1

@@ -49,7 +49,7 @@ words what it finds. Its parts:
 - **Order.** Units and repositories are listed by label, never by rank.
 - **Page text talks about the repositories, not the tool.** No toolkit issue number, bug,
   limitation or roadmap item reaches the page, comments in the script included. Each rendered
-  section that shows a not-measured reading ends with ``CONFIRM`` (``measuredNote``), and a hover
+  section that shows a not-measured reading carries ``CONFIRM`` once (``measuredNote``), and a hover
   that reads one carries it on the line before the needs: what not measured means and that a full assessment run on the
   repository confirms it. Tests: ``tests/test_fleet_page_text.py``.
 
@@ -98,7 +98,10 @@ SCRIPT = r"""
   var CONFIRM = "Not measured means this run could not read it, never that it is unmet. "
     + "A full assessment run on the repository confirms it.";
   function measuredNote(html) {
-    return /not measured/i.test(html) ? html + "<p class=\"muted\">" + esc(CONFIRM) + "</p>" : html;
+    // once per section, in its visible text: a condition's hover lines, listed in the drill-down,
+    // may carry it already; a cell's title attribute does not count, since it shows only on hover
+    var shown = html.replace(/<[^>]*>/g, " ");
+    return /not measured/i.test(shown) && shown.indexOf(esc(CONFIRM)) < 0 ? html + "<p class=\"muted\">" + esc(CONFIRM) + "</p>" : html;
   }
   function esc(s) {
     return String(s === null || s === undefined ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
