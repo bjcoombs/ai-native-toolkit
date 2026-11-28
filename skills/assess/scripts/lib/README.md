@@ -229,7 +229,7 @@ New code imports the new path.
   Named `hosting`, not `platform`, because a `lib/platform/` package would shadow the standard
   library's `platform` module for any script run by path from `lib/` (decision 9 on #917).
   `external_ci`, `external_ci_rules`, `gitlab_rules` and `unread_ci` (#884, #928) postdate the
-  #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`, `gh_cli.py`, `github_secret_scanning.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_include_renames.py`, `gitlab_notes.py`, `issue_outcomes.py`, `issue_outcomes_gitlab.py`, `merged_sample.py`, `org_security_policy.py`, `platform_cli.py`, `review_reality.py`.
+  #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `config_snapshots.py`, `delivery.py`, `gh_cli.py`, `github_secret_scanning.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_include_renames.py`, `gitlab_notes.py`, `issue_outcomes.py`, `issue_outcomes_gitlab.py`, `merged_sample.py`, `org_security_policy.py`, `platform_cli.py`, `review_reality.py`.
 - **`instructions/`**: agent instruction files read offline, the `instructions` group (#1394):
   discovery of root, nested and path-scoped files and their scope globs, section placement,
   content and claim checks, the always-loaded budget, the grader and the per-file records it

@@ -386,6 +386,7 @@ def test_without_a_committed_queue_unreadable_rules_leave_merge_queue_unknown(wo
     (False, False, True, (None, None)),          # rules say no; classic protection is not read for it
     (False, True, False, (False, "ruleset")),
     (None, None, False, (None, None)),
+    (False, True, None, (None, None)),           # the committed read was unsettled: not a no
 ])
 def test_merge_queue_reads_the_platform_first(ruleset_queue, required, committed, expected) -> None:
     from lib.hosting.review_reality import merge_queue

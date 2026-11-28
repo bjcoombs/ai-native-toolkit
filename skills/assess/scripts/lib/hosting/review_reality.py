@@ -115,7 +115,8 @@ rules are read as they stand now, so `oldest_merged_days_ago` travels with them.
 `merge_queue` rule. Where the rules or the protection could not be read, a committed merge
 queue (`lib/ci/review_rules.py`: a `merge_group` workflow trigger or a Mergify `queue_rules`)
 makes it True from `committed`; it is False (`ruleset`) only when the rules were read with no
-queue and none is committed, else null with a null source. Counts, shares and booleans only: no title or login reaches
+queue and the committed read found none (an unread one is not a no), else null with a null
+source. Counts, shares and booleans only: no title or login reaches
 the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
 sample's merged merge requests (`scan_gitlab_review_reality(project, mrs, notes=...)`) and
@@ -303,19 +304,20 @@ def review_required(slug: str) -> bool | None:
 
 
 def merge_queue(ruleset_queue: bool | None, required: bool | None,
-                committed: bool) -> tuple[bool | None, str | None]:
+                committed: bool | None) -> tuple[bool | None, str | None]:
     """``(merge_queue, merge_queue_source)`` (#856): the platform's answer, else the committed one.
 
     True from ``ruleset`` when the effective rules carry a ``merge_queue`` rule. Where the
     rules or the protection could not be read (``ruleset_queue`` or ``required`` None), a
     committed merge queue (``lib.ci.review_rules``: a ``merge_group`` trigger or a Mergify
     ``queue_rules``) reads True from ``committed``. False only when the rules were read with no
-    queue and none is committed; otherwise None, never a false no."""
+    queue and the committed read found none (``committed`` False; None is not a no); otherwise
+    None, never a false no."""
     if ruleset_queue:
         return True, "ruleset"
     if committed and (ruleset_queue is None or required is None):
         return True, "committed"
-    if ruleset_queue is False and not committed:
+    if ruleset_queue is False and committed is False:
         return False, "ruleset"
     return None, None
 

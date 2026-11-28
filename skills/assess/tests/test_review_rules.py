@@ -42,7 +42,8 @@ MERGE_GROUP = "name: ci\non:\n  pull_request:\n  merge_group:\njobs:\n  t:\n    
 
 
 def _git(repo: Path, *args: str) -> None:
-    env = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null"}
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE")}
+    env["GIT_CONFIG_GLOBAL"] = "/dev/null"
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
 
 
@@ -58,6 +59,11 @@ def _repo(root: Path, files: dict[str, str], untracked: dict[str, str] | None = 
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
     return root
+
+
+def _mkdir(path: Path) -> Path:
+    path.mkdir()
+    return path
 
 
 def _rules(root: Path) -> list[tuple[str, str]]:
@@ -137,10 +143,28 @@ def test_an_unread_owners_file_never_reads_catch_all(tmp_path: Path) -> None:
     "policy:\n  approval: [x]\napproval_rules:\n  - name: x\n    requires:\n      count: \"1\"\n",
     "policy:\n  approval: [x]\napproval_rules:\n  - name: x\n    requires:\n      count: true\n",
     "# approval_rules:\n#   - requires:\n#       count: 1\npolicy: {}\n",
+    # an unreferenced rule that needs approval, beside an auto-approve that is in force
+    "policy:\n  approval: [auto]\napproval_rules:\n  - name: auto\n  - name: unused\n    requires:\n"
+    "      count: 2\n",
+    # an or with an unconditional auto-approve branch
+    "policy:\n  approval:\n    - or: [auto, manual]\napproval_rules:\n  - name: auto\n  - name: manual\n"
+    "    requires: {count: 1}\n",
 ])
 def test_a_policy_that_requires_no_approval_does_not_count(tmp_path: Path, text: str) -> None:
     block = scan_review_rules(_repo(tmp_path, {".policy.yml": text}))
     assert block["arms"] == [] and block["present"] is False
+
+
+def test_an_and_of_an_auto_approve_and_a_required_rule_counts(tmp_path: Path) -> None:
+    text = ("policy:\n  approval:\n    - and: [auto, manual]\napproval_rules:\n  - name: auto\n"
+            "  - name: manual\n    requires: {count: 1}\n")
+    assert _rules(_repo(tmp_path, {".policy.yml": text})) == [("policy_bot", ".policy.yml")]
+
+
+def test_a_policy_naming_an_undefined_rule_is_unsettled(tmp_path: Path) -> None:
+    text = "policy:\n  approval: [missing]\napproval_rules:\n  - name: x\n    requires: {count: 1}\n"
+    block = scan_review_rules(_repo(tmp_path, {".policy.yml": text}))
+    assert block["present"] is None and block["unsettled"] == [".policy.yml"]
 
 
 @pytest.mark.parametrize(("files", "expected", "unsettled"), [
@@ -177,6 +201,10 @@ def test_a_ruleset_counts_only_when_active_and_requiring_review(
     ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("schedule", "cat docs/rubrics/a.md")}, []),
     ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat docs/rubrics-old/a")}, []),
     ({"docs/guides/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat docs/guides/a.md")}, []),
+    # a paths filter says when the workflow runs, not that it uses the folder
+    ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml":
+      "name: d\non:\n  pull_request:\n    paths: ['docs/rubrics/**']\njobs:\n  b:\n    runs-on: x\n"
+      "    steps:\n      - run: mkdocs build\n"}, []),
 ])
 def test_a_review_guide_directory_counts_when_a_pull_request_workflow_names_it(
         tmp_path: Path, files: dict[str, str], expected: list[tuple[str, str]]) -> None:
@@ -211,7 +239,13 @@ def test_outside_a_git_checkout_the_block_is_unavailable(tmp_path: Path) -> None
     block = scan_review_rules(tmp_path)
     assert block["available"] is False and block["present"] is None
     assert block["reason"].startswith("git_tracking_unknown")
-    assert committed_merge_queue(block) is False
+    assert committed_merge_queue(block) is None
+
+
+def test_an_unsettled_file_leaves_the_committed_merge_queue_unknown(tmp_path: Path) -> None:
+    block = scan_review_rules(_repo(tmp_path, {".mergify.yml": "queue_rules: &q [x]\n"}))
+    assert committed_merge_queue(block) is None
+    assert committed_merge_queue(scan_review_rules(_repo(_mkdir(tmp_path / "b"), {"README.md": "x"}))) is False
 
 
 def test_a_reader_fault_reads_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -278,6 +312,7 @@ def test_the_yaml_reader_reads_the_subset_the_rule_files_use() -> None:
     "a: &x 1\n", "a: *x\n", "a: !tag 1\n", "<<: {}\n", "a: [1,\n  2]\n", "a: plain\n  more\n",
     "a: 1\n---\nb: 2\n", "%YAML 1.2\na: 1\n", "a: 1\na: 2\n", "a:\n\t- x\n", "a: 1\n  b: 2\n",
     "  a: 1\n", "a: 'open\n", "- a\nb: 1\n", "a: {k: v, k: w}\n", "a: [x]]\n",
+    "a:\n  - - x\n", "---\n---\nqueue_rules: [default]\n",
 ])
 def test_the_yaml_reader_fails_closed(text: str) -> None:
     with pytest.raises(YamlError):

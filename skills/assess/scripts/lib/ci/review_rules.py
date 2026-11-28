@@ -8,9 +8,10 @@ git-tracked files, each parsed, never matched as text:
   (``ci_triggers.workflow_events``) names ``merge_group``, or a Mergify config
   (``.mergify.yml``, ``.mergify/config.yml``, ``.github/mergify.yml``) with a non-empty
   ``queue_rules`` list;
-- ``policy_bot``: a root ``.policy.yml`` whose ``policy.approval`` is non-empty and whose
-  ``approval_rules`` hold a rule with ``requires.count`` of 1 or more (a rule that requires no
-  approval is an auto-approve and does not count);
+- ``policy_bot``: a root ``.policy.yml`` whose ``policy.approval`` expression always needs an
+  approval: each rule it names resolves in ``approval_rules``, an ``and`` needs one when any
+  member does, an ``or`` only when every branch does (an unconditional auto-approve, ``count`` 0
+  and no ``if``, clears it; a conditional one is left out). An unknown rule name is unsettled;
 - ``prow_owners``: Prow ``OWNERS`` files naming ``approvers``, at the top level or under
   ``filters``. Mirroring the #785 catch-all rule, OWNERS files that between them name one owner
   for everything (after expanding a root ``OWNERS_ALIASES``) do not count: with Prow's implicit
@@ -23,7 +24,9 @@ git-tracked files, each parsed, never matched as text:
 - ``review_guide``: a tracked directory whose name marks review guidance (``review-guidelines``,
   ``review_checklist``, ``code-review-criteria``, or a folder of grading sheets such as
   ``rubrics``) that a workflow running on proposed changes
-  (``review_automation.runs_on_changes``) names as a path. Comment text never counts.
+  (an ``on:`` naming a ``review_automation.REVIEW_EVENTS`` event) names as a path, outside its
+  ``on:`` block (a ``paths:`` filter only says when the workflow runs). Comment text never counts;
+  a workflow whose ``on:`` cannot be read is unsettled, as for the merge queue.
 
 Committed config is evidence, not proof the app or rule is live: the block moves no tally or
 Step. ``lib.scoring.condition_evidence`` attaches ``arms`` to the review condition while it is
@@ -45,7 +48,7 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from lib.ci.review_automation import runs_on_changes
+from lib.ci.review_automation import REVIEW_EVENTS
 from lib.ci.shared_tooling import workflow_events
 from lib.ci.yaml_tree import Value, parse
 from lib.history.git_churn import tracked_files
@@ -186,14 +189,14 @@ class _Scan:
             raise _Unsettled(rel)
         policy, rules = doc.get("policy"), doc.get("approval_rules")
         approval = policy.get("approval") if isinstance(policy, dict) else None
-        if not isinstance(approval, list) or not approval or not isinstance(rules, list):
+        if not isinstance(approval, list) or not approval:
             return
-        for rule in rules:
-            requires = rule.get("requires") if isinstance(rule, dict) else None
-            count = requires.get("count") if isinstance(requires, dict) else None
-            if isinstance(count, int) and not isinstance(count, bool) and count >= 1:
-                self.credit("policy_bot", rel)
-                return
+        if not isinstance(rules, list):
+            raise _Unsettled(rel)  # the policy names rules the file does not define
+        by_name: dict[str, Mapping[str, Any]] = {
+            name: r for r in rules if isinstance(r, dict) and isinstance(name := r.get("name"), str)}
+        if _needs_approval(approval, by_name, conjunction=True):
+            self.credit("policy_bot", rel)
 
     def prow_owners(self) -> None:
         files = sorted(r for r in self.tracked if PurePosixPath(r).name == OWNERS)
@@ -249,12 +252,55 @@ class _Scan:
                        if _GUIDE_DIR.fullmatch(PurePosixPath(p).name.lower())})
         if not dirs:
             return
-        texts = ["\n".join(strip_comment(line) for line in text.splitlines())
-                 for _, text in workflows if runs_on_changes(text)]
+        texts = [_without_on(text) for _, text in workflows
+                 if (events := workflow_events(text)) is not None and set(events) & REVIEW_EVENTS]
         for guide in dirs:
             named = re.compile(r"(?<![\w./-])(?:\./)?" + re.escape(guide) + r"(?![\w.-])")
             if any(named.search(text) for text in texts):
                 self.credit("review_guide", guide)
+
+
+def _required_count(rule: Mapping[str, Any]) -> int:
+    requires = rule.get("requires")
+    count = requires.get("count") if isinstance(requires, dict) else None
+    return count if isinstance(count, int) and not isinstance(count, bool) else 0
+
+
+def _needs_approval(expr: Any, rules: Mapping[str, Mapping[str, Any]], conjunction: bool) -> bool:
+    """Whether a policy-bot ``approval`` expression always needs an approval.
+
+    A list is an ``and`` (``conjunction``) or the members of an ``or``. A rule name needs one when
+    its ``requires.count`` is 1 or more. An ``or`` needs one only when every branch does, so an
+    unconditional auto-approve (``count`` 0, no ``if``) clears it; a conditional auto-approve
+    (with ``if``) clears only the changes it matches and is left out. A name the file does not
+    define, or any other shape, is unsettled."""
+    if isinstance(expr, str):
+        if expr not in rules:
+            raise _Unsettled(expr)
+        return _required_count(rules[expr]) >= 1
+    if isinstance(expr, dict) and len(expr) == 1 and next(iter(expr)) in ("and", "or"):
+        key, members = next(iter(expr.items()))
+        return _needs_approval(members, rules, conjunction=key == "and")
+    if not isinstance(expr, list) or not expr:
+        raise _Unsettled("approval")
+    if conjunction:
+        return any(_needs_approval(e, rules, conjunction=True) for e in expr)
+    branches = [e for e in expr if not (isinstance(e, str) and e in rules and "if" in rules[e]
+                                        and _required_count(rules[e]) < 1)]
+    return bool(branches) and all(_needs_approval(e, rules, conjunction=True) for e in branches)
+
+
+def _without_on(text: str) -> str:
+    """A workflow's text without its top-level ``on:`` block, so a ``paths:`` filter that names a
+    folder is not read as the workflow using it."""
+    out: list[str] = []
+    skipping = False
+    for line in text.splitlines():
+        if line[:1] not in ("", " ", "\t", "#", "-"):
+            skipping = line.split(":", 1)[0].strip().strip("'\"") in ("on", "true")
+        if not skipping:
+            out.append(strip_comment(line))
+    return "\n".join(out)
 
 
 def _approvals(params: Any) -> int:
@@ -314,7 +360,11 @@ def rules_or_unknown(repo_root: Path) -> ReviewRulesBlock:
                 "catch_all_owners": False, "unsettled": []}
 
 
-def committed_merge_queue(block: Mapping[str, Any] | None) -> bool:
-    """Whether a ``review_rules`` block credits a committed merge queue."""
-    return (isinstance(block, Mapping) and block.get("available") is True
-            and "merge_queue" in (block.get("arms") or ()))
+def committed_merge_queue(block: Mapping[str, Any] | None) -> bool | None:
+    """Whether a ``review_rules`` block credits a committed merge queue: None when the block is
+    missing or unavailable, or credits none while a file was unsettled."""
+    if not isinstance(block, Mapping) or block.get("available") is not True:
+        return None
+    if "merge_queue" in (block.get("arms") or ()):
+        return True
+    return None if block.get("unsettled") else False

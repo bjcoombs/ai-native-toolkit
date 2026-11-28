@@ -12,7 +12,7 @@ publishes = ["review_rules"]
 reads = ["repo_root"]
 stage = "read_side"
 headless = { review_rules = "registered" }
-whys.review_rules = "A rule kept as code is a rule an agent can read before it opens a change, and a reviewer can check it against the code. A merge queue, an approval policy or an owners file says who must look at a change before it lands."
+whys.review_rules = "A rule kept as code is a rule an agent can read before it opens a change, and a reviewer can check it against the code. An approval policy or an owners file says who must look at a change before it lands, and a merge queue says how it lands."
 shapes = [
   { path = "review_rules", type = "lib.run_context_types_review_rules:ReviewRulesBlock" },
 ]

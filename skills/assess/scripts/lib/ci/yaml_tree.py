@@ -18,8 +18,8 @@ scalars:
 
 Anything else raises ``lib.pack_yaml.YamlError`` with its code, so a caller reads the file as
 unsettled, never as empty: an anchor, alias, tag, merge key or complex key, a flow collection
-or quoted scalar that spans lines, a plain scalar continued on the next line, a second
-document or a directive (``unsupported_yaml``); a tab in the indentation, a duplicate key, or
+or quoted scalar that spans lines, a plain scalar continued on the next line, a nested list on
+one line (``- - x``), a second document or a directive (``unsupported_yaml``); a tab in the indentation, a duplicate key, or
 a line no open block owns (``unparsable_file``). Tests: ``tests/test_review_rules.py``.
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ _NULLS = frozenset({"", "~", "null", "Null", "NULL"})
 
 def _rows(text: str) -> list[Row]:
     rows: list[Row] = []
-    started = False
+    started = marked = False
     for raw in text.lstrip("﻿").splitlines():
         line = strip_comment(raw)
         if not line.strip():
@@ -49,8 +49,9 @@ def _rows(text: str) -> list[Row]:
             raise YamlError(UNPARSABLE)
         body = line.strip()
         if not lead and (body in ("---", "...") or body.startswith(("--- ", "%"))):
-            if started or body != "---":
-                raise YamlError(UNSUPPORTED)
+            if started or marked or body != "---":
+                raise YamlError(UNSUPPORTED)  # a second document, a directive or an end marker
+            marked = True
             continue
         started = True
         rows.append((len(lead), body))
@@ -194,6 +195,8 @@ class _Reader:
         while (row := self.peek()) is not None and row[0] == indent and (
                 row[1] == "-" or row[1].startswith("- ")):
             rest = row[1][1:].lstrip(" ")
+            if rest == "-" or rest.startswith("- "):
+                raise YamlError(UNSUPPORTED)  # a nested list on one line (``- - x``)
             column = indent + len(row[1]) - len(rest)
             if rest and rest[0] not in "'\"[{" and (": " in rest or rest.endswith(":")):
                 self.rows[self.i] = (column, rest)  # ``- key: v`` opens a mapping at the key's column
