@@ -9,7 +9,9 @@ whether a section exists and how many entries named no item this reader parses.
 the merged configuration (``ci_includes.merged_config``) never settles what it defines.
 ``inputs`` holds the item's ``inputs:`` as ``(name, raw value)`` pairs (#1339), block or flow;
 a value that is not one line (a list, a map) is ``""``. ``lib.ci.ci_include_inputs`` reads them.
-Inward-only imports: ``lib.ci.shared_tooling``. Tests: ``tests/test_ci_includes.py``.
+``include_ident(item)`` is the record id a roll-up dedupes on (``gitlab_project:<path>``,
+``gitlab_component:<path>``; None for the other kinds). Inward-only imports:
+``lib.ci.shared_tooling``. Tests: ``tests/test_ci_includes.py``, ``tests/test_ci_include_inputs.py``.
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from lib.ci.shared_tooling import include_lines
+from lib.ci.shared_tooling import component_source, include_lines
 
 # ``unknown``: an ``include:`` entry naming no item this reader parses (status ``unparsed``);
 # its kind is not known, so it never counts as a local file.
@@ -91,6 +93,15 @@ def _values(raw: str) -> list[str]:
 
 
 _ITEM_KINDS: tuple[IncludeKind, ...] = ("project", "component", "local", "template", "remote")
+
+
+def include_ident(item: IncludeItem) -> str | None:
+    """``IncludeRecord.id``: the project or component a roll-up dedupes on; None otherwise."""
+    if item.kind == "project":
+        return f"gitlab_project:{item.source.strip('/').lower()}"
+    if item.kind == "component":
+        return f"gitlab_component:{component_source(item.source).lower()}"
+    return None
 
 
 def _pair(text: str) -> tuple[str, str] | None:

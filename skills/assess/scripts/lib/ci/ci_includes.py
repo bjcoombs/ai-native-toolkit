@@ -56,8 +56,8 @@ from lib.instructions.command_index import MAX_CONFIG_BYTES
 from lib.history.git_churn import tracked_files
 from lib.ci.ci_include_items import (
     KINDS as KINDS, IncludeItem as IncludeItem, IncludeKind as IncludeKind, _split_flow, _unquote,
-    include_items as include_items)
-from lib.ci.ci_include_inputs import Inputs, file_inputs, interpolate, item_inputs
+    include_ident as _ident, include_items as include_items)
+from lib.ci.ci_include_inputs import Inputs, file_inputs, interpolate, item_inputs, used_inputs
 from lib.ci.shared_tooling import component_source, pin
 
 GITLAB_CI = ".gitlab-ci.yml"
@@ -323,15 +323,6 @@ def _read_at(clone: Path, ref: str | None) -> _Source | IncludeStatus:
     return _Source(clone, head, "head") if head is not None else "not_cloned"
 
 
-def _ident(item: IncludeItem) -> str | None:
-    """``IncludeRecord.id``: the project or component a roll-up dedupes on; None otherwise."""
-    if item.kind == "project":
-        return f"gitlab_project:{item.source.strip('/').lower()}"
-    if item.kind == "component":
-        return f"gitlab_component:{component_source(item.source).lower()}"
-    return None
-
-
 def _written(item: IncludeItem) -> str:
     """An include item as written, ``<kind>: <source>`` (``Slot.include``)."""
     return f"{item.kind}: {item.source}"
@@ -398,8 +389,9 @@ class _Walk:
 
     def walk_once(self, key: tuple[str, str | None, str], text: str, source: _Source, depth: int,
                   line: int, passed: Inputs) -> None:
-        if (values := file_inputs(text, passed)) not in self.walked.setdefault(key, []):  # #1339
-            self.walked[key].append(values)
+        values = file_inputs(text, passed)  # #1339: again only for values its includes read
+        if (used := used_inputs(text, values)) not in self.walked.setdefault(key, []):
+            self.walked[key].append(used)
             self.walk(text, source, depth + 1, line, values)
 
     def walk(self, text: str, here: _Source, depth: int, top_line: int | None,

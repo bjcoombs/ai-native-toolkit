@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from lib.ci.ci_checks import scan_ci_checks
-from lib.ci.ci_include_inputs import file_inputs, interpolate, item_inputs, spec_defaults
+from lib.ci.ci_include_inputs import file_inputs, interpolate, item_inputs, spec_defaults, used_inputs
 from lib.ci.ci_includes import STATUSES, IncludeItem, include_items, resolve_includes
 
 
@@ -164,6 +164,21 @@ def test_a_file_included_twice_with_the_same_inputs_walks_once(tmp_path: Path) -
     item = "  - component: gl.test/grp/outer/outer@3.0\n    inputs:\n      version: '2.0'\n"
     root, app = _fleet(tmp_path, _outer(None), "include:\n" + item + item)
     assert len(resolve_includes(app.resolve(), root.resolve()).includes) == 3
+
+
+def test_a_file_included_twice_with_inputs_no_include_reads_walks_once(tmp_path: Path) -> None:
+    item = "  - local: /ci/c.yml\n    inputs:\n      job: {}\n"
+    root = tmp_path / "root"
+    app = _clone(root, "grp/app")
+    _commit(app, {".gitlab-ci.yml": "include:\n" + item.format("a") + item.format("b"),
+                  "ci/c.yml": "spec:\n  inputs:\n    job:\n---\ninclude:\n  - local: /ci/n.yml\n",
+                  "ci/n.yml": TEST_TPL})
+    assert len(resolve_includes(app.resolve(), root.resolve()).includes) == 3
+
+
+def test_used_inputs_names_only_what_the_include_section_reads() -> None:
+    text = _outer(None) + "job:\n  script:\n    - echo $[[ inputs.stage ]]\n"
+    assert used_inputs(text, {"version": "2.0", "stage": "x"}) == {"version": "2.0"}
 
 
 def test_a_value_passed_from_the_parents_own_input_travels_down(tmp_path: Path) -> None:

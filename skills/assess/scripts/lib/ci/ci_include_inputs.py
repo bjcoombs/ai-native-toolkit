@@ -13,6 +13,8 @@ known for reads ``input_ref``, never ``ref_missing``, so a reader can tell the t
 - ``item_inputs(pairs, values)``: an include item's ``inputs:`` values, each interpolated with
   the values of the file it sits in, so a value travels down a nested chain; None where unknown.
 - ``file_inputs(text, passed)``: the values a file reads, ``passed`` over its spec defaults.
+- ``used_inputs(text, values)``: those of ``values`` its ``include:`` section names, so a file
+  read again is walked again only when a value its includes read differs.
 - ``interpolate(ref, values)``: ``ref`` with every input substituted, or None when one has no
   known value, the result is blank, or the interpolation is not a bare ``inputs.<name>`` (a
   function such as ``| expand_vars``, or another context).
@@ -26,7 +28,7 @@ import re
 from collections.abc import Iterable, Mapping
 
 from lib.ci.ci_include_items import _split_flow, _unquote
-from lib.ci.shared_tooling import strip_comment
+from lib.ci.shared_tooling import include_lines, strip_comment
 
 Inputs = Mapping[str, str | None]
 
@@ -70,6 +72,12 @@ def item_inputs(pairs: Iterable[tuple[str, str]], values: Inputs) -> dict[str, s
 def file_inputs(text: str, passed: Inputs) -> dict[str, str | None]:
     """The input values ``text`` reads: those its includer passed, then its spec defaults."""
     return {**spec_defaults(text), **passed}
+
+
+def used_inputs(text: str, values: Inputs) -> dict[str, str | None]:
+    """The ``values`` the ``include:`` section of ``text`` names by ``$[[ inputs.<name> ]]``."""
+    names = {m.group(1) for _, row, _ in include_lines(text) for m in _REF.finditer(row)}
+    return {name: values.get(name) for name in sorted(names)}
 
 
 def _mapping(rows: _Rows) -> dict[str, tuple[str, _Rows]]:
