@@ -177,8 +177,8 @@ The Linux CI jobs enforce the floors; on Windows you can drop the three
 On Python 3.15 under Git Bash, every pytest-xdist worker has been seen to crash
 while execnet starts it, with `OSError: [Errno 22]`, so the parallel
 `-n auto --dist loadfile` commands above fail before a test runs. On
-2026-11-28 the CI probe ran cleanly on CPython 3.15.2 under Git Bash, with
-every worker up, so the crash then depended on the local setup (interpreter
+2026-11-28 the CI probe [ran cleanly](https://github.com/bjcoombs/ai-native-toolkit/actions/runs/46136533682/job/140952977344) on CPython 3.15.2 under Git
+Bash, with every worker up, so the crash then depended on the local setup (interpreter
 build or install location, Git Bash version, or an environment detail) rather
 than on 3.15 and pytest-xdist as such. Its cause is not yet known.
 

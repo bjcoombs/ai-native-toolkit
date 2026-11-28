@@ -5,7 +5,9 @@ name: Windows Python 3.15 probe
 # `OSError: [Errno 22]` during execnet bootstrap. This workflow runs the same
 # parallel commands as windows.yml on 3.15 to show whether that reproduces on
 # the runner image. On 2026-11-28 it did not: every worker started on CPython
-# 3.15.2. It runs weekly and on demand only, never on a pull request or a push,
+# 3.15.2, in this job's first run, then a windows.yml job on pull request #1657:
+# https://github.com/bjcoombs/ai-native-toolkit/actions/runs/46136533682/job/140952977344
+# It runs weekly and on demand only, never on a pull request or a push,
 # so it is not a check any merge waits on and costs one Windows runner a week.
 # Each suite step is continue-on-error, so a crash or a test failure leaves
 # the job green; the last step writes each step's outcome, and whether its log
