@@ -34,7 +34,10 @@ Pure subprocess (git) + stdlib. No LLM calls, no heavy dependencies, every git
 call capped by ``GIT_TIMEOUT_SECONDS``. Degrades to ``available: False`` on any
 git failure and to ``reliable: False`` on degenerate history (shallow clone,
 squashed import - same verdict as every other churn consumer), never raises out
-of ``scan_accretion_ratchet``.
+of ``scan_accretion_ratchet``. A git call that times out or cannot start is a
+fact about the machine, not the repository: it is made ``GIT_ATTEMPTS`` times,
+then the scan degrades with a reason naming the timeout (``GitUnavailable``),
+never as "not a git repository" or "no commit history" (#1686).
 
 CLI (standalone use)::
 
@@ -52,7 +55,9 @@ multi-commit gate drops single-touch rename artifacts; binary files (numstat
 `.rst`, `.adoc`; not `.txt`, which covers `CMakeLists.txt` and `requirements.txt`) are never
 flagged, since an appended-to document carries no change risk. Compensates the *Accretion* contributor tendency named in the
 repo goal statement. Degrades to `available: False` on git failure and
-`reliable: False` on degenerate history (same verdict as `git_churn`). Reuses
+`reliable: False` on degenerate history (same verdict as `git_churn`); a git
+call that times out or cannot start is retried once, then degrades with a reason
+naming it (`GitUnavailable`), so load never reads as an empty history. Reuses
 `git_churn`'s `GIT_TIMEOUT_SECONDS` and `churn_is_degenerate`; imports no
 orchestrator. `net_additions` is net physical lines (numstat additions minus
 deletions over the file's non-merge commits), not scored LOC, so the hotspot
@@ -100,6 +105,10 @@ DOC_SUFFIXES = frozenset({".md", ".markdown", ".mdx", ".rst", ".adoc"})
 
 # Average days per month for the time-span readout (Gregorian mean).
 DAYS_PER_MONTH = 30.44
+
+# A git call that times out or cannot start is made again before the scan
+# degrades: a loaded machine, not the repository, caused the failure (#1686).
+GIT_ATTEMPTS = 2
 
 # Cap the files carried into run-context.json so a pathological repo can't bloat
 # the bus; the scan still measures every file, only the report list is capped.
@@ -176,16 +185,43 @@ class _FileHistory:
     net_sequence: list[int] = field(default_factory=list)
 
 
+class GitUnavailable(RuntimeError):
+    """A git call timed out or could not start on every attempt.
+
+    A busy machine, not the repository, caused it, so the scan names the failure
+    instead of reading it as "no commit history" (#1686).
+    """
+
+
+def _run_git(cmd: list[str]) -> str | None:
+    """Stdout of a git call, or None when git refuses it.
+
+    A non-zero exit (not a repository, or no commit yet) and a missing git binary
+    are answers about the target and return None. A timeout or a failed start
+    (``fork`` refused under load) is a fact about the machine: the call is tried
+    ``GIT_ATTEMPTS`` times and then raises :class:`GitUnavailable`, so a loaded
+    machine is never reported as "not a git repository" or "no commit history".
+    """
+    failure = ""
+    for _ in range(GIT_ATTEMPTS):
+        try:
+            return subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8", check=True,
+                errors="replace", timeout=GIT_TIMEOUT_SECONDS,
+            ).stdout
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return None
+        except subprocess.TimeoutExpired:
+            failure = f"timed out after {GIT_TIMEOUT_SECONDS}s"
+        except OSError as exc:
+            failure = f"could not start: {exc}"
+    raise GitUnavailable(f"git {cmd[3]} {failure} on {GIT_ATTEMPTS} attempts")
+
+
 def _repo_top(repo_root: Path) -> str | None:
     """Absolute repo top-level for ``repo_root``, or None if not in a git repo."""
-    try:
-        return subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True,
-            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
-        ).stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-        return None
+    out = _run_git(["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"])
+    return None if out is None else out.strip()
 
 
 def _accumulate_history(repo_top: str) -> dict[str, _FileHistory]:
@@ -205,12 +241,8 @@ def _accumulate_history(repo_top: str) -> dict[str, _FileHistory]:
         "--no-merges", "--no-renames", "--numstat",
         "--pretty=format:\x1e%at %H",
     ]
-    try:
-        raw = subprocess.run(
-            cmd, capture_output=True, text=True, encoding="utf-8", check=True, errors="replace",
-            timeout=GIT_TIMEOUT_SECONDS,
-        ).stdout
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    raw = _run_git(cmd)
+    if raw is None:
         return {}
 
     # Parse into (author_time, sha, [(added, removed, path), ...]) per commit,
@@ -323,11 +355,11 @@ def scan_accretion_ratchet(
     degenerate history. Flagged files are sorted by net additions descending,
     then by path for a stable tie-break.
     """
-    repo_top = _repo_top(repo_root)
-    if repo_top is None:
-        return AccretionScan(available=False, reason="not a git repository")
-
     try:
+        repo_top = _repo_top(repo_root)
+        if repo_top is None:
+            return AccretionScan(available=False, reason="not a git repository")
+
         histories = _accumulate_history(repo_top)
         if not histories:
             return AccretionScan(available=False, reason="no commit history")

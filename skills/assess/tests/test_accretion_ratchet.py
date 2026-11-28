@@ -259,8 +259,13 @@ def test_scan_output_is_byte_identical_across_runs(tmp_path: Path) -> None:
         # A churny file that should be excluded - keeps the sort non-trivial.
         _commit(repo, "c.py", _lines(50, start=i * 1000), clock)
 
-    first = json.dumps(scan_accretion_ratchet(repo).summary(), sort_keys=True)
-    second = json.dumps(scan_accretion_ratchet(repo).summary(), sort_keys=True)
+    first_scan = scan_accretion_ratchet(repo)
+    second_scan = scan_accretion_ratchet(repo)
+    # A degraded scan names its reason here rather than as an opaque JSON diff (#1686).
+    assert first_scan.available, first_scan.reason
+    assert second_scan.available, second_scan.reason
+    first = json.dumps(first_scan.summary(), sort_keys=True)
+    second = json.dumps(second_scan.summary(), sort_keys=True)
     assert first == second
     # And the flagged set is actually populated, so equality isn't vacuous.
     assert scan_accretion_ratchet(repo).files
