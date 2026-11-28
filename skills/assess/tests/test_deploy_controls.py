@@ -22,6 +22,9 @@ GL = GitlabProject(host="gitlab.example.com", path="grp/app")
 GL_ENVS = "projects/grp%2Fapp/environments?per_page=100&page=1"
 GL_PROTECTED = "projects/grp%2Fapp/protected_environments?per_page=100&page=1"
 GL_PROJECT = "projects/grp%2Fapp"
+USER_NS = {"namespace": {"kind": "user", "full_path": "someone"}}
+GROUP_NS = {"namespace": {"kind": "group", "full_path": "grp"}}
+GL_GROUP = "groups/grp/protected_environments?per_page=100&page=1"
 COUNTS = ("production_environments", "unreviewed_count", "self_review_allowed_count")
 
 
@@ -179,8 +182,9 @@ def test_a_rule_without_the_self_review_flag_reads_null(tmp_path: Path, monkeypa
     assert block["self_review_allowed_count_reason"] == "not_reported"
 
 
-def test_a_malformed_list_is_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _github(monkeypatch, {GH_ENVS: {"environments": "x"}})
+@pytest.mark.parametrize("envs", ["x", [None], [{"protection_rules": []}]])
+def test_a_malformed_list_is_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, envs: Any) -> None:
+    _github(monkeypatch, {GH_ENVS: {"environments": envs}})
     block = dc.scan_deploy_controls(tmp_path)
     assert block["available"] is False and block["reason"].startswith("gh_bad_json:")
 
@@ -211,7 +215,7 @@ def test_gitlab_protected_without_approvals_is_unreviewed(tmp_path: Path,
                                                           monkeypatch: pytest.MonkeyPatch) -> None:
     _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}],
                           GL_PROTECTED: [{**_approval(0), "approval_rules": []}],
-                          GL_PROJECT: {"allow_pipeline_trigger_approve_deployment": False}})
+                          GL_PROJECT: {**USER_NS, "allow_pipeline_trigger_approve_deployment": False}})
     assert _counts(dc.scan_deploy_controls(tmp_path)) == (1, 1, 0)
 
 
@@ -240,9 +244,59 @@ def test_gitlab_unreported_triggerer_setting_is_null(tmp_path: Path, monkeypatch
 
 def test_gitlab_no_reviewed_environment_allows_no_self_review(tmp_path: Path,
                                                              monkeypatch: pytest.MonkeyPatch) -> None:
-    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}], GL_PROTECTED: [], GL_PROJECT: {}})
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}], GL_PROTECTED: [], GL_PROJECT: USER_NS})
     block = dc.scan_deploy_controls(tmp_path)
     assert _counts(block) == (1, 1, 0) and "self_review_allowed_count_reason" not in block
+
+
+def test_gitlab_matches_protection_by_exact_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}, {"name": "Production"}],
+                          GL_PROTECTED: [_approval(1)],
+                          GL_PROJECT: {**USER_NS, "allow_pipeline_trigger_approve_deployment": False}})
+    assert _counts(dc.scan_deploy_controls(tmp_path)) == (2, 1, 0)
+
+
+def test_gitlab_group_rule_covers_the_tier(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    envs = [{"name": "production", "tier": "production"}, {"name": "prod", "tier": "staging"}]
+    _gitlab(monkeypatch, {GL_ENVS: envs, GL_PROTECTED: [],
+                          GL_PROJECT: {**GROUP_NS, "allow_pipeline_trigger_approve_deployment": True},
+                          GL_GROUP: [_approval(1)]})
+    assert _counts(dc.scan_deploy_controls(tmp_path)) == (2, 1, 1)
+
+
+def test_gitlab_every_ancestor_group_is_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    nested = {"namespace": {"kind": "group", "full_path": "grp/sub"}}
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production", "tier": "production"}], GL_PROTECTED: [],
+                          GL_PROJECT: {**nested, "allow_pipeline_trigger_approve_deployment": False},
+                          GL_GROUP: [], GL_GROUP.replace("grp/", "grp%2Fsub/"): [_approval(1)]})
+    assert _counts(dc.scan_deploy_controls(tmp_path)) == (1, 0, 0)
+
+
+def test_gitlab_refused_group_read_is_null(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production", "tier": "production"}], GL_PROTECTED: [],
+                          GL_PROJECT: {**GROUP_NS, "allow_pipeline_trigger_approve_deployment": True},
+                          GL_GROUP: GhUnavailable("no_access: refused (HTTP 403)")})
+    block = dc.scan_deploy_controls(tmp_path)
+    assert _counts(block) == (1, None, None)
+    assert block["unreviewed_count_reason"] == block["self_review_allowed_count_reason"] == "no_access"
+
+
+def test_gitlab_unreported_tier_or_namespace_is_null(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}], GL_PROTECTED: [],
+                          GL_PROJECT: {**GROUP_NS, "allow_pipeline_trigger_approve_deployment": False},
+                          GL_GROUP: [_approval(1)]})
+    block = dc.scan_deploy_controls(tmp_path)
+    assert _counts(block) == (1, None, 0) and block["unreviewed_count_reason"] == "not_reported"
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}], GL_PROTECTED: [], GL_PROJECT: {}})
+    block = dc.scan_deploy_controls(tmp_path)
+    assert _counts(block) == (1, None, None) and block["unreviewed_count_reason"] == "not_reported"
+
+
+def test_gitlab_other_project_read_failure_is_unavailable(tmp_path: Path,
+                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}], GL_PROTECTED: [_approval(1)],
+                          GL_PROJECT: GhUnavailable("unreachable: GitLab host")})
+    assert dc.scan_deploy_controls(tmp_path)["reason"].startswith("unreachable:")
 
 
 def test_gitlab_refused_project_read_is_null_with_its_code(tmp_path: Path,
