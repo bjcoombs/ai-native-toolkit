@@ -85,7 +85,7 @@ _COMMAND_KEYS = ("command", "bash", "powershell")
 TERMINAL_AUTO_APPROVE = "chat.tools.terminal.autoApprove"
 # Settings that approve every tool, the terminal included, when true.
 _ALL_TOOLS = ("chat.tools.autoApprove", "chat.tools.global.autoApprove")
-_MATCH_ALL = re.compile(r"^/(?:\^?(?:\.|\[\\s\\S\]|\[\^\])[*+]\$?|\^|\$|)/[a-z]*$")
+_MATCH_ALL = re.compile(r"^/(?:\^?(?:\.|\[\\s\\S\]|\[\^\])[*+]\$?|\^?(?:\.|\[\\s\\S\])\??|(?:\.|\[\\s\\S\])\??\$|\^|\$|)/[a-z]*$")
 
 
 def _count(value: Any) -> int:
@@ -141,7 +141,9 @@ def _approves(value: Any) -> bool:
 
 def is_broad_rule(key: str) -> bool:
     """A terminal auto-approve key that matches every command: ``*`` (only ``*`` and spaces), or a
-    match-all regex such as ``/.*/``, ``/^.+$/``, ``/[\\s\\S]*/`` or a bare anchor (``/^/``, ``/$/``)."""
+    match-all regex such as ``/.*/``, ``/^.+$/``, ``/[\\s\\S]*/`` a single ``.`` anchored at one end at most (``/./``, ``/^./``, ``/.$/``: every command is
+    non-empty; ``/^.$/`` is not broad) or a bare anchor
+    (``/^/``, ``/$/``)."""
     stripped = key.strip()
     return bool(stripped) and (set(stripped) <= {"*", " "} or bool(_MATCH_ALL.match(stripped)))
 
