@@ -21,7 +21,7 @@ from the project's `## Marathon Configuration` (defaults if absent).
 
 ## Run-completion is gated elsewhere (floor)
 
-This skill takes one PR to merge — a **process** signal. A green, merged PR is not proof the run's assembled product works, and this skill never certifies run-completion. That is gated by the acceptance-contract scripts the marathon engine invokes, not here: `scripts/contract/start_gate.py` fails closed at run start unless the contract is frozen before decomposition, `scripts/contract/spawn_verifier.py` is the sole custody chokepoint that spawns the cold non-implementing verifier against the assembled product, and `scripts/contract/complete_gate.py` fails closed unless that verifier's completion record validates. Merging here never substitutes for those gates. This note is part of the constitutional floor (`FLOOR.md`); the retro may propose changes but never self-apply them.
+This skill takes one PR to merge — a **process** signal. A green, merged PR is not proof the run's assembled product works, and this skill never certifies run-completion. That is gated by the acceptance-contract scripts the marathon engine invokes, not here: `scripts/contract/start_gate.py` fails closed at run start unless the contract is frozen before decomposition or a signed operator skip (`operator_signoff`) caps the run at `UNVERIFIED`, `scripts/contract/spawn_verifier.py` is the sole custody chokepoint that spawns the cold non-implementing verifier against the assembled product, and `scripts/contract/complete_gate.py` fails closed unless that verifier's completion record validates. Merging here never substitutes for those gates. This note is part of the constitutional floor (`FLOOR.md`); the retro may propose changes but never self-apply them.
 
 ## Ready Criteria (ALL must be true)
 
@@ -36,15 +36,15 @@ The PR is merge-ready only when all six are simultaneously true. Re-check from t
 
 **Checking criterion 6** (per flagged bot; `<bot-login>` and the optional `<check-name>` from its `Re-review check name` field in the Marathon Configuration):
 ```bash
-HEAD_SHA=$(gh pr view $PR --json headRefOid | jq -r '.headRefOid')
+HEAD_SHA=$(gh pr view $PR --json headRefOid | jq -r '.headRefOid' | tr -d '\r')
 # Push time of the head commit: GitHub creates check suites on push.
 # --paginate emits one JSON page after another; jq -s gathers them so min spans all pages.
 PUSHED_AT=$(gh api --paginate "repos/<owner>/<repo>/commits/$HEAD_SHA/check-suites?per_page=100" \
-  | jq -r -s '[.[].check_suites[].created_at] | min // empty')
+  | jq -r -s '[.[].check_suites[].created_at] | min // empty' | tr -d '\r')
 # No check suite on the head SHA (min of an empty list is null): use the committer date as a
 # floor so the max wait always expires. This is not the push time; it predates the push.
 if [ -z "$PUSHED_AT" ]; then
-  PUSHED_AT=$(gh api "repos/<owner>/<repo>/commits/$HEAD_SHA" | jq -r '.commit.committer.date')
+  PUSHED_AT=$(gh api "repos/<owner>/<repo>/commits/$HEAD_SHA" | jq -r '.commit.committer.date' | tr -d '\r')
 fi
 # (a) Bot that submits reviews: its reviews whose commit_id is the head SHA.
 # Reviews page in ascending order, so the newest head-SHA review sits on the last page:
@@ -69,6 +69,8 @@ Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. G
 ## Shell Pitfalls
 
 **Never use `gh ... --jq` with complex filters.** Always pipe to `jq` separately.
+
+**Strip CR from every `jq -r` capture.** On Windows, Git Bash can run a native `jq.exe` that ends each raw line with CRLF; `$(...)` and `read` drop the LF but keep the CR, so a captured SHA or id breaks the next URL or comparison. End each capture with `| tr -d '\r'`, as every block in this skill does. `tests/test_jq_cr_strip.py` fails on a capture without it.
 
 **Use positive jq filters, not negative.** zsh escapes `!=` to `\!=`, breaking filters silently:
 ```bash
@@ -173,8 +175,8 @@ PR=<number>
 
 # Step 1: Dismiss stale bot CRs
 STALE_REVIEWS=$(gh api repos/<owner>/<repo>/pulls/$PR/reviews \
-  --jq '[.[] | select(.state == "CHANGES_REQUESTED" and (.user.login | endswith("[bot]")))]')
-echo "$STALE_REVIEWS" | jq -r '.[].id' | while read REVIEW_ID; do
+  | jq '[.[] | select(.state == "CHANGES_REQUESTED" and (.user.login | endswith("[bot]")))]')
+echo "$STALE_REVIEWS" | jq -r '.[].id' | tr -d '\r' | while read -r REVIEW_ID; do
   gh api repos/<owner>/<repo>/pulls/$PR/reviews/$REVIEW_ID/dismissals \
     --method PUT -f message="Stale bot review — verified findings addressed" -f event="DISMISS"
 done
@@ -206,7 +208,7 @@ gh api repos/<owner>/<repo>/rules/branches/$BASE_BRANCH | jq '[.[] | select(.typ
 ```
 When it is non-zero, the queue is the merge: GitHub builds `$BASE_BRANCH` plus the PRs ahead plus this one, runs the required checks on that group, and merges only when they pass, so a semantic conflict between two individually green PRs fails in the queue instead of on `$BASE_BRANCH`. Enqueue the verified head once the auto-merge criteria above hold:
 ```bash
-HEAD_SHA=$(gh pr view $PR --json headRefOid | jq -r .headRefOid)
+HEAD_SHA=$(gh pr view $PR --json headRefOid | jq -r .headRefOid | tr -d '\r')
 gh pr merge $PR --match-head-commit "$HEAD_SHA"   # no strategy flag: the queue's merge method applies
 # GraphQL equivalent (one call, no CLI): enqueuePullRequest(input: {pullRequestId: <node id>, expectedHeadOid: "<sha>"})
 ```

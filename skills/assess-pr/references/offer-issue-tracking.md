@@ -177,11 +177,11 @@ uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same nu
   --confirm "<confirmed numbers, all or none>" --record-declines --declined-by "$WHO" \
   --declined-at "$(date +%Y-%m-%d)" > "$WRITES"
 while read -r w; do
-  n=$(jq -r '.number' <<<"$w"); jq -r '.comment' <<<"$w" > "$COMMENT"
-  case "$(jq -r '.op' <<<"$w")" in
+  n=$(jq -r '.number' <<<"$w" | tr -d '\r'); jq -r '.comment' <<<"$w" > "$COMMENT"
+  case "$(jq -r '.op' <<<"$w" | tr -d '\r')" in
     close)  gh issue close "$n" </dev/null ;;
     reopen) gh issue reopen "$n" </dev/null ;;
-    label)  l=$(jq -r '.add_label' <<<"$w"); gh label create "$l" --force </dev/null
+    label)  l=$(jq -r '.add_label' <<<"$w" | tr -d '\r'); gh label create "$l" --force </dev/null
             gh issue edit "$n" --add-label "$l" </dev/null ;;
   esac
   gh issue comment "$n" --body-file "$COMMENT" </dev/null

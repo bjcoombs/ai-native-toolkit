@@ -404,7 +404,7 @@ find ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug> -mmin -5 -ty
 2. **Periodically** — every ~30 minutes during long marathons to catch stalled teammates early
 
 ```bash
-for PR in $(jq -r '.tasks | to_entries[] | select(.value.status == "working") | .value.pr' "$TRACK_FILE"); do
+for PR in $(jq -r '.tasks | to_entries[] | select(.value.status == "working") | .value.pr' "$TRACK_FILE" | tr -d '\r'); do
   THREADS=$(gh api graphql -f query="query { repository(owner: \"<owner>\", name: \"<repo>\") {
     pullRequest(number: $PR) { reviewThreads(first: 100) { nodes { isResolved } } }
   }}" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')

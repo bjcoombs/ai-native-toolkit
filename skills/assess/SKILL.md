@@ -350,7 +350,7 @@ jq '.test_focus' "$REPO_ROOT/.assess/run-context.json"
 # regex mirrors sibling_tests.IS_TEST_RE; suffixes mirror test_focus.MUTABLE_SUFFIXES).
 # Tool by dominant focus-file language
 # (Python -> mutmut, TS/JS -> stryker); mutmut when mixed.
-FOCUS_FILES=$(jq -r '(.test_focus.entries // [])[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path | select(split("/") as $p | (($p[-1] | sub("\\.[^.]*$"; "") | test("(^test_|_test$|\\.test$|\\.spec$|_spec$|Tests?$)")) or ($p[-1] | endswith(".bats")) or any($p[:-1][]; . == "__tests__")) | not) | select(test("\\.(py|tsx?|jsx?|go|rs)$"))' "$REPO_ROOT/.assess/run-context.json" | head -5)
+FOCUS_FILES=$(jq -r '(.test_focus.entries // [])[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path | select(split("/") as $p | (($p[-1] | sub("\\.[^.]*$"; "") | test("(^test_|_test$|\\.test$|\\.spec$|_spec$|Tests?$)")) or ($p[-1] | endswith(".bats")) or any($p[:-1][]; . == "__tests__")) | not) | select(test("\\.(py|tsx?|jsx?|go|rs)$"))' "$REPO_ROOT/.assess/run-context.json" | tr -d '\r' | head -5)
 case "$FOCUS_FILES" in
   *.ts|*.tsx|*.js|*.jsx) MUT_TOOL=stryker ;;
   *) MUT_TOOL=mutmut ;;
@@ -360,7 +360,7 @@ command -v "$MUT_TOOL" >/dev/null 2>&1 && MUT_PRESENT=1 || MUT_PRESENT=0
 
 # Re-offer once when the existing decline was made under an older plugin major
 # (the mutation pass may have changed materially since). The core computes this.
-REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null)
+REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null | tr -d '\r')
 ```
 
 **Offer with AskUserQuestion** as a **standalone question** (skip it entirely when `run-context.json .interactive` is `false`, or when `MUT_DECLINED=1` **unless** `REOFFER_MUT=true`, in which case ask once more - the prior decline predates a major bump). Frame the code modification explicitly - not "run a deeper test analysis?" but "**this will modify your source files** (mutating up to 5 focus files) and run your test suite over the changes, time-boxed, then revert". When re-offering, say so: _"You previously declined mutation testing under an older version; the pass has since changed - run it now?"_. Three options, same shape as Steps 2a/2b:
