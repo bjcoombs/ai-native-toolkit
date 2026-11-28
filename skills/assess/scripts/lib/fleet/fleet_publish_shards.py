@@ -7,7 +7,8 @@ pinned against its own artifact. Nothing here publishes or calls a network.
 **Exports.** Each shard is its own artifact with its own database, so the session saves each
 shard's collections under ``<exports>/<shard folder>/`` (``fleet_shard.shard_folder``), in the
 single-artifact export format. A missing folder is an empty artifact, as on a first publish; a
-current shard the registry records with no export folder is refused (a retired one is never
+shard whose documents, with its exported targets and strays, exceed one artifact's cap is refused
+(``ShardTooLarge``), as the single-artifact plan is; a current shard the registry records with no export folder is refused (a retired one is never
 written, so it needs none), since its stored documents would
 otherwise be written over without their ``if_version`` pins.
 
@@ -56,7 +57,7 @@ from lib.fleet.fleet_publish_session import (
     stored_state,
     write_plan_to,
 )
-from lib.fleet.fleet_shard import ShardPlan, ShardRegistry, assignment, empty_registry, shard_folder, shard_plan
+from lib.fleet.fleet_shard import ShardPlan, ShardTooLarge, ShardRegistry, assignment, empty_registry, shard_folder, shard_plan
 from lib.fleet.fleet_shard_index import URL_PREFIX, index_page
 
 SHARDS_FILE: Final = "shards.json"
@@ -165,8 +166,13 @@ def plan_sharded(data: Mapping[str, Any], exports: Mapping[str, Exports], *, run
     shards: dict[str, tuple[PlanSummary, list[list[PinnedWrite]]]] = {}
     steps: list[Step] = [{"kind": "index", "key": None, "folder": None, "url": plan["index_url"], "page": INDEX_PAGE}]
     for shard in plan["shards"]:
-        shards[shard["key"]] = plan_publish(bundles[shard["key"]], exports.get(shard["folder"], {}), run_id=run_id,
-                                            allow_names=allow_names)
+        own = plan_publish(bundles[shard["key"]], exports.get(shard["folder"], {}), run_id=run_id,
+                           allow_names=allow_names)
+        size = own[0]["size"]
+        if not size["fits"]:  # the shard's strays and targets count against its cap too
+            raise ShardTooLarge(f"unit {shard['label']} needs about {size['documents']} documents with its stored "
+                                f"targets and strays, over one artifact's {size['document_limit']}")
+        shards[shard["key"]] = own
         steps.append({"kind": "shard", "key": shard["key"], "folder": shard["folder"], "url": shard["url"],
                       "page": f"{SHARDS_DIR}/{shard['folder']}/page.html"})
     summary: ShardedSummary = {"run_id": run_id, "sharded": True, "mode": mode, "index_url": plan["index_url"],

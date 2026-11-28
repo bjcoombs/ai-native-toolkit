@@ -14,7 +14,7 @@ import fleet_page_fixture as fx
 import lib.fleet.fleet_publish_shards as pss
 from lib.fleet.fleet_data import dumps_fleet_data
 from lib.fleet.fleet_publish import PublishError
-from lib.fleet.fleet_shard import UNASSIGNED, shard_folder
+from lib.fleet.fleet_shard import UNASSIGNED, ShardTooLarge, shard_folder
 from lib.fleet.fleet_targets_import import target_doc_id
 
 FLEET = Path(__file__).resolve().parents[2] / "fleet" / "scripts"
@@ -79,6 +79,15 @@ def test_a_retired_shard_needs_no_export_and_stays_in_the_registry(tmp_path: Pat
     assert sharded is not None and sharded["summary"]["retired"] == ["ownership/grp/gone"]
     assert "ownership/grp/gone" not in [s["key"] for s in sharded["summary"]["steps"]]
     assert sharded["plan"]["index"] is not None and sharded["plan"]["index"]["retired"][0]["url"] == URL + "gone"
+
+
+def test_a_shard_over_the_cap_with_its_strays_is_refused(tmp_path: Path) -> None:
+    org = tmp_path / "grp"
+    pss.record_shard(org, URL + "sub", SUB)
+    strays = [{"doc_id": f"x{i}", "version": 1, "data": {}} for i in range(25_000)]
+    exports: dict[str, Any] = {shard_folder(SUB): {"junk": strays}}
+    with pytest.raises(ShardTooLarge, match=r"needs about 250\d\d documents with its stored targets and strays"):
+        pss.plan_sharded(_data(), exports, run_id=fx.DATES[-1], registry=pss.read_shards(org), allow_names=True)
 
 
 def test_a_fleet_that_fits_and_has_no_shards_is_not_sharded() -> None:
