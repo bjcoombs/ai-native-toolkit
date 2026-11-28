@@ -196,6 +196,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_ops.summary.agent_job_write_access_reason` | token |
 | `agent_ops.summary.agent_instruction_rewrite_reason` | token |
 | `agent_ops.agent_instruction_rewrite_files` | path (hashed when hashing is on) |
+| `agent_ops.agent_instruction_rewrite_unread_files` | path (hashed when hashing is on) |
 
 ## agent_outcome
 

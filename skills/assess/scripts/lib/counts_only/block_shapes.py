@@ -146,6 +146,8 @@ class AgentOpsBlock(TypedDict):
     agent_workflows_unread: int
     agent_jobs: list[AgentJob]
     agent_instruction_rewrite_files: list[str]  # workflow files behind that hazard, sorted
+    # gh-aw files on that hazard's reach whose frontmatter does not parse, sorted (#1608)
+    agent_instruction_rewrite_unread_files: list[str]
     managed: ManagedSettingsBlock
     summary: AgentOpsSummary
 
