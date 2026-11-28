@@ -454,7 +454,6 @@ JET_PROGRAMS: Dict[str, List[Dict[str, Any]]] = {
     "JF1": [_GS],
     "JF2": [_GS, _frames(90), _GS],
     "JF3": [_GS, _key("ArrowUp"), _GS],
-    # JF4 reads state straight after Space (missile in flight), then after travel.
     "JF4": [_GS, _key(" "), _GS, _frames(90), _GS],
 }
 LR_PROGRAMS: Dict[str, List[Dict[str, Any]]] = {
@@ -470,7 +469,7 @@ def _lane_ok(value: Any) -> bool:
 
 
 def classify_jet(cid: str, snaps: List[Any]) -> str:
-    """Classify a jet-fighters tier-1 criterion from its snapshots."""
+    """Classify a jet-fighters tier-1 criterion (JF3: one-lane move; JF4: missile in flight, score rise on a hit)."""
     try:
         if cid == "JF1":
             s = snaps[0]
@@ -479,17 +478,11 @@ def classify_jet(cid: str, snaps: List[Any]) -> str:
             a, b = snaps[0], snaps[1]
             return "pass" if (a and b and a.get("jets") != b.get("jets")) else "fail"
         if cid == "JF3":
-            a, b = snaps[0], snaps[1]
-            la, lb = a["launcher"]["lane"], b["launcher"]["lane"]
-            # One ArrowUp is sent, so the contract's adjacent-lane move is |a - b| == 1.
+            la, lb = snaps[0]["launcher"]["lane"], snaps[1]["launcher"]["lane"]
             return "pass" if (_lane_ok(la) and _lane_ok(lb) and abs(la - lb) == 1) else "fail"
         if cid == "JF4":
             a, b, c = snaps[0], snaps[1], snaps[2]
-            if not (a and b and c) or b.get("missile") is None:
-                return "fail"
-            # The score clause applies only on a hit: a jet left the squadron in flight.
-            hit = len(c.get("jets") or []) < len(b.get("jets") or [])
-            return "pass" if (not hit or c.get("score", 0) > a.get("score", 0)) else "fail"
+            return "pass" if (b["missile"] is not None and (len(c["jets"]) >= len(b["jets"]) or c["score"] > a["score"])) else "fail"
     except (KeyError, TypeError, IndexError):
         return "fail"
     return "fail"
