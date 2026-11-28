@@ -65,6 +65,10 @@ Also carries this tag, listed under its first tag:
 
 That generated output and its source agree, so an agent editing one does not quietly break the other.
 
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `api-compat.1` API compatibility checked by CI (shared with Structure) | `api_compat` | CI runs an API compatibility check: is true (`api_compat.present eq true`) | `measured` | yes | - | positive | - | - | An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it. | Run a compatibility check in CI: cargo semver-checks, buf breaking or api-extractor run. apidiff only prints a report, so exit 1 when its output lists a change. japicmp needs --error-on-* or a breakBuild* setting. Or run a test that compares the exports with a fixed list. |
+
 Also carries this tag, listed under its first tag:
 
 - `docs-kept-true.1` (Docs)
@@ -99,6 +103,12 @@ That the code is shaped so an agent can work on one part without holding the who
 | `layer-3-linters.2` Suppression ages can be read from history | `promissory_markers` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | - | A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing. | Run on a full clone so suppression ages can be measured. |
 | `layer-4-architecture.1` A boundary or ownership map names a module path | `structure_drift` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | - | positive | - | - | A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs. | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
 | `layer-4-architecture.2` 95% of production source files are 500 lines or fewer | `stats_summary` | Production source file size at the 95th percentile: is at most 500 (`stats_summary.loc_by_class.source.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | - | With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file. Generated-header files are left out; Elixir @moduledoc and @doc lines do not count. | Split the largest files along their natural seams. |
+| `repo-guard-tested.1` Repo-owned guard is itself tested | `repo_guards` | A repo-owned guard script has its own tests: is true (`repo_guards.guard_tested eq true`) | `measured` | yes | - | positive | requires `repo-guards.1` | - | A guard script with no tests can stop catching anything and still pass, so a green check means less than it says. With its own tests, a change that breaks the guard turns red. | Add a test file for the guard script, named for it, such as test_check_layers.py beside check_layers.py. Give it one case the guard must reject and one it must pass. |
+| `repo-guards.1` Ratchets and repo-owned guards run in CI | `repo_guards` | CI runs a ratchet or a repo-owned guard: is true (`repo_guards.present eq true`) | `measured` | yes | - | positive | guarded by `repo-guard-tested.1` | - | A ratchet or a boundary checker the repository runs in CI turns a structure rule into a red check, so an agent cannot quietly add one more suppression or cross one more layer. | Run a boundary checker in CI (lint-imports, import-boss, or a script that exits non-zero on a forbidden import). Or commit a lint baseline with a make target that updates it and a CI step that reads it. Or cap file size in a CI check. |
+
+Also carries this tag, listed under its first tag:
+
+- `api-compat.1` (Contracts)
 
 ### Agent context
 
@@ -108,7 +118,7 @@ That an agent starts each task knowing how this repository works and how to chec
 |---|---|---|---|---|---|---|---|---|---|---|
 | `agent-consistency.1` Every agent system names the same checks | `agent_consistency` | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | - | positive | - | - | When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently. | Make the instruction files agree. Name the same test and lint commands and the same thresholds in each. Or replace each tool's file with the pointer line the report gives. |
 | `agent-consistency.2` Every agent system reads one canonical file | `agent_consistency` | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | - | positive | requires `agent-consistency.1` | - | One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place. | Keep AGENTS.md as the one source. Make each other tool's file a short pointer or a symlink to it, with the exact line the report gives for that tool. |
-| `agent-rewrites-instructions.1` An agent job can rewrite its own instructions (shared with Agent runtime) | `agent_ops` | Agent jobs that can rewrite unowned instruction or workflow files: is above 0 (`agent_ops.summary.agent_instruction_rewrite gt 0`) | `measured` | no, listed | held while met: `ci_runs_tests` | hazard | - | - | An agent job that can push files can change AGENTS.md, CLAUDE.md or its own workflow, so the next run follows instructions no reviewer approved. CI then checks changes against rules the agent wrote for itself. | Give AGENTS.md, CLAUDE.md, each agent workflow, its .lock.yml, the local workflows, actions and gh-aw imports it reaches at any depth, and CODEOWNERS itself an owner. Require code-owner review on the default branch. A file it could not read (agent_instruction_rewrite_unread_files) keeps this raised. |
+| `agent-rewrites-instructions.1` An agent job can rewrite its own instructions (shared with Agent runtime) | `agent_ops` | Agent jobs that can rewrite unowned instruction or workflow files: is above 0 (`agent_ops.summary.agent_instruction_rewrite gt 0`) | `measured` | no, listed | held while met: `ci_runs_tests` | hazard | - | - | An agent job that can push files can change AGENTS.md, CLAUDE.md or its own workflow, so the next run follows instructions no reviewer approved. CI then checks changes against rules the agent wrote for itself. | Give AGENTS.md, CLAUDE.md, each agent workflow, its .lock.yml, the local workflows, actions and gh-aw imports it reaches at any depth, and CODEOWNERS itself an owner. Require code-owner review on the default branch. Make each file in agent_instruction_rewrite_unread_files readable. |
 | `backlog-ready.1` New issues are asked for structure (shared with Governance) | `backlog_ready` | An issue form has a required field, or a GitLab template the six sections: is true (`backlog_ready.required_form_field eq true`) | `config_only` | no, listed | - | positive | - | - | An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up. | Commit an issue form under .github/ISSUE_TEMPLATE/ with a body field set to required: true, or a GitLab issue template with the six ready sections. |
 | `backlog-ready.1` New issues are marked untriaged when they arrive (shared with Governance) | `backlog_ready` | A workflow or scheduled GitLab job labels new issues untriaged: is true (`backlog_ready.untriaged_on_open eq true`) | `config_only` | no, listed | - | positive | - | - | An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up. | Add a workflow on issues: types: [opened] that adds an untriaged label (gh issue edit --add-label, or a labeler action); on GitLab, include the refinement template or schedule a job that adds one. |
 | `backlog-ready.1` A ready label is documented with its criteria (shared with Governance) | `backlog_ready` | A ready label is documented with its criteria: is true (`backlog_ready.ready_label_documented eq true`) | `config_only` | no, listed | - | positive | - | - | An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up. | Document the ready label in a Markdown file, the label in backticks, with a list of the criteria an issue must meet under it. |
@@ -186,6 +196,7 @@ Each pair of tags that share a condition, one line per condition both carry.
 
 - `behaviour` and `agent_runtime`: `agent-evals.1`
 - `contracts` and `docs`: `docs-kept-true.1`
+- `contracts` and `structure`: `api-compat.1`
 - `docs` and `agent_context`: `layer-0-instructions.2`
 - `agent_context` and `agent_runtime`: `agent-rewrites-instructions.1`
 - `agent_context` and `governance`: `backlog-ready.1`
@@ -215,8 +226,10 @@ The autonomy Steps in order. A Step needs every gate, whatever the gate's grade,
 - `layer-4-architecture.2` requires `layer-4-architecture.1`.
 - `layer-6-coverage.2` requires `layer-5-ci.1`.
 - `layer-7-review.2` requires `layer-7-review.1`.
+- `repo-guard-tested.1` requires `repo-guards.1`.
+- `repo-guards.1` is guarded by `repo-guard-tested.1`.
 
-No condition is guarded yet. No criterion compares two signals yet.
+No criterion compares two signals yet.
 
 ## Maturity-model rows
 
@@ -231,6 +244,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `agent-rewrites-instructions` | An agent job can rewrite its own instructions | team | `min` | `agent-rewrites-instructions.1` |
 | `ai-policy-declared` | AI policy declared | team | `min` | `ai-policy-declared.1` |
 | `ai-policy-enforced` | AI policy enforced on pull requests | team | `min` | `ai-policy-enforced.1` |
+| `api-compat` | API compatibility checked by CI | team | `min` | `api-compat.1` |
 | `backlog-ready` | Backlog kept agent-ready | team | `min` | `backlog-ready.1`, `backlog-ready.2` |
 | `ci-instructions-unchecked` | Pull request checks skip the instruction files | team | `min` | `ci-instructions-unchecked.1` |
 | `ci-skip-label` | A label skips every CI check | team | `min` | `ci-skip-label.1` |
@@ -249,6 +263,8 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `layer-7-review` | Review on merged pull requests | team | `min` | `layer-7-review.1`, `layer-7-review.2` |
 | `layer-8-agent-ops` | AI project management | team | `min` | `layer-8-agent-ops.1`, `layer-8-agent-ops.2` |
 | `model-ci-gated` | Model-backed CI jobs are gated | team | `min` | `model-ci-gated.1` |
+| `repo-guard-tested` | Repo-owned guard is itself tested | team | `min` | `repo-guard-tested.1` |
+| `repo-guards` | Ratchets and repo-owned guards run in CI | team | `min` | `repo-guards.1` |
 | `secrets-guard` | Secrets guard | team | `min` | `secrets-guard.1`, `secrets-guard.2` |
 | `skill-disclosure` | Skill disclosure | team | `min` | `skill-disclosure.1` |
 | `skill-library` | Skill library | team | `min` | `skill-library.1` |
@@ -392,6 +408,7 @@ Whether a workflow on pull requests reads the body or commit trailers for AI dis
 - Evidence: `ai_governance.enforced` head_structure (measured), `ai_governance.policy_declared` head_text (declared).
 - Not measured when:
   - `no_pr_workflows`: No GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it. Nothing to change: this reads as not measured until a workflow runs on pull requests.
+  - `ruby_unread`: No step reads as enforcing AI disclosure, but a step on a pull request workflow runs Ruby that names an AI marker. This reader does not read Ruby, so that step may enforce it. Nothing to change: this reads as not measured while the check is in Ruby. A shell, Python or JavaScript check is read.
 
 Why the signals named here matter:
 
@@ -422,6 +439,26 @@ Instruction files above the repository root load in a local session but never re
 - Evidence: `unclassified`.
 - Not measured when:
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+
+### `api_compat`: API compatibility checks CI runs
+
+A public interface stays stable only when a check stops a breaking change. A compatibility tool CI runs, or a test that pins the exports, turns an agent's accidental break of a contract into a red check, not a downstream bug report.
+
+Whether a GitHub Actions or GitLab CI step runs an API compatibility tool: apidiff, api-extractor, griffe check, cargo semver-checks, buf breaking, japicmp or revapi. The step may run it through a committed script, a make recipe, a Maven or Gradle build, or a package.json script. Whether a test pins the public exports while CI runs tests. A tool named only in a build file is listed as declared, never counted.
+
+- Collector: `core.api_compat`, reading `repo_root`, `ci_checks`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `api_compat.declared.path` path, `api_compat.declared.tool` token, `api_compat.pins` path, `api_compat.present_reason` token, `api_compat.runs.path` path, `api_compat.runs.tool` token.
+- Used by: row `api-compat`.
+- Evidence: `api_compat.present` head_structure (measured).
+- Not measured when:
+  - `tests_not_read`: A test pins the public exports, but whether CI runs tests is not settled (ci_checks.enforced_check_runs is null or the block is absent). Nothing to change: this reads as not measured until the CI test run can be read.
+  - `ci_not_read`: A compatibility tool is named in a build file, or found in a form whose exit status the step may hide. A CI file this reader cannot follow may run it. Examples are a CI system it does not parse, a GitLab include, or a step the follower could not settle. Nothing to change if the tool runs; calling it from a GitHub Actions or GitLab CI step the scan reads lets it count.
+
+Why the signals named here matter:
+
+- `api_compat.present` feeds `api-compat.1:api_compat.present`: An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it.
 
 ### `archetype`: Repository archetype
 
@@ -957,6 +994,28 @@ Why the signals named here matter:
 - `promissory_markers.families.suppression.stale` feeds `layer-3-linters.2:promissory_markers.families.suppression.stale`: A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters.
 - `promissory_markers.aging_reliable` feeds `layer-3-linters.2:promissory_markers.aging_reliable`: A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing.
 
+### `repo_guards`: Ratchets and repo-owned guards
+
+A ratchet or a boundary checker the repository runs in CI turns a structure rule into a red check, so an agent cannot quietly add one more suppression or cross one more layer. A guard with no test of its own can stop catching anything and still pass.
+
+Each ratchet or repo-owned guard a CI job runs on ordinary changes. It follows the scripts, make recipes and local actions a step leads to. A guard is a lint baseline CI reads and a tracked command updates, a boundary checker, or a file-size cap. A boundary checker is import-boss, lint-imports, a check-layers script or an architecture test CI runs. It also reads whether each guard script has a test file of its own.
+
+- Collector: `core.repo_guards`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `repo_guards.guard_tested_reason` token, `repo_guards.guards.kind` token, `repo_guards.guards.path` path, `repo_guards.guards.script` path, `repo_guards.guards.target` path, `repo_guards.guards.tested_by` path, `repo_guards.guards.trigger` token, `repo_guards.guards.via` token, `repo_guards.present_reason` token.
+- Used by: row `repo-guard-tested`, row `repo-guards`.
+- Evidence: `repo_guards.guard_tested` head_structure (measured), `repo_guards.present` head_structure (measured).
+- Not measured when:
+  - `ci_not_read`: No guard was found, and something here may run one that this reader cannot see. That is a CI file of a system it does not parse, or a .gitlab-ci.yml include: it does not follow. It can also be a step it could not settle, such as a remote reusable workflow. Nothing to change: this reads as not measured until that configuration can be read.
+  - `trigger_unknown`: A guard was found only in a workflow or GitLab job whose trigger this reader could not settle. So it cannot say the guard runs on ordinary changes. Nothing to change: give the workflow a literal on: list of push or pull_request, or the GitLab job literal rules, for it to be read.
+  - `no_guard_script`: Every guard found is a third-party tool or an architecture test with no committed script of its own. So there is no guard script whose tests to look for. Nothing to change: a third-party tool is tested where it is built.
+  - `scan_failed`: The reader of ratchets and repo-owned guards raised an error, so both conditions read not measured. Nothing to change in the repository: report the error so the reader can be fixed.
+
+Why the signals named here matter:
+
+- `repo_guards.guard_tested` feeds `repo-guard-tested.1:repo_guards.guard_tested`: A guard script with no tests can stop catching anything and still pass, so a green check means less than it says. With its own tests, a change that breaks the guard turns red.
+
 ### `review_automation`: AI review committed in CI
 
 A review step committed in CI reviews every change it runs on, and is evidence a headless run can read without platform access.
@@ -1279,6 +1338,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `ancestor_instruction_files` | Ancestor instruction files | `repo_root` | `ancestor_instruction_files` | no |
 | `anomalies` | Anomalies | `run_header` | `anomalies` | no |
+| `api_compat` | API compatibility checks CI runs | `repo_root`, `ci_checks` | `api_compat` | no |
 | `archetype` | Repository archetype | `repo_root` | `archetype` | no |
 | `assess_dir` | Artifact directory | `repo_root`, `run_scope` | private input | no |
 | `backlog_outcomes` | Issue tracker read (backlog-ready level 2) | `repo_root` | private input | yes |
@@ -1329,7 +1389,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
 | `keyhole_blocks` | Keyhole blocks | `keyhole`, `run_scope` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `api_compat`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `repo_guards`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
 | `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
 | `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
 | `measured_commit` | Measured commit | `repo_root` | private input | no |
@@ -1345,6 +1405,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `promissory` | Promissory marker scan | `repo_root`, `excludes`, `scope` | private input | no |
 | `promissory_markers` | Promissory markers | `promissory` | `promissory_markers` | no |
 | `rename_map` | Git rename map | `repo_root` | private input | no |
+| `repo_guards` | Ratchets and repo-owned guards | `repo_root` | `repo_guards` | no |
 | `review_automation` | AI review committed in CI | `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci` | `review_automation` | no |
 | `review_evidence` | Review evidence | `review_automation`, `review_reality` | `review_evidence` | no |
 | `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts` | `review_reality` | yes |
@@ -1371,7 +1432,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `test_pressure_scan` | Test pressure scan | `repo_root`, `current`, `coverage_data` | private input | no |
 | `unfinalized` | Unfinalized exclusions | `assess_dir`, `superseded`, `first_flagged`, `current`, `diff`, `excludes` | private input | no |
 | `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `api_compat`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `repo_guards`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |
 | `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |

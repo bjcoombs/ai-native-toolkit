@@ -98,6 +98,7 @@
           "ai_governance",
           "ai_usage",
           "ancestor_instruction_files",
+          "api_compat",
           "archetype",
           "backlog_ready",
           "behaviour",
@@ -131,6 +132,7 @@
           "owner_exclusions",
           "pack",
           "promissory_markers",
+          "repo_guards",
           "review_automation",
           "review_evidence",
           "review_reality",
@@ -1506,7 +1508,31 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'. The codes name the missing piece: no_pr_workflows (no GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                "description": "'code: sentence'. The codes name the missing piece: no_pr_workflows (no GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it); ruby_unread (no step reads as enforcing AI disclosure, but a step on a pull request workflow runs Ruby that names an AI marker. This reader does not read Ruby, so that step may enforce it). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "api_compat": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: tests_not_read (a test pins the public exports, but whether CI runs tests is not settled (ci_checks.enforced_check_runs is null or the block is absent)); ci_not_read (a compatibility tool is named in a build file, or found in a form whose exit status the step may hide. A CI file this reader cannot follow may run it. Examples are a CI system it does not parse, a GitLab include, or a step the follower could not settle). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
@@ -1675,6 +1701,30 @@
               "reason": {
                 "type": "string",
                 "description": "'code: sentence'. The codes name the missing piece: no_remote (the repository has no github.com remote, so there is no owner .github repository to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "repo_guards": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: ci_not_read (no guard was found, and something here may run one that this reader cannot see. That is a CI file of a system it does not parse, or a .gitlab-ci.yml include: it does not follow. It can also be a step it could not settle, such as a remote reusable workflow); trigger_unknown (a guard was found only in a workflow or GitLab job whose trigger this reader could not settle. So it cannot say the guard runs on ordinary changes); no_guard_script (every guard found is a third-party tool or an architecture test with no committed script of its own. So there is no guard script whose tests to look for); scan_failed (the reader of ratchets and repo-owned guards raised an error, so both conditions read not measured). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

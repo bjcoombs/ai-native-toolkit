@@ -1,0 +1,561 @@
+"""API and contract compatibility checks that CI runs (issue #853, theme 8 of #826).
+
+``scan_api_compat(repo_root, ci_checks)`` builds the ``api_compat`` block from two arms. Nothing is
+executed: CI files, the scripts, recipes and build files a step leads to, and test files are read
+as text, and Python test files are parsed with ``ast``, never imported.
+
+- **Named tool (``runs``).** A committed CI file (a GitHub Actions workflow, local composite
+  actions inlined, or ``.gitlab-ci.yml``) invokes a compatibility tool, on its own line or through
+  the shared CI-step follower (``lib.ci.ci_step_follower``: a committed script, a ``make`` recipe,
+  a Maven or Gradle build, up to ``_MAX_FOLLOW`` levels) or one root ``package.json`` script
+  (``npm run <t>``, ``pnpm``, ``yarn``, ``bun``), or a GitHub step ``uses:`` one of ``ACTIONS``
+  (``obi1kenobi/cargo-semver-checks-action``, ``bufbuild/buf-breaking-action``). The tools
+  (``TOOLS``): ``apidiff`` (or ``go run .../apidiff``), ``api-extractor run`` (not ``--local``, which
+  rewrites the report), ``griffe check``, ``cargo semver-checks``, ``buf breaking``, ``japicmp`` and
+  ``revapi`` (their Maven goals and Gradle plugins, read from the follower's ``tasks`` and
+  ``plugins``). An install (``go install .../apidiff``, ``npm i -D @microsoft/api-extractor``), a
+  ``--help`` or ``--version`` call and an ``echo`` invoke nothing. A run counts only when it can
+  turn the job red (``can_stop``): ``apidiff`` exits 0 on an incompatible change, so it needs a
+  re-raise (``exit 1``) in the job, script or recipe that runs it; the japicmp CLI needs an
+  ``--error-on-*`` flag, and its Maven or Gradle plugin a ``breakBuild*`` or ``failOn*`` setting
+  true. A run that cannot stop the job is listed under ``declared``, never counted.
+- **Pinning test (``pins``).** A tracked test file pins the public exports: a Python test whose
+  ``ast`` holds an ``==`` comparison with ``__all__`` on one side and a literal list of names, or a
+  name bound to one, on the other (``assert set(__all__) == set(EXPECTED_ALL)``; never ``dir(mod)``), or a JavaScript or TypeScript test that compares ``Object.keys`` of a
+  module to a snapshot or a literal array or object (``expect(Object.keys(api)).toMatchSnapshot()``;
+  never ``.toEqual(Object.keys(other))``). It counts when
+  CI runs tests: ``ci_checks.enforced_check_runs`` is true (the layer-5 reading).
+- **Declared only (``declared``, listed, never counted).** A tool named in a build file
+  (``pom.xml``, a Gradle build, ``package.json``, a Makefile, ``pyproject.toml``, ``Cargo.toml``,
+  ``buf.yaml``, ``api-extractor.json``) or a file under ``hack/``, ``scripts/``, ``build/`` or
+  ``.github/`` (not a workflow, which is read as CI) that no CI run reaches, and a CI run that
+  cannot stop its job (the CI file is the path). Docs never declare.
+
+Masking follows the #775 rule (``lib.ci.ci_masking.mask_lines``): ``|| true``, ``continue-on-error``,
+``allow_failure`` and a never-true ``if:`` do not count, and a form whose failure the step may hide
+(``ci_unsure``) is unsettled, never credit. A followed script or recipe line with a ``||`` fallback
+that does not re-raise does not count and is not followed (``lib.ci.ci_job_commands.commands``). Only
+shell bodies are read: GitHub ``run:``, GitLab ``script:`` and ``before_script:`` (GitLab ignores an
+``after_script:`` failure). GitLab is read as GitLab merges it (``lib.ci.ci_merged_view``:
+local includes, and an ``extends:`` job's effective ``script:``). On GitLab a job whose ``when:`` or every ``rules:`` entry is ``never``
+or ``manual`` runs nothing, and a hidden job (``.compat:``) runs only as far as a visible job that
+runs ``extends:`` it without setting that body itself; a tool in a hidden job nothing extends, in a file that uses anchors or
+``!reference``, is unsettled.
+
+``present`` is true when a tool runs, or a pinning test is tracked and CI runs tests. Otherwise
+null when it cannot be settled: ``tests_not_read`` (a pinning test, and ``enforced_check_runs``
+null or the ``ci_checks`` block absent) or ``ci_not_read`` (a tool is declared or found in an
+unsettled form, and a tracked CI file of a system this reader does not parse, a GitLab top-level
+``include:`` or a follower reading it could not settle may run it). Else false.
+
+Full reference: lib/docs/api_compat.md. Inward-only imports; never an orchestrator. Tests:
+``tests/test_api_compat_condition.py``.
+"""
+from __future__ import annotations
+
+import ast
+import json
+import posixpath
+import re
+from collections.abc import Mapping
+from pathlib import Path
+
+from lib.ci.agent_evals import _idle
+from lib.ci.check_command import is_info_invocation
+from lib.ci.ci_action_inputs import ReadLocal
+from lib.ci.ci_build_follower import Followed
+from lib.ci.ci_includes import merged_config
+from lib.ci.ci_masking import IndentTree, mask_lines, parse_lines
+from lib.ci.ci_merged_view import merged_view
+from lib.ci.ci_step_follower import StepFollower, follow_workflow
+from lib.ci.ci_step_paths import local_reader
+from lib.ci.ci_job_commands import OPERATOR as _OPERATOR
+from lib.ci.ci_job_commands import commands as _commands
+from lib.instructions.command_resolver import command_words
+from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
+from lib.run_context_types_api_compat import ApiCompatBlock, ApiCompatRun
+from lib.unread_ci import unread_ci_paths
+
+TOOLS = ("apidiff", "api-extractor", "griffe", "cargo-semver-checks", "buf-breaking", "japicmp", "revapi")
+REASON_CI_NOT_READ = "ci_not_read"
+REASON_TESTS_NOT_READ = "tests_not_read"
+_MAX_FOLLOW = 3
+_GITHUB_BODY = frozenset({"run"})
+_GITLAB_BODY = frozenset({"script", "before_script"})
+_GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
+_INCLUDE = re.compile(r"^include\s*:", re.M)
+_OUTPUT_FILE = re.compile(r"(?:\d?>>?|\btee(?:\s+-a)?)\s*([\w./-]+)")
+_STATUS_VAR = re.compile(r"(?<![\w$])(\w+)=\$\?")
+_CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?(\w+)=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
+# The japicmp settings that make a breaking change stop the build: the Maven plugin's
+# ``breakBuildOn*`` / ``breakBuildBasedOnSemanticVersioning`` and the Gradle task's ``failOn*``.
+_JAPICMP_SETTING = r"(?:breakBuild(?:On|Based)\w*|failOn(?:Modification|SourceIncompatibility|BinaryIncompatibility))"
+_REVAPI_NO_FAIL = re.compile(r"^-Drevapi\.failBuildOnProblemsFound=false$")
+_REVAPI_QUIET = re.compile(r"failBuildOnProblemsFound\s*(?:>|=|\(|\.set\()\s*false")
+_JAPICMP_FLAG = re.compile(r"^-Djapicmp\." + _JAPICMP_SETTING + r"=true$")
+_JAPICMP_BREAK = re.compile(_JAPICMP_SETTING + r"\s*(?:>|=|\(|\.set\()\s*true")
+# Remote GitHub actions that run a compatibility check and stop the job on a breaking change.
+ACTIONS = {"obi1kenobi/cargo-semver-checks-action": "cargo-semver-checks",
+           "bufbuild/buf-breaking-action": "buf-breaking"}
+_ALIASING = re.compile(r"!reference|<<\s*:|(?:^|[\s\[,])\*[\w.-]+", re.M)
+# Words a launcher puts before the program it runs (``uv run``, ``npx --yes``, ``pnpm exec``).
+_LAUNCHERS = frozenset({"uv", "uvx", "pipx", "poetry", "pdm", "hatch", "rye", "pipenv", "npx", "bunx",
+                        "pnpx", "pnpm", "yarn", "bun", "run", "exec", "dlx", "x", "python", "python3", "-m"})
+_VALUED = frozenset({"--with", "--from", "--package", "-p", "--python", "--project", "-C", "--directory"})
+_PM = frozenset({"npm", "pnpm", "yarn", "bun"})
+_DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc", ".html")
+_BUILD_FILES = frozenset({"pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts",
+                          "package.json", "Makefile", "makefile", "GNUmakefile", "justfile", "pyproject.toml",
+                          "Cargo.toml", "buf.yaml", "buf.work.yaml", "api-extractor.json", "noxfile.py", "tox.ini"})
+_BUILD_DIRS = ("hack/", "scripts/", "build/", ".github/")
+_DECLARED: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("apidiff", re.compile(r"\bapidiff\b")),
+    ("api-extractor", re.compile(r"api-extractor")),
+    ("griffe", re.compile(r"\bgriffe\b")),
+    ("cargo-semver-checks", re.compile(r"semver-checks")),
+    ("buf-breaking", re.compile(r"\bbuf\s+breaking\b")),
+    ("japicmp", re.compile(r"japicmp")),
+    ("revapi", re.compile(r"\brevapi\b")),
+)
+_BUF_BREAKING = re.compile(r"^breaking\s*:", re.M)   # the breaking-rules section of a buf.yaml
+_SET_ASIDE = ("fixtures/", "testdata/", "vendor/", "node_modules/", "third_party/")
+_JS_TEST = re.compile(r"\.(?:test|spec)\.[cm]?[jt]sx?$")
+# ``expect(Object.keys(mod))`` against a snapshot, or ``toEqual`` / ``toStrictEqual`` with a literal
+# array or object as the argument; ``.toEqual(Object.keys(other))`` compares two live surfaces.
+_JS_PIN = re.compile(r"expect\(\s*Object\.keys\(\s*[\w$.]+\s*\)(?:\.sort\(\))?\s*\)\s*"
+                     r"\.(?:(?:toMatchSnapshot|toMatchInlineSnapshot)\(|(?:toEqual|toStrictEqual)\(\s*[\[{])")
+
+
+def _name(word: str) -> str:
+    """A program word as a bare name: ``@microsoft/api-extractor@7`` and ``node_modules/.bin/x`` read
+    ``api-extractor`` and ``x``."""
+    base = posixpath.basename(word.lstrip("@").split("@", 1)[0]) if word.startswith("@") else posixpath.basename(word)
+    return base.split("@", 1)[0]
+
+
+def _program(words: list[str]) -> list[str]:
+    """``words`` from the program a launcher runs, the launcher's own options skipped."""
+    i = 0
+    while i < len(words) - 1:
+        word = words[i]
+        if word in _LAUNCHERS:
+            i += 1
+        elif i and word.startswith("-"):
+            i += 2 if word in _VALUED else 1
+        else:
+            break
+    return words[i:]
+
+
+def tool_of(words: list[str]) -> str | None:
+    """The ``TOOLS`` token one command invokes, or None (module docstring)."""
+    if not words or is_info_invocation(" ".join(words)):
+        return None
+    if words[:2] == ["go", "run"]:
+        return "apidiff" if any(_name(w) == "apidiff" for w in words[2:] if not w.startswith("-")) else None
+    prog = _program(words)
+    head, rest = (_name(prog[0]), prog[1:]) if prog else ("", [])
+    if head == "apidiff" or head == "japicmp" or head == "revapi":
+        return head
+    if head == "java" and any(w.endswith(".jar") and "japicmp" in _name(w) for w in rest):
+        return "japicmp"
+    if head == "api-extractor":
+        return "api-extractor" if rest[:1] == ["run"] and not {"--local", "-l"} & set(rest) else None
+    if head == "griffe" and rest[:1] == ["check"]:
+        return "griffe"
+    if (head == "cargo" and rest[:1] == ["semver-checks"]) or head == "cargo-semver-checks":
+        return "cargo-semver-checks"
+    if head == "buf" and rest[:1] == ["breaking"]:
+        return "buf-breaking"
+    return None
+
+
+def _shell(line: str) -> str:
+    """A CI or script line as shell text, a whole-line capture (``out=$(apidiff a b)``) read as
+    the command it runs."""
+    text = ci_line_text(line)
+    capture = _CAPTURE.match(text)
+    return capture.group(2) if capture else text
+
+
+def _after(text: str, words: list[str]) -> list[list[str]]:
+    """The commands of one shell line after the one whose words are ``words``, less that
+    command's own ``||`` fallback (``apidiff a b || exit 1`` re-raises nothing: apidiff exits 0)."""
+    parts = _OPERATOR.split(text)
+    for i in range(0, len(parts), 2):
+        if command_words(parts[i].strip().strip("(){} ")) == words:
+            rest = parts[i + 1:]
+            if rest[:1] == ["||"]:   # skip the whole fallback: up to the next ``;`` or ``&&`` at depth 0
+                depth, j = 0, 1
+                while j < len(rest) and not (rest[j] in (";", "&&") and depth <= 0):
+                    depth += rest[j].count("{") + rest[j].count("(") - rest[j].count("}") - rest[j].count(")")
+                    j += 1
+                rest = rest[j:]
+            return [command_words(p.strip().strip("(){} ")) for p in rest[1::2]]
+    return []
+
+
+def _reraises(words: list[str], held: frozenset[str] = frozenset()) -> bool:
+    """A command that ends its script red: ``exit`` or ``return`` with a non-zero literal or a
+    variable other than ``$?`` or one ``held`` (assigned ``$?``), or ``false`` (``then exit 1`` inside an ``if`` too)."""
+    for i, word in enumerate(words):
+        code = words[i + 1].strip('"') if i + 1 < len(words) else ""
+        zero = code in ("", "0", "$?") or code.strip("${}") in held   # ``$?`` after apidiff is its 0
+        if word in ("exit", "return") and not zero:
+            return True
+        if word == "false" and i in (0, 1):
+            return True
+    return False
+
+
+def _output_refs(line: str) -> list[str]:
+    """How later lines can name what apidiff wrote: the variable a whole-line capture assigns
+    (``out=$(apidiff a b)`` gives ``$out``) and the files it is redirected or tee'd to."""
+    text = ci_line_text(line)
+    capture = _CAPTURE.match(text)
+    refs = [f"${capture.group(1)}", f"${{{capture.group(1)}}}"] if capture else []
+    tail = text[text.find("apidiff"):]
+    return refs + [m.group(1) for m in _OUTPUT_FILE.finditer(tail) if not m.group(1).startswith("/dev/")]
+
+
+def _names(ref: str, text: str) -> bool:
+    """Whether ``text`` names ``ref`` as a whole word: ``$out`` is not ``$output``."""
+    return re.search(r"(?<![\w./-])" + re.escape(ref) + r"(?![\w./-])", text) is not None
+
+
+def _checks_output(words: list[str], unit: list[str]) -> bool:
+    """Whether apidiff's output decides a re-raise: a later command on its own line that reads its
+    pipe (``apidiff a b | grep -q . && exit 1``), or a later line of the same shell that names its
+    captured variable or output file and re-raises (``if [ -s out.txt ]; then exit 1; fi``). An
+    ``exit 1`` that reads nothing apidiff wrote is not its check."""
+    if not unit:
+        return False
+    held = frozenset(_STATUS_VAR.findall("\n".join(unit)))   # ``rc=$?`` holds apidiff's 0
+    first = _shell(unit[0])
+    piped = re.search(r"apidiff[^|;&]*\|(?!\|)", first) is not None
+    if piped and any(_reraises(w, held) for w in _after(first, words)):
+        return True
+    refs = _output_refs(unit[0])
+    return any(any(_names(r, ci_line_text(line)) for r in refs) and any(_reraises(c["words"], held)
+                                                               for c in _commands(_shell(line)))
+               for line in unit[1:])
+
+
+def can_stop(tool: str, words: list[str], unit: list[str]) -> bool:
+    """Whether a run of ``tool`` can turn its job red. ``apidiff`` exits 0 on an incompatible
+    change, so it counts only when its output decides a re-raise later in ``unit``, the lines
+    from the call to the end of its shell (a GitHub step, a GitLab job's script, a followed
+    script or recipe): ``_checks_output``. The japicmp CLI exits 0 unless an ``--error-on-*``
+    flag is passed. Every other tool exits non-zero on a breaking change by default."""
+    if tool == "apidiff":
+        return _checks_output(words, unit)
+    if tool == "japicmp":
+        return any(w.startswith("--error-on-") for w in words)
+    return True
+
+
+def build_tools(followed: Followed, read_local: ReadLocal, words: list[str]) -> tuple[set[str], set[str], bool]:
+    """``(run, report_only, unsettled)`` for a Maven or Gradle step: the tools its bound plugins
+    and tasks reach, those that cannot stop the build (japicmp with no ``breakBuild*`` or
+    ``failOn*`` setting true in a build file read, nor a ``-Djapicmp.breakBuild*=true``; a Maven
+    revapi run that reaches no ``revapi-maven-plugin:check`` goal, or revapi with
+    ``failBuildOnProblemsFound`` set false), and
+    whether the reading left a part unsettled (a ``-Djapicmp.skip``, an unread ``apply from:``)."""
+    names = [n.lower() for n in (*followed.plugins, *followed.tasks)]
+    found = {tool for tool in ("japicmp", "revapi") if any(tool in n for n in names)}
+    if any(t in u.lower() for u in followed.unknown for t in found):
+        return set(), set(), True   # a property may skip the goal: not credit
+    quiet: set[str] = set()
+    if "revapi" in found and (
+            (followed.kind == "maven" and not any(t.lower().startswith("revapi-maven-plugin:check") for t in followed.tasks))
+            or any(_REVAPI_NO_FAIL.match(w) for w in words)
+            or any(_REVAPI_QUIET.search(read_local(p) or "") for p in followed.paths)):
+        quiet.add("revapi")   # only the ``check`` goal stops the build, and only with failing left on
+    if "japicmp" in found and not (any(_JAPICMP_FLAG.match(w) for w in words)
+                                   or any(_JAPICMP_BREAK.search(read_local(p) or "") for p in followed.paths)):
+        quiet.add("japicmp")
+    return found - quiet, quiet, bool(followed.unknown)
+
+
+def _package_scripts(read_local: ReadLocal, cwd: str) -> Mapping[str, object]:
+    text = read_local(posixpath.join(cwd, "package.json") if cwd else "package.json")
+    try:
+        scripts = json.loads(text).get("scripts", {}) if text else {}
+    except (ValueError, AttributeError):
+        return {}
+    return scripts if isinstance(scripts, dict) else {}
+
+
+class _Reader:
+    """Follows one repository's CI lines to the tools they run (module docstring)."""
+
+    def __init__(self, read_local: ReadLocal, tracked: frozenset[str]) -> None:
+        self.read_local = read_local
+        self.follower = StepFollower(read_local, tracked)
+        self.unsettled = False
+        self.report_only: set[str] = set()   # tools run in a form that cannot stop the job
+
+    def lines(self, lines: list[str], depth: int = 0, path: tuple[str, ...] = (),
+              raw: list[str] | None = None) -> set[str]:
+        """The tools the shell ``lines`` run, followed into the repository. ``raw`` holds the same
+        lines before masking (a CI file's), which apidiff's output check reads: masking drops an
+        ``if`` condition such as ``[ -s out.txt ]`` that names the output."""
+        found: set[str] = set()
+        raw = raw if raw is not None else lines
+        for index, line in enumerate(lines):
+            commands = list(_commands(_shell(line)))
+            for cmd in commands:
+                tool = tool_of(cmd["words"]) if not cmd["masked"] else None
+                if tool is not None and can_stop(tool, cmd["words"], raw[index:]):
+                    found.add(tool)
+                elif tool is not None:
+                    self.report_only.add(tool)
+                if not cmd["masked"] and depth < _MAX_FOLLOW:
+                    found |= self._npm(cmd["words"], depth, path)
+            if depth >= _MAX_FOLLOW or any(c["masked"] for c in commands):
+                continue   # a fallback that can pass: what the line runs cannot fail the job
+            words = [w for c in commands for w in c["words"]]
+            for followed in self.follower.step(line):
+                if any(p in path for p in followed.paths):
+                    continue
+                tools, quiet, unsettled = build_tools(followed, self.read_local, words)
+                found |= tools
+                self.report_only |= quiet
+                self.unsettled |= unsettled or (followed.kind == "workflow" and bool(followed.unknown))
+                found |= self.lines(list(followed.commands), depth + 1, (*path, *followed.paths))
+        return found
+
+    def _npm(self, words: list[str], depth: int, path: tuple[str, ...]) -> set[str]:
+        """The tools a root ``package.json`` script runs, for ``npm run <t>`` and its kin."""
+        if not words or _name(words[0]) not in _PM:
+            return set()
+        rest = [w for w in words[1:] if not w.startswith("-")]
+        target = rest[1] if rest[:1] == ["run"] and len(rest) > 1 else (
+            rest[0] if words[0] in ("yarn", "pnpm", "bun") and rest and rest[0] not in _LAUNCHERS else None)
+        script = _package_scripts(self.read_local, "").get(target or "")
+        key = f"package.json#{target}"
+        if not isinstance(script, str) or key in path:
+            return set()
+        return self.lines([script], depth + 1, (*path, key))
+
+
+def _extends(tree: IndentTree, top: int) -> list[str]:
+    """The names a GitLab job's ``extends:`` holds (a value, a flow list or a block list)."""
+    out: list[str] = []
+    for k in tree.children(top):
+        if tree.lines[k].key != "extends":
+            continue
+        value = tree.lines[k].value.strip()
+        if value:
+            out += [v.strip(" '\"") for v in value.strip("[]").split(",") if v.strip(" '\"")]
+        out += [tree.lines[j].value.strip(" '\"") for j in tree.subtree(k)
+                if j != k and tree.lines[j].dash and tree.lines[j].value]
+    return out
+
+
+def _gitlab_jobs(tree: IndentTree) -> tuple[dict[int, frozenset[str]], set[int]]:
+    """``(running, untaken)``: each top-level GitLab job that runs on a pipeline with the shell
+    bodies of it that run, and the hidden jobs nothing that runs extends. A visible job that is not
+    a global keyword and not idle runs all of ``_GITLAB_BODY``. A hidden job runs a body only
+    through a job that runs, ``extends:`` it and does not set that body itself: GitLab's
+    ``extends`` replaces an array, so ``test: {extends: .compat, script: [...]}`` runs its own
+    ``script:``, never the template's."""
+    tops = {i: line.key for i, line in enumerate(tree.lines) if line.structural and line.level == 0 and line.key
+            and not tree.ancestors(i)}
+    idle = _idle(tree)
+    running = {i: _GITLAB_BODY for i, key in tops.items()
+               if not key.startswith(".") and key not in _GLOBALS and i not in idle}
+    by_name = {key: i for i, key in tops.items()}
+    queue = list(running)
+    while queue:
+        e = queue.pop()
+        own = frozenset(tree.lines[k].key for k in tree.children(e)) & _GITLAB_BODY
+        for name in _extends(tree, e):
+            j = by_name.get(name)
+            if j is None or j in idle or not tops[j].startswith("."):
+                continue
+            kept = running.get(j, frozenset()) | (running[e] - own)
+            if kept != running.get(j):
+                running[j] = kept
+                queue.append(j)
+    untaken = {i for i, key in tops.items() if key.startswith(".") and not running.get(i)}
+    return running, untaken
+
+
+def _job_lines(text: str, gitlab: bool) -> tuple[list[tuple[list[str], list[str]]], list[str], list[str], set[str]]:
+    """``(shells, untaken, unsure, actions)``: the unmasked lines of each shell that runs (a GitHub
+    ``run:`` step, a running GitLab job's ``before_script:`` and ``script:``) beside the same
+    lines as written, the lines of
+    GitLab hidden jobs nothing extends, the lines whose exit status the step may hide
+    (``ci_unsure``), and the tools of the ``ACTIONS`` an unmasked GitHub step ``uses:``."""
+    keys = _GITLAB_BODY if gitlab else _GITHUB_BODY
+    lines = text.splitlines()
+    unmasked, unsure = mask_lines(text)
+    tree = IndentTree(parse_lines(lines))
+    running, untaken = _gitlab_jobs(tree) if gitlab else ({}, set())
+    spans: dict[int, list[str]] = {}
+    raws: dict[int, list[str]] = {}
+    hidden: list[str] = []
+    doubt: list[str] = []
+    actions: set[str] = set()
+    for i, line in enumerate(unmasked):
+        ref = tree.lines[i].value.strip("'\" ").split("@", 1)[0].lower()
+        if not gitlab and tree.lines[i].key == "uses" and line.strip() and ref in ACTIONS:
+            actions.add(ACTIONS[ref])
+        if tree.lines[tree.body(i)].key not in keys:
+            continue
+        start = tree.job(i).start
+        shell = start if gitlab else tree.body(i)   # a GitHub step is its own shell; a GitLab job one
+        if gitlab and start in untaken:
+            hidden.append(line)
+        elif not gitlab or tree.lines[tree.body(i)].key in running.get(start, frozenset()):
+            if line.strip():
+                spans.setdefault(shell, []).append(line)
+                raws.setdefault(shell, []).append(lines[i])
+            if unsure[i].strip():
+                doubt.append(unsure[i])
+    return [(spans[k], raws[k]) for k in spans], hidden, doubt, actions
+
+
+def _declared(tracked: frozenset[str], read_local: ReadLocal, ci_files: frozenset[str]) -> dict[str, list[str]]:
+    """Tool token to the build files that name it (module docstring), sorted."""
+    out: dict[str, list[str]] = {}
+    for rel in sorted(tracked):
+        base = posixpath.basename(rel)
+        if rel.endswith(_DOC_SUFFIXES) or any(s in f"/{rel}" for s in ("/" + d for d in _SET_ASIDE)):
+            continue
+        if rel in ci_files or (base not in _BUILD_FILES and not rel.startswith(_BUILD_DIRS)
+                               and not base.startswith("build.gradle")):
+            continue   # a CI file is read as CI, never as a declaration
+        text = read_local(rel) or ""
+        for tool, pattern in _DECLARED:
+            if pattern.search(text) or (tool == "buf-breaking" and base.startswith("buf") and _BUF_BREAKING.search(text)):
+                out.setdefault(tool, []).append(rel)
+    return out
+
+
+_WRAPS = frozenset({"set", "sorted", "list", "tuple", "frozenset"})
+
+
+def _literal_strs(node: ast.AST) -> bool:
+    """A list, tuple or set literal of one or more string constants."""
+    return (isinstance(node, (ast.List, ast.Tuple, ast.Set)) and bool(node.elts)
+            and all(isinstance(e, ast.Constant) and isinstance(e.value, str) for e in node.elts))
+
+
+def _python_pins(text: str) -> bool:
+    """An ``==`` comparison in a Python test with ``__all__`` on one side and, on the other, a
+    literal of names or a name bound to one (``EXPECTED_ALL``), optionally wrapped in ``set``,
+    ``sorted``, ``list``, ``tuple`` or ``frozenset``, and nothing else. A comparison with ``dir(mod)`` or
+    ``inspect.getmembers`` checks ``__all__`` against the module, not against a fixed list."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return False
+    fixed = {t.id for n in ast.walk(tree) if isinstance(n, (ast.Assign, ast.AnnAssign)) and n.value is not None
+             and _literal_strs(n.value) for t in (n.targets if isinstance(n, ast.Assign) else [n.target])
+             if isinstance(t, ast.Name)}
+
+    def names_all(node: ast.AST) -> bool:
+        return any((isinstance(n, ast.Name) and n.id == "__all__")
+                   or (isinstance(n, ast.Attribute) and n.attr == "__all__") for n in ast.walk(node))
+
+    def pinned(node: ast.AST) -> bool:
+        """The side is the fixed list itself: a literal, a name bound to one, or one wrapped in
+        ``set``, ``sorted``, ``list``, ``tuple`` or ``frozenset``; ``set(dir(m)) - {"x"}`` is not."""
+        if _literal_strs(node) or (isinstance(node, ast.Name) and node.id in fixed):
+            return True
+        return (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _WRAPS
+                and len(node.args) == 1 and not node.keywords and pinned(node.args[0]))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare) and len(node.ops) == 1 and isinstance(node.ops[0], ast.Eq):
+            left, right = node.left, node.comparators[0]
+            if (names_all(left) and not names_all(right) and pinned(right)) or (
+                    names_all(right) and not names_all(left) and pinned(left)):
+                return True
+    return False
+
+
+def _pins(tracked: frozenset[str], read_local: ReadLocal) -> list[str]:
+    """The tracked test files that pin public exports (module docstring), sorted."""
+    out: list[str] = []
+    for rel in sorted(tracked):
+        base = posixpath.basename(rel)
+        if any(s in f"/{rel}" for s in ("/" + d for d in _SET_ASIDE)):
+            continue
+        if base.endswith(".py") and (base.startswith("test_") or base.endswith("_test.py")):
+            if _python_pins(read_local(rel) or ""):
+                out.append(rel)
+        elif _JS_TEST.search(base):
+            text = "\n".join(line for line in (read_local(rel) or "").splitlines()
+                             if not line.lstrip().startswith("//"))
+            if _JS_PIN.search(text):
+                out.append(rel)
+    return out
+
+
+def gitlab_texts(repo: Path, raw: str, reader: _Reader) -> list[str]:
+    """The GitLab texts to read, as GitLab merges them (``lib.ci.ci_merged_view``, #1180): each
+    source with its merged jobs blanked, then the rendered merged jobs, so an ``extends:`` job runs
+    its effective ``script:`` (an array the template's is replaced by) and a local include is
+    read. A rendered line the view could not settle is left out and marks the reading unsettled.
+    With no view (no readable merged configuration), the root file alone, read with
+    ``_gitlab_jobs``'s own ``extends:`` rule."""
+    config = merged_config(repo)
+    view = merged_view(config) if config is not None and config.sources[0] == raw else None
+    if view is None:
+        return [raw]
+    reader.unsettled |= bool(view.unsettled) or bool(config is not None and config.open)
+    rendered = "\n".join("" if i in view.unsettled else line for i, line in enumerate(view.rendered.splitlines()))
+    return [*view.texts, rendered]
+
+
+def scan_api_compat(repo_root: Path, ci_checks: Mapping[str, object] | None = None) -> ApiCompatBlock:
+    """Build the ``api_compat`` block (module docstring)."""
+    repo = repo_root.resolve()
+    tracked = repo_files(repo)
+    read_local: ReadLocal = local_reader(repo, tracked)
+    files = ci_config_files(tracked)
+    reader = _Reader(read_local, tracked)
+    runs: dict[tuple[str, str], None] = {}
+    quiet: dict[tuple[str, str], None] = {}   # run in a form that cannot stop the job: declared
+    unsure_hit = False
+    for rel in files:
+        gitlab = rel in CI_CONFIG_FILES
+        raw = read_config(repo, rel)
+        texts = gitlab_texts(repo, raw, reader) if gitlab else [follow_workflow(raw, read_local).text]
+        reader.report_only = set()
+        tools: set[str] = set()
+        for text in texts:
+            jobs, hidden, doubt, actions = _job_lines(text, gitlab)
+            tools |= actions
+            for lines, raw_lines in jobs:
+                tools |= reader.lines(lines, raw=raw_lines)
+            unsure_hit |= bool(_Reader(read_local, tracked).lines(doubt))
+            unsure_hit |= bool(_ALIASING.search(text)) and bool(_Reader(read_local, tracked).lines(hidden))
+        for tool in sorted(tools):
+            runs[(rel, tool)] = None
+        for tool in sorted(reader.report_only - tools):
+            quiet[(rel, tool)] = None
+    run_rows = [ApiCompatRun(path=rel, tool=tool) for rel, tool in runs]
+    reached = {tool for _, tool in runs}
+    declared = {t: paths for t, paths in _declared(tracked, read_local, frozenset(files)).items() if t not in reached}
+    for rel, tool in quiet:
+        if tool not in reached:
+            declared.setdefault(tool, []).append(rel)
+    pins = _pins(tracked, read_local)
+    tests_run = ci_checks.get("enforced_check_runs") if isinstance(ci_checks, Mapping) else None
+    block = ApiCompatBlock(
+        files_read=len(files), tools_run=len(reached), pinning_tests=len(pins), declared_only=len(declared),
+        present=bool(run_rows) or (bool(pins) and tests_run is True),
+        runs=run_rows, pins=pins,
+        declared=[ApiCompatRun(path=p, tool=t) for t, paths in sorted(declared.items()) for p in paths])
+    if block["present"]:
+        return block
+    gitlab_includes = any(_INCLUDE.search(read_config(repo, rel)) for rel in files if rel in CI_CONFIG_FILES)
+    if pins and tests_run is None:
+        block["present"], block["present_reason"] = None, REASON_TESTS_NOT_READ
+    elif (declared or unsure_hit) and (unsure_hit or reader.unsettled or unread_ci_paths(tracked) or gitlab_includes):
+        block["present"], block["present_reason"] = None, REASON_CI_NOT_READ
+    return block

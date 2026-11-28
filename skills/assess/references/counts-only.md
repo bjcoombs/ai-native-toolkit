@@ -245,6 +245,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `anomalies.description` | dropped |
 | `anomalies.detail` | dropped |
 
+## api_compat
+
+| Field | Kept as |
+|---|---|
+| `api_compat.present_reason` | token |
+| `api_compat.runs.path` | path (hashed when hashing is on) |
+| `api_compat.runs.tool` | token |
+| `api_compat.pins` | path (hashed when hashing is on) |
+| `api_compat.declared.path` | path (hashed when hashing is on) |
+| `api_compat.declared.tool` | token |
+
 ## archetype
 
 | Field | Kept as |
@@ -795,6 +806,20 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `promissory_markers.top_offenders.text` | dropped |
 | `promissory_markers.top_offenders.commit` | dropped |
 | `promissory_markers.stale_by_file.{}.families` | dropped |
+
+## repo_guards
+
+| Field | Kept as |
+|---|---|
+| `repo_guards.present_reason` | token |
+| `repo_guards.guard_tested_reason` | token |
+| `repo_guards.guards.path` | path (hashed when hashing is on) |
+| `repo_guards.guards.kind` | token |
+| `repo_guards.guards.via` | token |
+| `repo_guards.guards.target` | path (hashed when hashing is on) |
+| `repo_guards.guards.script` | path (hashed when hashing is on) |
+| `repo_guards.guards.trigger` | token |
+| `repo_guards.guards.tested_by` | path (hashed when hashing is on) |
 
 ## review_automation
 

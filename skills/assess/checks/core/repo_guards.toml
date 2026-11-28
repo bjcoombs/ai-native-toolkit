@@ -1,0 +1,71 @@
+# Check manifest fragment: the repo_guards collector and the signals and conditions it owns.
+# Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.repo_guards"
+kind = "collector"
+title = "Ratchets and repo-owned guards"
+summary = "Each ratchet or repo-owned guard a CI job runs on ordinary changes. It follows the scripts, make recipes and local actions a step leads to. A guard is a lint baseline CI reads and a tracked command updates, a boundary checker, or a file-size cap. A boundary checker is import-boss, lint-imports, a check-layers script or an architecture test CI runs. It also reads whether each guard script has a test file of its own."
+issues = [854]
+callable = "lib.ci.repo_guards:guards_or_unknown"
+publishes = ["repo_guards"]
+reads = ["repo_root"]
+stage = "post_offers"
+headless = { repo_guards = "registered" }
+whys.repo_guards = "A ratchet or a boundary checker the repository runs in CI turns a structure rule into a red check, so an agent cannot quietly add one more suppression or cross one more layer. A guard with no test of its own can stop catching anything and still pass."
+shapes = [
+  { path = "repo_guards", type = "lib.ci.repo_guards:RepoGuardsBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "ci_not_read", block = "repo_guards", means = "No guard was found, and something here may run one that this reader cannot see. That is a CI file of a system it does not parse, or a .gitlab-ci.yml include: it does not follow. It can also be a step it could not settle, such as a remote reusable workflow.", next_step = "Nothing to change: this reads as not measured until that configuration can be read." },
+  { code = "trigger_unknown", block = "repo_guards", means = "A guard was found only in a workflow or GitLab job whose trigger this reader could not settle. So it cannot say the guard runs on ordinary changes.", next_step = "Nothing to change: give the workflow a literal on: list of push or pull_request, or the GitLab job literal rules, for it to be read." },
+  { code = "no_guard_script", block = "repo_guards", means = "Every guard found is a third-party tool or an architecture test with no committed script of its own. So there is no guard script whose tests to look for.", next_step = "Nothing to change: a third-party tool is tested where it is built." },
+  { code = "scan_failed", block = "repo_guards", means = "The reader of ratchets and repo-owned guards raised an error, so both conditions read not measured.", next_step = "Nothing to change in the repository: report the error so the reader can be fixed." },
+]
+  [entries.privacy]
+  "repo_guards.present_reason" = "token"
+  "repo_guards.guard_tested_reason" = "token"
+  "repo_guards.guards.path" = "path"
+  "repo_guards.guards.kind" = "token"
+  "repo_guards.guards.via" = "token"
+  "repo_guards.guards.target" = "path"
+  "repo_guards.guards.script" = "path"
+  "repo_guards.guards.trigger" = "token"
+  "repo_guards.guards.tested_by" = "path"
+
+[[entries]]
+id = "core:repo_guards.present"
+kind = "signal"
+title = "CI runs a ratchet or a repo-owned guard"
+collector = "core.repo_guards"
+path = "repo_guards.present"
+type = "bool"
+evidence = "head_structure"
+null_means = "ci_not_read or trigger_unknown: none was found where CI is read, and a CI file, step or trigger this reader cannot settle may run one"
+
+[[entries]]
+id = "core.cond.repo-guards.1.present"
+kind = "condition"
+title = "Ratchets and repo-owned guards run in CI"
+key = "repo-guards.1:repo_guards.present"
+why = "A ratchet or a boundary checker the repository runs in CI turns a structure rule into a red check, so an agent cannot quietly add one more suppression or cross one more layer."
+fix = "Run a boundary checker in CI (lint-imports, import-boss, or a script that exits non-zero on a forbidden import). Or commit a lint baseline with a make target that updates it and a CI step that reads it. Or cap file size in a CI check."
+
+[[entries]]
+id = "core:repo_guards.guard_tested"
+kind = "signal"
+title = "A repo-owned guard script has its own tests"
+collector = "core.repo_guards"
+path = "repo_guards.guard_tested"
+type = "bool"
+evidence = "head_structure"
+null_means = "no_guard_script: every guard found is a third-party tool; or the reason repo_guards.present gives"
+
+[[entries]]
+id = "core.cond.repo-guard-tested.1.guard_tested"
+kind = "condition"
+title = "Repo-owned guard is itself tested"
+key = "repo-guard-tested.1:repo_guards.guard_tested"
+why = "A guard script with no tests can stop catching anything and still pass, so a green check means less than it says. With its own tests, a change that breaks the guard turns red."
+fix = "Add a test file for the guard script, named for it, such as test_check_layers.py beside check_layers.py. Give it one case the guard must reject and one it must pass."

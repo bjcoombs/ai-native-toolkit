@@ -19,8 +19,8 @@ no check: an unsettled reading never counts. Both readers answer the same two qu
   ``/X/.test(body)``. A name assigned from a marker test is one too (``ok = "X" in body``).
   An **act** is Python ``sys.exit`` / ``exit`` / ``raise SystemExit`` with a non-zero or
   message argument (``sys.exit(0)``, ``sys.exit()`` and a bare ``raise SystemExit`` end the
-  run green), or a process call (``subprocess.*``, ``os.system``) running ``gh ... --add-label``,
-  never a message that names it; JavaScript ``core.setFailed(...)``, ``throw``,
+  run green), or a process call (``subprocess.*``, ``os.system``) running ``gh ... --add-label``
+  (a literal, or an f-string read by its literal parts), never a message that names it; JavaScript ``core.setFailed(...)``, ``throw``,
   ``process.exit(N)`` with N non-zero, or ``addLabels(...)``, as the statement's own call (one
   inside a callback such as ``files.forEach(f => ...)`` belongs to the callback). The act **follows** when it is a
   statement of the branches of the ``if`` the test is the condition of, or an unconditional
@@ -178,15 +178,27 @@ def _py_ends(stmts: list[ast.stmt]) -> bool:
         isinstance(s, ast.Expr) and isinstance(s.value, ast.Call) and _dotted(s.value.func) in _PY_EXITS) for s in stmts)
 
 
+def _command(node: ast.AST) -> str | None:
+    """A command word or string: a literal, or an f-string's literal parts joined with ``{}`` in
+    place of each value (issue #1609), so ``f"gh pr edit {pr} --add-label x"`` reads as
+    ``gh pr edit {} --add-label x`` and a value never supplies the program or the flag."""
+    if isinstance(node, ast.JoinedStr):
+        parts = [_text(v) for v in node.values]
+        return "".join("{}" if part is None else part for part in parts)
+    return _text(node)
+
+
 def _labels(call: ast.Call) -> bool:
-    """Whether a process call runs ``gh ... --add-label``: an argument list holding both words, or
-    one command string (``os.system("gh pr edit --add-label x")``). A message naming it is no call."""
+    """Whether a process call runs ``gh ... --add-label`` (or ``--add-label=x``): an argument list
+    holding both words, or one command string (``os.system("gh pr edit --add-label x")``), literal
+    or f-string (``_command``). A message naming it is no call."""
     first = call.args[0] if call.args else None
     if isinstance(first, (ast.List, ast.Tuple)):
-        words = [_text(e) or "" for e in first.elts]
-        return bool(words) and words[0] == "gh" and any(w == "--add-label" or w.startswith("--add-label=") for w in words)
-    text = _text(first) if first is not None else None
-    return text is not None and text.split()[:1] == ["gh"] and "--add-label" in text.split()
+        words = [_command(e) or "" for e in first.elts]
+    else:
+        text = _command(first) if first is not None else None
+        words = text.split() if text is not None else []
+    return bool(words) and words[0] == "gh" and any(w == "--add-label" or w.startswith("--add-label=") for w in words)
 
 
 def _red(arg: ast.expr) -> bool:

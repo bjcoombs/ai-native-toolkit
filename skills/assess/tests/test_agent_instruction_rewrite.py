@@ -297,7 +297,7 @@ def test_the_hazard_names_each_file_whose_frontmatter_it_could_not_read(git_repo
     assert kept["agent_instruction_rewrite_unread_files"] == block["agent_instruction_rewrite_unread_files"]
     entry = next(h for h in _level(dict(block))["hazards"]  # type: ignore[arg-type]
                  if h["id"] == "agent-rewrites-instructions.1")
-    assert "could not read" in entry["fix"]
+    assert "agent_instruction_rewrite_unread_files readable" in entry["fix"]
     bad_source = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports: [shared/a.md\n")
     block = scan_agent_ops(_repo(git_repo, {SOURCE: bad_source}))
     assert block["agent_instruction_rewrite_unread_files"] == [SOURCE]

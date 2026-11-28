@@ -1,7 +1,9 @@
 """One CI step's AI-disclosure check: its code split by language and read by structure (issue #1599).
 
 ``step_units(text)`` splits a GitHub Actions step into the code it runs, each a ``Unit`` with
-its language: a ``run:`` value (shell, or Python under ``shell: python``; with no ``shell:``
+its language: a ``run:`` value (shell, Python under ``shell: python`` or Ruby under ``shell: ruby``,
+the runner matched by its program name, so ``shell: /bin/bash -e {0}`` and
+``shell: /usr/bin/env bash {0}`` are bash; with no ``shell:``
 it is read as shell, and as Python only when it does not parse as shell) and a
 ``script:`` value (JavaScript, when the step's ``uses:`` is ``actions/github-script`` or the
 text names no action; another action's ``script:``, such as an SSH action's, is not read). Text
@@ -21,6 +23,7 @@ Inward-only imports: stdlib and the ``lib.ci.disclosure_*`` readers. Tests:
 """
 from __future__ import annotations
 
+import posixpath
 import re
 import textwrap
 from collections.abc import Callable
@@ -34,6 +37,7 @@ from lib.ci.disclosure_terms import is_read
 SHELL = "shell"
 PYTHON = "python"
 JS = "js"
+RUBY = "ruby"  # no reader: what it does is unread (issue #1609)
 RUN = "run"  # a run: with no shell: key, read as shell, or as Python when it is not shell
 _MAX_ROUNDS = 8
 _KEY = re.compile(r"^(\s*(?:-\s+)?)(run|script|shell)\s*:\s*(.*)$")
@@ -44,7 +48,7 @@ _ENTRY = re.compile(r"^\s*([A-Za-z_]\w*)\s*:\s*(.+)$")
 
 
 class Unit(NamedTuple):
-    language: str  # SHELL, PYTHON or JS
+    language: str  # SHELL, RUN, PYTHON, JS or RUBY
     code: str
 
 
@@ -64,6 +68,14 @@ def _value(lines: list[str], i: int, column: int, value: str) -> tuple[str, int]
     return value, i + 1
 
 
+def _runner(value: str) -> str:
+    """A ``shell:`` value's program by basename, past a leading ``env`` (``/usr/bin/env bash {0}`` is bash)."""
+    words = [posixpath.basename(w) for w in value.split()]
+    if words[:1] == ["env"]:
+        words = words[1:]
+    return words[0] if words else ""
+
+
 def step_units(text: str) -> list[Unit]:
     """The code one step runs, by language (module docstring)."""
     lines = text.splitlines()
@@ -77,13 +89,13 @@ def step_units(text: str) -> list[Unit]:
             continue
         value, i = _value(lines, i, len(m.group(1)), m.group(3).strip())
         if m.group(2) == "shell":
-            runner = value.strip().split(" ")[0]
+            runner = _runner(value)
         else:
             found.append((m.group(2), value))
     if not found:
         return [Unit(SHELL, text)]
     run_languages = ([PYTHON] if runner.startswith("python") else [SHELL] if runner in ("bash", "sh")
-                     else [RUN] if not runner else [])
+                     else [RUBY] if runner == "ruby" else [RUN] if not runner else [])
     uses = _USES.search(text)
     script_languages = [JS] if uses is None or "github-script" in uses.group(1) else []
     return [Unit(lang, code) for key, code in found for lang in (run_languages if key == "run" else script_languages)]
@@ -112,6 +124,8 @@ class _Parsed(NamedTuple):
 
 
 def _parse(unit: Unit) -> _Parsed | None:
+    if unit.language == RUBY:
+        return None
     if unit.language in (SHELL, RUN):
         seq = shell.parse(unit.code)
         if seq is not None:

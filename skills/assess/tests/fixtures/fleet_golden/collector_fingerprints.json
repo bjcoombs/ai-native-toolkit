@@ -62,7 +62,7 @@
         "grpa/svc1": "32c077ec246cb21e3f568f26a8c7d52e94d5f4014b2fada02bac3b72d1b982b5",
         "grpb/lib1": "32c077ec246cb21e3f568f26a8c7d52e94d5f4014b2fada02bac3b72d1b982b5"
       },
-      "revision": 2
+      "revision": 3
     },
     "core.ai_usage": {
       "repos": {
@@ -77,6 +77,14 @@
         "grpa/sub/deep/svc2": "ac408cf00f26198018d8617d2614ea7b3b6f2ca6e127874e47366f20a5ccb005",
         "grpa/svc1": "ac408cf00f26198018d8617d2614ea7b3b6f2ca6e127874e47366f20a5ccb005",
         "grpb/lib1": "ac408cf00f26198018d8617d2614ea7b3b6f2ca6e127874e47366f20a5ccb005"
+      },
+      "revision": 1
+    },
+    "core.api_compat": {
+      "repos": {
+        "grpa/sub/deep/svc2": "c86c6e79f4dffa461f8c3b2879e03c8b18ff8a34bc6b488c1b187f038dc7fd14",
+        "grpa/svc1": "f3fd7ee6071c469597a0cc345e009a31fc7db65cca514f9d0f23ee045683cdd5",
+        "grpb/lib1": "c86c6e79f4dffa461f8c3b2879e03c8b18ff8a34bc6b488c1b187f038dc7fd14"
       },
       "revision": 1
     },
@@ -293,6 +301,14 @@
         "grpa/sub/deep/svc2": "047d31e6ae03f80d8be97f752f19329b30cb1d1ae09fa9ea0e271cd51dcf2143",
         "grpa/svc1": "aaa43786614ebcc7bd61ccba02deaeb5f4f15bd6f7d168e1b92375cb8769c559",
         "grpb/lib1": "a42ba8ef738922d932fa06cce433c568f038431b1207eb17dfbf50ec4dcc1962"
+      },
+      "revision": 1
+    },
+    "core.repo_guards": {
+      "repos": {
+        "grpa/sub/deep/svc2": "27858b3f6367f7b4ef74a7ba86e66acab91536d5b323962483061e15cedd3ee4",
+        "grpa/svc1": "78cd35d318e36ae92f5c79f3e4d3d4f74f6c74ee434d251f214c02c47c351153",
+        "grpb/lib1": "27858b3f6367f7b4ef74a7ba86e66acab91536d5b323962483061e15cedd3ee4"
       },
       "revision": 1
     },

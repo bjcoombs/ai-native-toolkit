@@ -299,7 +299,7 @@
               "eq_signal": null,
               "text": "Agent jobs that can rewrite unowned instruction or workflow files: is above 0",
               "title": "An agent job can rewrite its own instructions",
-              "fix": "Give AGENTS.md, CLAUDE.md, each agent workflow, its .lock.yml, the local workflows, actions and gh-aw imports it reaches at any depth, and CODEOWNERS itself an owner. Require code-owner review on the default branch. A file it could not read (agent_instruction_rewrite_unread_files) keeps this raised.",
+              "fix": "Give AGENTS.md, CLAUDE.md, each agent workflow, its .lock.yml, the local workflows, actions and gh-aw imports it reaches at any depth, and CODEOWNERS itself an owner. Require code-owner review on the default branch. Make each file in agent_instruction_rewrite_unread_files readable.",
               "why": "An agent job that can push files can change AGENTS.md, CLAUDE.md or its own workflow, so the next run follows instructions no reviewer approved. CI then checks changes against rules the agent wrote for itself.",
               "why_source": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners",
               "input_class": "head_structure",
@@ -391,6 +391,52 @@
               "title": "AI policy enforced on pull requests",
               "fix": "Add a workflow on pull_request that reads the pull request body or the commit trailers for the disclosure your policy asks for. Have it turn the check red or add a label when the disclosure is absent or a banned marker is present.",
               "why": "An agent follows the rules a check holds it to. A workflow that reads each pull request for AI disclosure or attribution, and turns the check red or labels on it, applies the policy to every change, an agent's included, without a reviewer having to remember it.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "api-compat",
+      "title": "API compatibility checked by CI",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "api-compat.1",
+          "truth": [
+            "contracts",
+            "structure"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "api-compat.1:api_compat.present",
+              "signal": "api_compat.present",
+              "producer": {
+                "scan": "api_compat",
+                "collector": "core.api_compat"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "CI runs an API compatibility check: is true",
+              "title": "API compatibility checked by CI",
+              "fix": "Run a compatibility check in CI: cargo semver-checks, buf breaking or api-extractor run. apidiff only prints a report, so exit 1 when its output lists a change. japicmp needs --error-on-* or a breakBuild* setting. Or run a test that compares the exports with a fixed list.",
+              "why": "An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it.",
               "why_source": "",
               "input_class": "head_structure",
               "grade": "measured",
@@ -1907,6 +1953,98 @@
       ]
     },
     {
+      "id": "repo-guard-tested",
+      "title": "Repo-owned guard is itself tested",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "repo-guard-tested.1",
+          "truth": [
+            "structure"
+          ],
+          "polarity": "positive",
+          "requires": [
+            "repo-guards.1"
+          ],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "repo-guard-tested.1:repo_guards.guard_tested",
+              "signal": "repo_guards.guard_tested",
+              "producer": {
+                "scan": "repo_guards",
+                "collector": "core.repo_guards"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A repo-owned guard script has its own tests: is true",
+              "title": "Repo-owned guard is itself tested",
+              "fix": "Add a test file for the guard script, named for it, such as test_check_layers.py beside check_layers.py. Give it one case the guard must reject and one it must pass.",
+              "why": "A guard script with no tests can stop catching anything and still pass, so a green check means less than it says. With its own tests, a change that breaks the guard turns red.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repo-guards",
+      "title": "Ratchets and repo-owned guards run in CI",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "repo-guards.1",
+          "truth": [
+            "structure"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": "repo-guard-tested.1",
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "repo-guards.1:repo_guards.present",
+              "signal": "repo_guards.present",
+              "producer": {
+                "scan": "repo_guards",
+                "collector": "core.repo_guards"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "CI runs a ratchet or a repo-owned guard: is true",
+              "title": "Ratchets and repo-owned guards run in CI",
+              "fix": "Run a boundary checker in CI (lint-imports, import-boss, or a script that exits non-zero on a forbidden import). Or commit a lint baseline with a make target that updates it and a CI step that reads it. Or cap file size in a CI check.",
+              "why": "A ratchet or a boundary checker the repository runs in CI turns a structure rule into a red check, so an agent cannot quietly add one more suppression or cross one more layer.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "secrets-guard",
       "title": "Secrets guard",
       "scope": "team",
@@ -2200,10 +2338,14 @@
       "id": "contracts",
       "title": "Contracts",
       "conditions": [
+        "api-compat.1",
         "docs-kept-true.1"
       ],
-      "listed": [],
+      "listed": [
+        "api-compat.1"
+      ],
       "shared": [
+        "api-compat.1",
         "docs-kept-true.1"
       ],
       "why": "That generated output and its source agree, so an agent editing one does not quietly break the other.",
@@ -2236,12 +2378,15 @@
       "id": "structure",
       "title": "Structure",
       "conditions": [
+        "api-compat.1",
         "layer-2-design.1",
         "layer-2-design.2",
         "layer-3-linters.1",
         "layer-3-linters.2",
         "layer-4-architecture.1",
-        "layer-4-architecture.2"
+        "layer-4-architecture.2",
+        "repo-guard-tested.1",
+        "repo-guards.1"
       ],
       "listed": [
         "layer-2-design.1",
@@ -2249,9 +2394,13 @@
         "layer-3-linters.1",
         "layer-3-linters.2",
         "layer-4-architecture.1",
-        "layer-4-architecture.2"
+        "layer-4-architecture.2",
+        "repo-guard-tested.1",
+        "repo-guards.1"
       ],
-      "shared": [],
+      "shared": [
+        "api-compat.1"
+      ],
       "why": "That the code is shaped so an agent can work on one part without holding the whole repository in mind.",
       "why_source": ""
     },
@@ -2399,6 +2548,15 @@
       ],
       "conditions": [
         "docs-kept-true.1"
+      ]
+    },
+    {
+      "tags": [
+        "contracts",
+        "structure"
+      ],
+      "conditions": [
+        "api-compat.1"
       ]
     },
     {
@@ -2586,6 +2744,16 @@
       "kind": "requires",
       "source": "layer-7-review.2",
       "target": "layer-7-review.1"
+    },
+    {
+      "kind": "requires",
+      "source": "repo-guard-tested.1",
+      "target": "repo-guards.1"
+    },
+    {
+      "kind": "guarded_by",
+      "source": "repo-guards.1",
+      "target": "repo-guard-tested.1"
     }
   ],
   "scans": [
@@ -3064,6 +3232,11 @@
           "code": "no_pr_workflows",
           "means": "No GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it.",
           "next_step": "Nothing to change: this reads as not measured until a workflow runs on pull requests."
+        },
+        {
+          "code": "ruby_unread",
+          "means": "No step reads as enforcing AI disclosure, but a step on a pull request workflow runs Ruby that names an AI marker. This reader does not read Ruby, so that step may enforce it.",
+          "next_step": "Nothing to change: this reads as not measured while the check is in Ruby. A shell, Python or JavaScript check is read."
         }
       ],
       "evidence": [
@@ -3160,6 +3333,64 @@
         "unclassified"
       ],
       "why": "Instruction files above the repository root load in a local session but never reach a fresh clone, so an agent elsewhere works without those rules.",
+      "why_source": ""
+    },
+    {
+      "name": "api_compat",
+      "title": "API compatibility checks CI runs",
+      "summary": "Whether a GitHub Actions or GitLab CI step runs an API compatibility tool: apidiff, api-extractor, griffe check, cargo semver-checks, buf breaking, japicmp or revapi. The step may run it through a committed script, a make recipe, a Maven or Gradle build, or a package.json script. Whether a test pins the public exports while CI runs tests. A tool named only in a build file is listed as declared, never counted.",
+      "collector": "core.api_compat",
+      "reads": [
+        "repo_root",
+        "ci_checks"
+      ],
+      "headless_reads": null,
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "api_compat.declared.path": "path",
+          "api_compat.declared.tool": "token",
+          "api_compat.pins": "path",
+          "api_compat.present_reason": "token",
+          "api_compat.runs.path": "path",
+          "api_compat.runs.tool": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "api-compat"
+        ],
+        "conditions": [
+          "api-compat.1:api_compat.present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "tests_not_read",
+          "means": "A test pins the public exports, but whether CI runs tests is not settled (ci_checks.enforced_check_runs is null or the block is absent).",
+          "next_step": "Nothing to change: this reads as not measured until the CI test run can be read."
+        },
+        {
+          "code": "ci_not_read",
+          "means": "A compatibility tool is named in a build file, or found in a form whose exit status the step may hide. A CI file this reader cannot follow may run it. Examples are a CI system it does not parse, a GitLab include, or a step the follower could not settle.",
+          "next_step": "Nothing to change if the tool runs; calling it from a GitHub Actions or GitLab CI step the scan reads lets it count."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "api_compat.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A public interface stays stable only when a check stops a breaking change. A compatibility tool CI runs, or a test that pins the exports, turns an agent's accidental break of a contract into a red check, not a downstream bug report.",
       "why_source": ""
     },
     {
@@ -5019,6 +5250,83 @@
       "why_source": ""
     },
     {
+      "name": "repo_guards",
+      "title": "Ratchets and repo-owned guards",
+      "summary": "Each ratchet or repo-owned guard a CI job runs on ordinary changes. It follows the scripts, make recipes and local actions a step leads to. A guard is a lint baseline CI reads and a tracked command updates, a boundary checker, or a file-size cap. A boundary checker is import-boss, lint-imports, a check-layers script or an architecture test CI runs. It also reads whether each guard script has a test file of its own.",
+      "collector": "core.repo_guards",
+      "reads": [
+        "repo_root"
+      ],
+      "headless_reads": null,
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "repo_guards.guard_tested_reason": "token",
+          "repo_guards.guards.kind": "token",
+          "repo_guards.guards.path": "path",
+          "repo_guards.guards.script": "path",
+          "repo_guards.guards.target": "path",
+          "repo_guards.guards.tested_by": "path",
+          "repo_guards.guards.trigger": "token",
+          "repo_guards.guards.via": "token",
+          "repo_guards.present_reason": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "repo-guard-tested",
+          "repo-guards"
+        ],
+        "conditions": [
+          "repo-guard-tested.1:repo_guards.guard_tested",
+          "repo-guards.1:repo_guards.present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "ci_not_read",
+          "means": "No guard was found, and something here may run one that this reader cannot see. That is a CI file of a system it does not parse, or a .gitlab-ci.yml include: it does not follow. It can also be a step it could not settle, such as a remote reusable workflow.",
+          "next_step": "Nothing to change: this reads as not measured until that configuration can be read."
+        },
+        {
+          "code": "trigger_unknown",
+          "means": "A guard was found only in a workflow or GitLab job whose trigger this reader could not settle. So it cannot say the guard runs on ordinary changes.",
+          "next_step": "Nothing to change: give the workflow a literal on: list of push or pull_request, or the GitLab job literal rules, for it to be read."
+        },
+        {
+          "code": "no_guard_script",
+          "means": "Every guard found is a third-party tool or an architecture test with no committed script of its own. So there is no guard script whose tests to look for.",
+          "next_step": "Nothing to change: a third-party tool is tested where it is built."
+        },
+        {
+          "code": "scan_failed",
+          "means": "The reader of ratchets and repo-owned guards raised an error, so both conditions read not measured.",
+          "next_step": "Nothing to change in the repository: report the error so the reader can be fixed."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "repo_guards.guard_tested",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
+        {
+          "signal": "repo_guards.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A ratchet or a boundary checker the repository runs in CI turns a structure rule into a red check, so an agent cannot quietly add one more suppression or cross one more layer. A guard with no test of its own can stop catching anything and still pass.",
+      "why_source": ""
+    },
+    {
       "name": "review_automation",
       "title": "AI review committed in CI",
       "summary": "",
@@ -6176,6 +6484,19 @@
       "private": false
     },
     {
+      "name": "api_compat",
+      "title": "API compatibility checks CI runs",
+      "publishes": [
+        "api_compat"
+      ],
+      "reads": [
+        "repo_root",
+        "ci_checks"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "archetype",
       "title": "Repository archetype",
       "publishes": [
@@ -6835,6 +7156,7 @@
         "agent_environment",
         "agent_ops",
         "ai_governance",
+        "api_compat",
         "backlog_ready",
         "ci_checks",
         "ci_hazards",
@@ -6848,6 +7170,7 @@
         "nested_instructions",
         "observability",
         "promissory_markers",
+        "repo_guards",
         "review_evidence",
         "review_reality",
         "secrets_guard",
@@ -7045,6 +7368,18 @@
       ],
       "network": false,
       "private": true
+    },
+    {
+      "name": "repo_guards",
+      "title": "Ratchets and repo-owned guards",
+      "publishes": [
+        "repo_guards"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
     },
     {
       "name": "review_automation",
@@ -7428,6 +7763,7 @@
         "agent_environment",
         "agent_ops",
         "ai_governance",
+        "api_compat",
         "backlog_ready",
         "ci_checks",
         "ci_hazards",
@@ -7441,6 +7777,7 @@
         "nested_instructions",
         "observability",
         "promissory_markers",
+        "repo_guards",
         "review_evidence",
         "review_reality",
         "secrets_guard",
@@ -7630,7 +7967,7 @@
       "collector": "core.ai_governance",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "no_pr_workflows: no GitHub Actions workflow runs on pull requests"
+      "null_means": "no_pr_workflows: no GitHub Actions workflow runs on pull requests; ruby_unread: a step runs Ruby naming an AI marker, which this reader does not read"
     },
     {
       "path": "ai_governance.policy_declared",
@@ -7640,6 +7977,15 @@
       "input_class": "head_text",
       "grade": "declared",
       "null_means": ""
+    },
+    {
+      "path": "api_compat.present",
+      "title": "CI runs an API compatibility check",
+      "type": "bool",
+      "collector": "core.api_compat",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "tests_not_read or ci_not_read: a pinning test or a declared tool whose CI run cannot be settled"
     },
     {
       "path": "backlog_ready.close_open_met",
@@ -7874,6 +8220,24 @@
       "input_class": "git_history",
       "grade": "measured",
       "null_means": "absent when no suppression was found"
+    },
+    {
+      "path": "repo_guards.guard_tested",
+      "title": "A repo-owned guard script has its own tests",
+      "type": "bool",
+      "collector": "core.repo_guards",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_guard_script: every guard found is a third-party tool; or the reason repo_guards.present gives"
+    },
+    {
+      "path": "repo_guards.present",
+      "title": "CI runs a ratchet or a repo-owned guard",
+      "type": "bool",
+      "collector": "core.repo_guards",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "ci_not_read or trigger_unknown: none was found where CI is read, and a CI file, step or trigger this reader cannot settle may run one"
     },
     {
       "path": "review_evidence.present",
