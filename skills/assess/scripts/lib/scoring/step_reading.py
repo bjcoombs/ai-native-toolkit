@@ -12,7 +12,9 @@ codes once each in gate order; None at the top Step, below Step 1, when any open
 unmet, set aside, declined or held by a hazard, or for anything that is not a level result.
 It reads only ``step`` and ``next_step.blockers``, so a ``fleet-data.json`` repository entry
 (``lib/fleet/fleet_data_steps.py``) reads the same as the level result it was copied from.
-``step_reading(level)`` is the words, ``Step 2, Step 3 not measured``, and ``unread_gap``
+``first_measured(blockers)`` is the first blocker that was measured, else the first: the
+gate the funnel counts a repository under and the badge summary's ``next:`` names, so the
+two agree when an unmet gate stands beside one not measured. ``step_reading(level)`` is the words, ``Step 2, Step 3 not measured``, and ``unread_gap``
 how one not-measured gate reads beside the others: ``the CI runs tests gate, not measured
 here (needs a full run)``, never as a gate not held.
 
@@ -26,10 +28,10 @@ Tests: ``tests/test_step_reading.py``.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-__all__ = ["next_unread", "step_reading", "unread_gap"]
+__all__ = ["first_measured", "next_unread", "step_reading", "unread_gap"]
 
 
 def next_unread(level: Any) -> tuple[int, int, list[str]] | None:
@@ -46,6 +48,12 @@ def next_unread(level: Any) -> tuple[int, int, list[str]] | None:
         return None
     reasons = [str(b["reason"]) for b in gates if b.get("reason")]
     return step, nxt["step"], list(dict.fromkeys(reasons))
+
+
+def first_measured(blockers: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    """The first blocker that was measured, else the first one; None for no blocker. The
+    gate a repository counts under, and the one the badge summary's ``next:`` names."""
+    return next((b for b in blockers if b.get("state") != "not_measured"), blockers[0] if blockers else None)
 
 
 def step_reading(level: Any) -> str | None:

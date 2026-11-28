@@ -40,7 +40,7 @@ holds (#1334): the Step, then the practices fully in place (``practices_held``, 
 result's ``in_place`` rows at their top level, left out at 0), then the next gate:
 ``Step 1 · 2 practices fully in place · next: instruction file``. No tally count is in it.
 Without a practice at its top level it reads ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first gate
-``card_facts.blocking_gates`` returns, the function the top card reads),
+``card_facts.blocking_gates`` returns that was measured, else the first, ``step_reading.first_measured``, #1640),
 ``Step 1 · one change from Step 3: instruction file`` when one gate blocks the next Step and
 the gates above it already hold (``one_change_ceiling``, reading the level result's
 ``ceiling_step``, #1333). ``lone_condition`` is the one test of "one change": exactly one
@@ -80,7 +80,7 @@ from lib.scoring.level_result_types import Blocker, ConditionResult, DeclineReco
 from lib.scoring.level_tags import tag_cells
 from lib.scoring.level_tally import NOT_APPLICABLE_REASONS, default_model, scan_not_applicable
 from lib.scoring.levels import MaturityModel, StepDef, condition_id
-from lib.scoring.step_reading import next_unread, step_reading
+from lib.scoring.step_reading import first_measured, next_unread, step_reading
 
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
 # release PR moves it by hand during a version freeze.
@@ -189,7 +189,8 @@ def _summary(level: LevelResult, model: MaturityModel) -> str:
     if step is None and nxt is None:
         return "no Steps defined"
     gates = blocking_gates(level)
-    gate = gates[0].get("gate", "") if gates else None
+    first = first_measured(gates)  # #1640: an unmet gate before one not measured
+    gate = first.get("gate", "") if first is not None else None
     held = practices_held(level)
     if step is None:  # below Step 1 of a model whose Step 1 has a gate (#889)
         return f"no Step yet{held} · next: {GATE_NOUN.get(gate, gate)}" if gate else f"no Step yet{held}"

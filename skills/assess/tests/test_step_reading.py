@@ -98,6 +98,8 @@ def test_a_gate_not_measured_beside_an_unmet_one_never_reads_as_not_held() -> No
     blocks = next(line for line in card_lines(mixed, MODEL, KNOWN) if line.startswith("Blocks Step 3"))  # type: ignore[arg-type]
     assert blocks == ("Blocks Step 3: the CI runs tests gate, not measured here (needs a full run); "
                       "no coverage gate is enforced.")
+    # the badge names the measured gate the funnel counts the repository under
+    assert headline(mixed, MODEL)["summary"] == "Step 2 · next: coverage gate"  # type: ignore[arg-type]
 
 
 # --- the fleet -------------------------------------------------------------------------------

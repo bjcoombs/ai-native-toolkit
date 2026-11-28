@@ -4,7 +4,7 @@
 ``next_step``, the level result's fields, ``lib/fleet/fleet_data_steps.py``) and the maturity
 model's ``[[steps]]`` (the Step names and order). One bar per Step, with the count of
 repositories at it. Each repository counts once, under the first gate of its next Step that
-does not hold, in model order (the level result lists its blockers in that order), so a
+does not hold and was measured (the first one when none was), in model order (the level result lists its blockers in that order), so a
 Step's segments sum to its count. A gate that was not measured holds a repository only when
 every open gate of its next Step was not measured (``lib/scoring/step_reading.py``, #1640):
 the repository reads "Step N, Step N+1 not measured", counts in its bar's
@@ -41,7 +41,7 @@ import lib.fleet.fleet_svg as svg
 from lib.svg_scope import SCOPES
 from lib.assess_diagrams import row_label, wrap
 from lib.scoring.levels import MaturityModel
-from lib.scoring.step_reading import next_unread
+from lib.scoring.step_reading import first_measured, next_unread
 from lib.vocabulary import IN_PLACE
 
 FILE = "step-funnel.svg"
@@ -116,7 +116,7 @@ def funnel_view(model: MaturityModel, data: Mapping[str, Any]) -> FunnelView:
         # #1640: a gate not measured holds the repository only when no open gate is measured
         unread = next_unread(repo) is not None
         nm[step] += unread
-        first = blockers[0] if unread else next((b for b in blockers if b.get("state") != "not_measured"), blockers[0])
+        first = blockers[0] if unread else (first_measured(blockers) or blockers[0])
         kind = _kind(first)
         at[step][(first.get("gate"), kind, first.get("reason") if kind == "not_measured" else None)] += 1
         more[step] += len(blockers) > 1
@@ -200,8 +200,8 @@ def render(model: MaturityModel, data: Mapping[str, Any]) -> str:
                  default=0.0)
     width = max(WIDTH, x0 + BAR_W + 8 + side_w + PAD, x0 + 18 + line_w + PAD)
     body = [svg.text(PAD, 28, TITLE, size=15, weight="600", cls="fg"),
-            svg.text(PAD, 48, "Each repository counts once, under the first gate of its next Step that does "
-                     "not hold", size=12, cls="muted")]
+            svg.text(PAD, 48, "Each repository counts once, under the first measured gate of its next Step "
+                     "that does not hold", size=12, cls="muted")]
     y = 76.0
     for bar in reversed(view["bars"]):  # the Step ladder's order: the top Step first (#1330)
         nxt = next((s for s in steps if s["step"] == bar["step"] + 1), None)
