@@ -59,7 +59,8 @@ TITLE = "Step movement since the earlier run"
 QUESTION = "How many repositories changed Step since the earlier run, and how many moved only because the rules changed?"
 CAPTION = ("Each cell counts repositories by their Step in the earlier run and in this one. "
            "A dashed cell with a hatched mark holds moves that rule changes alone explain.")
-UNREADABLE = "the earlier run's files are at a version this toolkit does not read"
+UNREADABLE = ("the earlier run's files are in an older format than this run reads; "
+              "running both at the same version compares them")
 NO_JOIN = ("the two runs hashed repository ids under different salts, so no repository is in both "
            "(compare runs that used one --hash-salt)")
 
