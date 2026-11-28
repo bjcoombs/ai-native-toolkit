@@ -359,7 +359,7 @@ step runs in a signed-in session with the `Artifact` and `ArtifactData` tools. D
 
    ```bash
    uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" shards out "<history>/<org>"
-   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" record-shard "<history>/<org>" --url URL (--index | --shard KEY)
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" record-shard "<history>/<org>" out --url URL (--index | --shard FOLDER)
    ```
 
 5. **Publish the page.** Load the `artifact-capabilities` skill first. Publish

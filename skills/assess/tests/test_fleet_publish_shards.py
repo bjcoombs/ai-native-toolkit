@@ -70,6 +70,17 @@ def test_a_recorded_shard_without_its_export_is_refused(tmp_path: Path) -> None:
         pss.plan_sharded(_data(), {}, run_id=fx.DATES[-1], registry=pss.read_shards(org), allow_names=True)
 
 
+def test_a_retired_shard_needs_no_export_and_stays_in_the_registry(tmp_path: Path) -> None:
+    org = tmp_path / "grp"
+    pss.record_shard(org, URL + "sub", SUB)
+    pss.record_shard(org, URL + "gone", "ownership/grp/gone")  # a unit that has left the fleet
+    sharded = pss.plan_sharded(_data(), {shard_folder(SUB): {}}, run_id=fx.DATES[-1], registry=pss.read_shards(org),
+                               allow_names=True)
+    assert sharded is not None and sharded["summary"]["retired"] == ["ownership/grp/gone"]
+    assert "ownership/grp/gone" not in [s["key"] for s in sharded["summary"]["steps"]]
+    assert sharded["plan"]["index"] is not None and sharded["plan"]["index"]["retired"][0]["url"] == URL + "gone"
+
+
 def test_a_fleet_that_fits_and_has_no_shards_is_not_sharded() -> None:
     assert pss.plan_sharded(_data(), {}, run_id=fx.DATES[-1], registry=None, allow_names=True) is None
 
@@ -97,7 +108,7 @@ def test_the_cli_plans_shards_with_org_dir_and_prints_them(tmp_path: Path, capsy
     out, org, exports = _out(tmp_path), tmp_path / "grp", tmp_path / "exports"
     exports.mkdir()
     assert cli.main(["shards", str(out), str(org)]) == 1  # fits one artifact, nothing recorded
-    assert cli.main(["record-shard", str(org), "--url", URL + "s", "--shard", SUB]) == 0
+    pss.record_shard(org, URL + "s", SUB)
     assert cli.main(["shards", str(out), str(org)]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines == ["index new", f"{shard_folder(OTHER)} new", f"{shard_folder(SUB)} {URL}s", "unassigned new"]
@@ -107,8 +118,11 @@ def test_the_cli_plans_shards_with_org_dir_and_prints_them(tmp_path: Path, capsy
     err = capsys.readouterr().err
     assert "sharded into 3 artifact(s) plus an index" in err and "plan again" in err
     assert (out / "publish" / "index.html").is_file()
-    assert cli.main(["record-shard", str(org), "--url", URL + "i", "--index"]) == 0
-    assert pss.read_shards(org) == {"index": URL + "i", "shards": {SUB: URL + "s"}}
+    assert cli.main(["record-shard", str(org), str(out), "--url", URL + "i", "--index"]) == 0
+    assert cli.main(["record-shard", str(org), str(out), "--url", URL + "o", "--shard", shard_folder(OTHER)]) == 0
+    assert cli.main(["record-shard", str(org), str(out), "--url", URL + "x", "--shard", OTHER]) == 2  # a key, not a folder
+    assert "is not a shard of the written plan" in capsys.readouterr().err
+    assert pss.read_shards(org) == {"index": URL + "i", "shards": {OTHER: URL + "o", SUB: URL + "s"}}
 
 
 def test_targets_read_back_from_two_shards_merge_into_one_targets_file(tmp_path: Path) -> None:

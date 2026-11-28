@@ -8,7 +8,7 @@ never publishes.
     fleet_publish_plan.py record ORG_DIR --url URL --run-id ID
     fleet_publish_plan.py url ORG_DIR
     fleet_publish_plan.py shards OUT ORG_DIR [--run-id ID]
-    fleet_publish_plan.py record-shard ORG_DIR --url URL (--index | --shard KEY)
+    fleet_publish_plan.py record-shard ORG_DIR OUT --url URL (--index | --shard FOLDER)
 
 ``plan`` reads ``OUT/fleet-data.json`` and ``OUT/fleet-view.html`` and, in ``--exports``, the
 artifact's stored documents as ``<collection>.json`` (``runs``, ``units``, ``repos``, ``targets``
@@ -28,7 +28,8 @@ per artifact, ``<folder or index> <url or new>``, so the session knows which sha
 export into ``--exports DIR/<folder>/``; it prints nothing and exits 1 when the run fits one
 artifact. ``plan`` with ``--org-dir`` then writes ``OUT/publish/plan.json`` (the publish steps in
 order), ``index.html`` and ``shards/<folder>/`` per shard. ``record-shard`` keeps the index's or
-one shard's URL in ``ORG_DIR/shards.json``. Without ``--org-dir`` a run that needs shards is
+one shard's URL in ``ORG_DIR/shards.json``; ``--shard`` takes the folder ``shards`` prints and is
+refused unless ``OUT/publish/plan.json`` names it. Without ``--org-dir`` a run that needs shards is
 refused, as before.
 
 ``record`` keeps the artifact URL in ``ORG_DIR/publish.json`` (the fleet's history directory for
@@ -60,7 +61,7 @@ sys.path.insert(0, str(ASSESS_SCRIPTS))
 from lib.fleet.fleet_page import PAGE_FILE
 from lib.fleet.fleet_page_live import live_page
 from lib.fleet.fleet_publish import PublishError
-from lib.fleet.fleet_publish_shards import plan_sharded, read_shards, record_shard, write_sharded
+from lib.fleet.fleet_publish_shards import plan_sharded, read_shards, record_shard, shard_key, write_sharded
 from lib.fleet.fleet_shard import UNASSIGNED, shard_plan
 from lib.fleet.fleet_publish_session import (
     LIMITS_PINNED,
@@ -98,10 +99,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     shards.add_argument("--run-id", metavar="ID", help="The run's history entry name (default: its scan date).")
     shard = sub.add_parser("record-shard", help="Keep the index's or one shard's URL in ORG_DIR/shards.json.")
     shard.add_argument("org_dir", help="The fleet's history directory for the org.")
+    shard.add_argument("out", help="The fleet run's --out directory, holding the written publish/plan.json.")
     shard.add_argument("--url", required=True, help="The artifact's claude.ai URL.")
     which = shard.add_mutually_exclusive_group(required=True)
     which.add_argument("--index", action="store_true", help="The URL is the index's.")
-    which.add_argument("--shard", metavar="KEY", help="The shard key plan.json names.")
+    which.add_argument("--shard", metavar="FOLDER", help="The shard's folder, as `shards` and plan.json name it.")
     record = sub.add_parser("record", help="Keep the artifact URL in ORG_DIR/publish.json.")
     record.add_argument("org_dir", help="The fleet's history directory for the org.")
     record.add_argument("--url", required=True, help="The artifact's claude.ai URL.")
@@ -130,6 +132,13 @@ def _exports(folder: Path) -> dict[str, list[StoredDoc]]:
     for path in sorted(folder.glob("*.json")):
         exports[path.stem] = read_export(_json(path), path.stem)
     return exports
+
+
+def _summary(out: Path) -> dict[str, Any]:
+    found = _json(out / PUBLISH_DIR / "plan.json")
+    if not isinstance(found, dict) or not found.get("sharded"):
+        raise PublishError("publish/plan.json is not a sharded plan; run plan with --org-dir first")
+    return found
 
 
 def _shards(args: argparse.Namespace) -> int:
@@ -216,7 +225,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"fleet_publish_plan: recorded -> {path}", file=sys.stderr)
             return 0
         if args.command == "record-shard":
-            path = record_shard(Path(args.org_dir), args.url, None if args.index else args.shard)
+            key = None if args.index else shard_key(args.shard, _summary(Path(args.out)))
+            path = record_shard(Path(args.org_dir), args.url, key)
             print(f"fleet_publish_plan: recorded -> {path}", file=sys.stderr)
             return 0
         if args.command == "shards":

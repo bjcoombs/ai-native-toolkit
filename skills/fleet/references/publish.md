@@ -255,8 +255,9 @@ The session, in order:
 3. Publish the index page with no capabilities. Publish each shard's `page.html` with its
    `capabilities.json` and contract `0.2.96`, then send its batches in order. Pass the recorded
    URL for any step that has one.
-4. Record each new URL: `fleet_publish_plan.py record-shard "<history>/<org>" --url URL --index`,
-   or `--shard KEY` with the key the step names.
+4. Record each new URL: `fleet_publish_plan.py record-shard "<history>/<org>" out --url URL --index`,
+   or `--shard FOLDER` with the folder the step names. A folder the written plan does not name is
+   refused, so a mistyped name never becomes a registry entry.
 5. If `plan.json` says `links_complete` is false, a page went out without a link that now
    exists. Run `plan` again with the same arguments and republish only the pages; do not send
    the batches again.

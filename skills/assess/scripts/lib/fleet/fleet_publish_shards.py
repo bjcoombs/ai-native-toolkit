@@ -7,7 +7,8 @@ pinned against its own artifact. Nothing here publishes or calls a network.
 **Exports.** Each shard is its own artifact with its own database, so the session saves each
 shard's collections under ``<exports>/<shard folder>/`` (``fleet_shard.shard_folder``), in the
 single-artifact export format. A missing folder is an empty artifact, as on a first publish; a
-shard the registry records with no export folder is refused, since its stored documents would
+current shard the registry records with no export folder is refused (a retired one is never
+written, so it needs none), since its stored documents would
 otherwise be written over without their ``if_version`` pins.
 
 **Output** (``write_sharded``): under ``<out>/publish/``, ``plan.json`` (``sharded`` true, the
@@ -18,7 +19,8 @@ per shard ``shards/<folder>/`` holding ``page.html``, ``capabilities.json``, ``p
 are removed first, so a stale batch is never sent.
 
 **Registry** (``read_shards``, ``record_shard``): ``<history>/<org>/shards.json`` holds
-``{"index": <url or null>, "shards": {<shard key>: <url>}}``. ``record_shard`` adds the index
+``{"index": <url or null>, "shards": {<shard key>: <url>}}``. ``shard_key`` reads a shard's key from
+the written ``plan.json`` by its folder, refusing a folder the plan does not name. ``record_shard`` adds the index
 URL or one shard's URL, written through a temp file. It refuses a URL that is not
 ``https://claude.ai/`` and a second URL for a key that already has one; it never removes an
 entry, so a unit that leaves the fleet keeps its artifact. A file of another shape is refused,
@@ -54,7 +56,7 @@ from lib.fleet.fleet_publish_session import (
     stored_state,
     write_plan_to,
 )
-from lib.fleet.fleet_shard import ShardPlan, ShardRegistry, empty_registry, shard_folder, shard_plan
+from lib.fleet.fleet_shard import ShardPlan, ShardRegistry, assignment, empty_registry, shard_folder, shard_plan
 from lib.fleet.fleet_shard_index import URL_PREFIX, index_page
 
 SHARDS_FILE: Final = "shards.json"
@@ -110,6 +112,15 @@ def read_shards(history_org_dir: Path) -> ShardRegistry | None:
     return {"index": index, "shards": dict(shards)}
 
 
+def shard_key(folder: str, summary: Mapping[str, Any]) -> str:
+    """The shard key of ``folder``, one of the shard steps of a written plan's ``summary``
+    (``plan.json``); refuses any other, so a mistyped name never becomes a registry entry."""
+    for step in summary.get("steps") or []:
+        if step.get("kind") == "shard" and step.get("folder") == folder and isinstance(step.get("key"), str):
+            return str(step["key"])
+    raise PublishError(f"{folder} is not a shard of the written plan; pass a folder that `shards` or plan.json names")
+
+
 def record_shard(history_org_dir: Path, url: str, key: str | None) -> Path:
     """Keep the index URL (``key`` None) or one shard's URL in ``shards.json`` (see the module doc)."""
     if not url.startswith(URL_PREFIX):
@@ -141,7 +152,8 @@ def plan_sharded(data: Mapping[str, Any], exports: Mapping[str, Exports], *, run
     registry = registry or empty_registry()
     bundle = cast(FleetData, data)
     stored: dict[str, dict[str, int]] = {}
-    for key, url in registry["shards"].items():
+    current = set(assignment(bundle))  # a retired shard is never written, so it needs no export
+    for key in sorted(k for k in registry["shards"] if k in current):
         folder = shard_folder(key)
         if folder not in exports:
             raise PublishError(f"shard {folder} is recorded but its collections were not exported; export them "
