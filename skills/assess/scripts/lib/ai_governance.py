@@ -87,7 +87,7 @@ _LABELS = re.compile(r"--add-label\b|\baddLabels\b|\badd-labels?\b", _I)
 _NONZERO = r"\s*(?:[1-9]\d*|[rbfu]{0,2}['\"])"
 _ACTS = re.compile(r"\bexit\s+[1-9]\d*\b|\bexit\s*\(" + _NONZERO + r"|setFailed\s*\(|process\.exit\s*\(\s*[1-9]"
                    r"|sys\.exit\s*\(" + _NONZERO + r"|raise\s+SystemExit\s*\(" + _NONZERO
-                   + r"|::error\b|" + _LABELS.pattern, _I)
+                   + r"|" + _LABELS.pattern, _I)  # ::error only annotates: the step stays green
 # What a check reads a pattern with, just before the quoted marker: grep's pattern, a match call's
 # argument, =~ or ==; or just after it: `in` (Python's membership test) or `.test(` (a JS regex).
 _OPERAND_BEFORE = re.compile(r"(?:\b(?:e?grep|rg)(?:\s+-[\w-]+)*|\b(?:match|search|findall|fullmatch|includes|contains"
