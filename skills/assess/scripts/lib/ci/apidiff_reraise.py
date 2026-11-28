@@ -100,4 +100,4 @@ def line_ends(text: str) -> bool:
 def backgrounded(text: str) -> bool:
     """Whether the shell line ``text`` sends a job to the background: a bare ``&`` outside quotes
     and outside a trailing ``#`` comment."""
-    return bool(_BACKGROUND.search(_COMMENT.sub("", _QUOTED.sub("", text))))
+    return bool(_BACKGROUND.search(_COMMENT.sub("", _QUOTED.sub("q", text))))
