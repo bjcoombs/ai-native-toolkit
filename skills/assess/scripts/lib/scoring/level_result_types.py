@@ -27,6 +27,7 @@ class ConditionResult(TypedDict):
     polarity: NotRequired[str]  # "hazard" only: a harm, never counted (#843); absent: positive
     blocks: NotRequired[str]  # a hazard only: the Step gate it holds while met (#828)
     why: NotRequired[str]  # the manifest whys of its criteria, joined by a space (#939)
+    evidence: NotRequired[list[str]]  # #855: evidence-only practices on a met condition (condition_evidence.py)
     # the base model or practice pack its row came from (lib/pack_layering.py, #1274); present
     # only when a pack added rows to the model
     source: NotRequired[str]

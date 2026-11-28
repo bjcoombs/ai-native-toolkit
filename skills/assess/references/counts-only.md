@@ -279,6 +279,16 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `backlog_ready.untriaged_met_reason` | token |
 | `backlog_ready.close_open_met_reason` | token |
 
+## behaviour_pins
+
+| Field | Kept as |
+|---|---|
+| `behaviour_pins.reason` | token |
+| `behaviour_pins.practices` | token |
+| `behaviour_pins.pins.practice` | token |
+| `behaviour_pins.pins.arm` | token |
+| `behaviour_pins.pins.path` | path (hashed when hashing is on) |
+
 ## broken_instruction_refs
 
 | Field | Kept as |
@@ -665,6 +675,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.conditions.polarity` | token |
 | `level.conditions.source` | token |
 | `level.conditions.why` | dropped |
+| `level.conditions.evidence` | token |
 | `level.next_step.blockers.kind` | token |
 | `level.next_step.blockers.gate` | token |
 | `level.next_step.blockers.condition` | token |

@@ -67,6 +67,7 @@ from lib.skill_library import SkillLibraryBlock
 from lib.ci.ci_model_jobs import CiModelJobsBlock
 from lib.ci.ci_hazards import CiHazardsBlock
 from lib.ci.repo_guards import RepoGuardsBlock
+from lib.run_context_types_behaviour_pins import BehaviourPinsBlock
 from lib.ai_governance import AiGovernanceBlock
 from lib.run_context_types_api_compat import ApiCompatBlock
 from lib.backlog_ready_outcomes import BacklogReadyOutcomesBlock
@@ -172,6 +173,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("ci_model_jobs", CiModelJobsBlock),
     ("ci_hazards", CiHazardsBlock),
     ("repo_guards", RepoGuardsBlock),
+    ("behaviour_pins", BehaviourPinsBlock),
     ("ai_governance", AiGovernanceBlock),
     ("api_compat", ApiCompatBlock),
     ("contributor_files", ContributorFilesBlock),

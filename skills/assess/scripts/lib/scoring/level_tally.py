@@ -51,6 +51,10 @@ reads ``declined`` with ``requires:<id>``, as for any need that is not met (an u
 ``unmet``, as with an owner exclusion), and is not counted. An owner exclusion of the same id wins. ``declined[]`` (``{id, source}``) is
 present only when a record covers a condition. Absence of a record never produces ``declined``.
 
+**Evidence** (#855). Once every state is settled, ``condition_evidence.attach_evidence`` sets
+``evidence`` (practice slugs) on a met condition that reads an evidence-only block's signal; it
+never changes a state, grade, tally or Step.
+
 **Hazards** (#828). A hazard condition (``polarity = "hazard"``) carries the model's ``blocks``
 (a Step gate id) on its result. While the hazard is ``met`` (the harm is present) that gate does
 not hold, whatever its own conditions read: the blocker is ``{kind: "gate", gate, condition:
@@ -215,6 +219,7 @@ from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
 from lib.counts_only.reason_codes import reason_code, reason_token
+from lib.scoring.condition_evidence import EVIDENCE_BLOCKS, attach_evidence
 from lib.scoring.level_tags import tag_rows
 from lib.scoring.level_result_types import Blocker, ConditionResult, DeclinedCondition, ExcludedCondition, HazardEntry
 from lib.scoring.level_result_types import InPlace, LevelResult, NextStep
@@ -634,6 +639,7 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
     demoted = frozenset(model.get("demoted", ())) & condition_ids(model) - gate_conditions(model)
     conditions = _conditions(model, data, excluded, demoted, declined)
     _add_whys(model, conditions)
+    attach_evidence(model, conditions, data)  # #855: evidence only, after every state is settled
     counted = [c for c in conditions if c["counted"]]
     met = sum(c["state"] == "met" for c in counted)
     by_id = {c["id"]: c for c in conditions}
@@ -688,8 +694,9 @@ def model_blocks(model: MaturityModel) -> tuple[str, ...]:
 DEFAULT_BLOCKS = model_blocks(default_model())
 # The run-context block holding the owner's exclusions (lib/owner_exclusions.py).
 EXCLUSIONS_BLOCK = "owner_exclusions"
-# The run-context blocks the ``level`` entry reads, in order (lib/run/scan_registry.py).
-LEVEL_READS = (*DEFAULT_BLOCKS, EXCLUSIONS_BLOCK)
+# The run-context blocks the ``level`` entry reads, in order (lib/run/scan_registry.py): the
+# model's, the evidence-only blocks (lib/scoring/condition_evidence.py, #855), then the exclusions.
+LEVEL_READS = (*DEFAULT_BLOCKS, *EVIDENCE_BLOCKS, EXCLUSIONS_BLOCK)
 
 
 def run_exclusions(ctx: Mapping[str, Any]) -> list[Mapping[str, Any]]:
