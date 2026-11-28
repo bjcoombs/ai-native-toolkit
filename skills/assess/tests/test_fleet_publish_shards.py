@@ -81,21 +81,26 @@ def test_a_recorded_shard_with_an_empty_export_folder_is_refused(tmp_path: Path)
                             registry=pss.read_shards(org), allow_names=True) is not None
 
 
+@pytest.mark.parametrize("stored", ["strays", "history"])
 @pytest.mark.parametrize("org_dir", [True, False])
-def test_a_run_over_the_cap_only_with_its_strays_names_them_not_org_dir(
-        tmp_path: Path, capsys: pytest.CaptureFixture[str], org_dir: bool) -> None:
+def test_a_run_that_fits_on_its_own_but_not_with_what_is_stored_never_names_org_dir(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str], org_dir: bool, stored: str) -> None:
     """#1635 (3): the run fits whole, so it is one artifact even with --org-dir; what pushes it over
-    is the strays the artifact stores, so the refusal names them, never --org-dir."""
+    is what the artifact stores, so the refusal names the strays to remove, or says there are none
+    when earlier runs fill it, and never points at --org-dir."""
     cli = _script("fleet_publish_plan")
     out, exports = _out(tmp_path), tmp_path / "exports"
     exports.mkdir()
     rows = [{"doc_id": f"x{i}", "version": 1, "data": {}} for i in range(25_000)]
-    (exports / "junk.json").write_text(json.dumps(rows), encoding="utf-8")
+    (exports / ("junk.json" if stored == "strays" else "runs.json")).write_text(json.dumps(rows), encoding="utf-8")
     extra = ["--org-dir", str(tmp_path / "grp")] if org_dir else []
     assert cli.main(["plan", str(out), "--exports", str(exports), *extra, "--allow-names"]) == 2
     err = capsys.readouterr().err
-    assert "fits one artifact on its own, but with the 25000 stray and 0 target document(s)" in err
-    assert "remove the strays (in junk)" in err and "--org-dir" not in err
+    assert "documents fit one artifact, but with the" in err and "--org-dir" not in err
+    if stored == "strays":
+        assert "25000 of them are strays (in junk): remove them" in err
+    else:
+        assert "none of them is a stray (0 are targets, the rest earlier runs and units)" in err
     assert not (out / "publish" / "plan.json").exists()
 
 

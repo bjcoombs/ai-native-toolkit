@@ -31,8 +31,9 @@ order), ``index.html`` and ``shards/<folder>/`` per shard. ``record-shard`` keep
 one shard's URL in ``ORG_DIR/shards.json``; ``--shard`` takes the folder ``shards`` prints and is
 refused unless ``OUT/publish/plan.json`` names it. Without ``--org-dir`` a run that needs shards is
 refused, as before. A run that fits one artifact on its own but not with the strays and targets
-the artifact stores stays one artifact and is refused, naming the strays to remove, whether or not
-``--org-dir`` was passed. A shard folder under ``--exports`` holding no ``<collection>.json`` is
+the artifact already stores (earlier runs and units, strays, targets) stays one artifact and is
+refused, naming the strays to remove or saying there are none, whether or not ``--org-dir`` was
+passed. A shard folder under ``--exports`` holding no ``<collection>.json`` is
 no export, so a recorded shard with an empty folder is refused.
 
 ``record`` keeps the artifact URL in ``ORG_DIR/publish.json`` (the fleet's history directory for
@@ -70,6 +71,8 @@ from lib.fleet.fleet_publish_session import (
     LIMITS_PINNED,
     PUBLISH_DIR,
     STORED_COLLECTIONS,
+    PinnedWrite,
+    PlanSummary,
     StoredDoc,
     plan_publish,
     read_export,
@@ -189,6 +192,24 @@ def _plan_sharded(args: argparse.Namespace, out: Path, data: dict[str, Any], pag
     return 0
 
 
+def _over_cap(summary: PlanSummary, batches: list[list[PinnedWrite]]) -> str:
+    """Why a one-artifact plan is over the document cap. Only a run whose own documents are over it
+    is told to shard: one that fits on its own is over because of what the artifact already stores
+    (earlier runs and units, strays, targets), and the shard plan keeps such a run one artifact."""
+    size, strays = summary["size"], summary["strays"]
+    own = len({f"{w['collection']}/{w['doc_id']}" for batch in batches for w in batch})
+    if own > size["document_limit"]:
+        return (f"the run needs {size['documents']} documents, over one artifact's {size['document_limit']}; "
+                "plan it with --org-dir to shard it")
+    head = (f"the run's {own} documents fit one artifact, but with the {size['documents'] - own} the artifact "
+            f"already stores it needs {size['documents']}, over one artifact's {size['document_limit']}")
+    if strays["count"]:
+        return (f"{head}; {strays['count']} of them are strays (in {', '.join(strays['collections'])}): remove them "
+                "from the artifact, export again and plan again")
+    return (f"{head}; none of them is a stray ({strays['targets']} are targets, the rest earlier runs and units), "
+            "so there is nothing safe to remove")
+
+
 def _plan(args: argparse.Namespace) -> int:
     out = Path(args.out)
     data = _data(out)
@@ -207,17 +228,7 @@ def _plan(args: argparse.Namespace) -> int:
     if not size["fits"]:  # nothing oversized is left to send: no batch, and an earlier plan's removed
         for stale in (out / PUBLISH_DIR).glob("batch-*.json"):
             stale.unlink()
-        strays = summary["strays"]
-        if size["documents"] - strays["count"] - strays["targets"] > size["document_limit"]:
-            print(f"fleet_publish_plan: the run needs {size['documents']} documents, over one artifact's "
-                  f"{size['document_limit']}; plan it with --org-dir to shard it, so nothing was planned", file=sys.stderr)
-            return 2
-        # the run fits whole (so the shard plan keeps it one artifact): what the artifact stores pushes it over
-        where = f" (in {', '.join(strays['collections'])})" if strays["collections"] else ""
-        print(f"fleet_publish_plan: the run fits one artifact on its own, but with the {strays['count']} stray and "
-              f"{strays['targets']} target document(s) the artifact stores it needs {size['documents']} documents, "
-              f"over one artifact's {size['document_limit']}; remove the strays{where} from the artifact, export "
-              "again and plan again, so nothing was planned", file=sys.stderr)
+        print(f"fleet_publish_plan: {_over_cap(summary, batches)}, so nothing was planned", file=sys.stderr)
         return 2
     folder = write_plan(out, summary, batches, live_page(page, data, summary["mode"], run_id))
     print(f"fleet_publish_plan: run {run_id}, {summary['mode']}, {len(batches)} batch(es), {size['documents']} of "
