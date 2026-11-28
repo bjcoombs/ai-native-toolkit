@@ -100,6 +100,9 @@ def test_a_gate_not_measured_beside_an_unmet_one_never_reads_as_not_held() -> No
                       "no coverage gate is enforced.")
     # the badge names the measured gate the funnel counts the repository under
     assert headline(mixed, MODEL)["summary"] == "Step 2 · next: coverage gate"  # type: ignore[arg-type]
+    # and the card's Start here names that same gate, so one screen never names two
+    start = next(line for line in card_lines(mixed, MODEL, KNOWN) if line.startswith("Start here:"))  # type: ignore[arg-type]
+    assert "coverage gate" in start and "not measured" not in start
 
 
 # --- the fleet -------------------------------------------------------------------------------

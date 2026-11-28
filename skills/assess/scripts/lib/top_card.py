@@ -57,7 +57,8 @@ precedes every gate line.
 5. ``Start here: ...`` and 6. ``Done when: ...``, exactly one each: the first open entry of
    ``.assess/actions.json`` by rank (``first_action``; its ``first_step``, in backticks unless
    it already holds some, else its ``action``, and its ``done_when``). With no open action:
-   below the top Step, the first blocking gate as a task (``GATE_TASK``), linked to its
+   below the top Step, the first blocking gate that was measured, else the first
+   (``step_reading.first_measured``, the gate the badge's ``next:`` names, #1640), as a task (``GATE_TASK``), linked to its
    catalog entry; at the top Step, the next run of ``/assess`` (``Done when: the next `/assess`
    run still holds every gate.``). The core reads ``actions.json``
    as it stands when the run starts, the file the previous run's finalize step wrote (or the
@@ -90,7 +91,7 @@ from typing import Any, TypedDict
 from lib.card_facts import CardFact, advisories, blocking_gates, fully_in_place, step_gate_ids, step_name, top_step
 from lib.scoring.headline import (GATE_CHANGE, GATE_NOUN, GLOSSARY_URL, gate_note, one_change_ceiling, reason_word,
                                   verified_count)
-from lib.scoring.step_reading import next_unread, step_reading, unread_gap
+from lib.scoring.step_reading import first_measured, next_unread, step_reading, unread_gap
 from lib.scoring.levels import MaturityModel
 from lib.model_change import model_changed_line
 from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
@@ -353,13 +354,14 @@ def start_lines(level: Mapping[str, Any], action: CardAction | None) -> tuple[st
     gate as a task, else the next run of ``/assess``."""
     if action is not None:
         return f"Start here: {action['start']}", f"Done when: {_sentence(action['done_when'])}"
-    gates = blocking_gates(level)
-    if gates and (special := _special_start(level, gates[0])) is not None:
+    # the first measured blocking gate, the one the badge's next: names (#1640)
+    first = first_measured(blocking_gates(level))
+    if first is not None and (special := _special_start(level, first)) is not None:
         return special
-    if gates:
-        gate = str(gates[0].get("gate", ""))
+    if first is not None:
+        gate = str(first.get("gate", ""))
         task = GATE_TASK.get(gate, f"make the {gate} gate hold")
-        return (f"Start here: [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL}){gate_note(gates[0])}",
+        return (f"Start here: [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL}){gate_note(first)}",  # type: ignore[arg-type]
                 f"Done when: the next `/assess` run reads that {GATE_CHANGE.get(gate, f'the {gate} gate holds')}.")
     return ("Start here: run `/assess` again after your next change",
             "Done when: the next `/assess` run still holds every gate.")

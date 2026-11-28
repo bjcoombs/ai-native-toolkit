@@ -157,17 +157,15 @@ def gate_titles(model: MaturityModel) -> dict[str, str]:
     return {g["id"]: titles.get(g["row"], g["id"]) for s in model.get("steps", []) for g in s["gates"]}
 
 
-def segment_text(segment: Segment, titles: Mapping[str, str], step: int | None = None) -> str:
+def segment_text(segment: Segment, titles: Mapping[str, str], step: int) -> str:
     """A segment's legend line; ``step`` is its bar's Step, which a not-measured segment names (#1640)."""
     n = segment["count"]
     if segment["kind"] == "top":
         return f"{n} at the top Step"
     gate = titles.get(segment["gate"] or "", segment["gate"])
     if segment["kind"] == "not_measured":
-        reason = segment["reason"] or "no_value"
-        if step is not None:  # every not-measured segment reads its next Step not measured (#1640)
-            return f"{n} with Step {step + 1} not measured: {gate} ({reason})"
-        return f"{n} where {gate} was not measured ({reason})"
+        # every not-measured segment reads its next Step not measured (#1640)
+        return f"{n} with Step {step + 1} not measured: {gate} ({segment['reason'] or 'no_value'})"
     if segment["kind"] == "set_aside":
         return f"{n} where the owner set {gate} aside"
     return f"{n} held by {gate}"
