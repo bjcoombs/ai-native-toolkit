@@ -263,6 +263,12 @@
               "why": {
                 "type": "string"
               },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "source": {
                 "type": "string",
                 "description": "the base model or practice pack the row came from; present only when a pack added rows (lib/pack_layering.py)"

@@ -73,6 +73,10 @@
       "revision": 5
     },
     {
+      "id": "core.behaviour_pins",
+      "revision": 1
+    },
+    {
       "id": "core.broken_instruction_refs",
       "revision": 1
     },
