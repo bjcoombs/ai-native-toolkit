@@ -239,22 +239,61 @@ source "$SCRIPT_DIR/ghreport_settings.sh"
 # shellcheck source=ghreport_render.sh
 source "$SCRIPT_DIR/ghreport_render.sh"
 
+# Temp paths the EXIT trap removes; each stays empty until it is created.
+disc_err=""
+owned_tmp=""
+# Bash 3.2 (macOS /bin/bash) runs an EXIT trap with $? = 0 after a `set -u`
+# abort, and the trap's status then becomes the script's, so an abort exited
+# 0 (#1673). The trap cannot see the abort, so the deliberate successes after
+# this point set ghreport_finished (through exit_ok or at the end of the
+# script), and the trap turns any other 0 into 1. A bare `exit 0` after this
+# line therefore exits 1: use exit_ok.
+ghreport_finished=false
+exit_ok() {
+    ghreport_finished=true
+    exit 0
+}
+on_exit() {
+    local rc=$?
+    [ -z "$disc_err" ] || rm -f "$disc_err"
+    [ -z "$owned_tmp" ] || rm -rf "$owned_tmp"
+    if [ "$rc" -eq 0 ] && [ "$ghreport_finished" != true ]; then
+        rc=1
+    fi
+    exit "$rc"
+}
+trap on_exit EXIT
+
 echo "Discovering repos in $ORG ..." >&2
+discover() {
+    if [ "$PROVIDER" = gitlab ]; then
+        gl_args=(--provider gitlab --host "$GITLAB_HOST" --porcelain)
+        [ -n "$GITLAB_GROUP" ] && gl_args+=(--group "$GITLAB_GROUP")
+        bash "$GHSYNC_SH" "${gl_args[@]}"
+    else
+        bash "$GHSYNC_SH" --porcelain --org "$ORG" --root "$ROOT"
+    fi
+}
 # Capture discovery output and exit status separately. Process substitution
 # would discard ghsync's exit code (it is not a pipeline, so pipefail does not
 # apply), masking an auth/deps failure as "no repositories". Capturing lets us
-# distinguish a genuine empty org from a failed discovery.
-if [ "$PROVIDER" = gitlab ]; then
-    # ghsync's preflight checks glab and its auth for the host, and its one
-    # error line already names the host, so a failure adds nothing here.
-    gl_args=(--provider gitlab --host "$GITLAB_HOST" --porcelain)
-    [ -n "$GITLAB_GROUP" ] && gl_args+=(--group "$GITLAB_GROUP")
-    disc_out=$(bash "$GHSYNC_SH" "${gl_args[@]}") || exit 1
-else
-    disc_out=$(bash "$GHSYNC_SH" --porcelain --org "$ORG" --root "$ROOT") || {
-        echo "Error: repo discovery via ghsync failed (see its output above)." >&2
-        exit 1
-    }
+# distinguish a genuine empty org from a failed discovery. ghsync's stderr
+# still reaches ours as it runs, and a copy goes to disc_err: --porcelain sends
+# its progress lines there, so stderr alone is no failure, but a line the
+# shell itself wrote (`ghsync.sh: line N: ...`, an unbound variable or a
+# syntax error) is, even when the exit status says 0 (#1673).
+disc_err=$(mktemp)
+disc_rc=0
+disc_out=$( { discover 2>&1 1>&4 4>&- | tee "$disc_err" >&2 4>&-; } 4>&1 ) || disc_rc=$?
+if grep -Eq 'ghsync\.sh: line [0-9]+: ' "$disc_err"; then
+    echo "Error: repo discovery via ghsync failed (see its output above)." >&2
+    exit 1
+fi
+if [ "$disc_rc" -ne 0 ]; then
+    # On GitLab, ghsync's preflight checks glab and its auth for the host, and
+    # its one error line already names the host, so a failure adds nothing.
+    [ "$PROVIDER" = gitlab ] || echo "Error: repo discovery via ghsync failed (see its output above)." >&2
+    exit 1
 fi
 repos=()
 # A read loop rather than mapfile, which bash 3.2 (macOS /bin/bash) lacks.
@@ -265,7 +304,7 @@ if [ -n "$disc_out" ]; then
 fi
 if [ ${#repos[@]} -eq 0 ]; then
     echo "No repositories discovered for $ORG (the org is empty or nothing is accessible)." >&2
-    exit 0
+    exit_ok
 fi
 
 # --limit caps the expensive querying (~5 API calls per repo), so apply it
@@ -284,7 +323,7 @@ if [ -n "$KEEP_DIR" ]; then
     TMP_DIR=$KEEP_DIR
 else
     TMP_DIR=$(mktemp -d)
-    trap 'rm -rf "$TMP_DIR"' EXIT
+    owned_tmp=$TMP_DIR
 fi
 
 # Org / group settings, into a subdirectory the per-repo glob skips. A
@@ -338,3 +377,4 @@ if [ -n "$KEEP_DIR" ]; then
     date -u +%Y-%m-%dT%H:%M:%SZ > "$KEEP_DIR/CAPTURE_COMPLETE"
     echo "Fragments kept in: $KEEP_DIR (replay with --render-dir $KEEP_DIR)" >&2
 fi
+ghreport_finished=true
