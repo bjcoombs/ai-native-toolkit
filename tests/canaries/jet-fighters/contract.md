@@ -39,8 +39,8 @@ criteria:
     observation: "launcher.lane moves to an adjacent lane in {0,1,2} (it differs from the recorded lane by exactly 1) - the launcher lever moves one lane in response to input."
   - id: JF4
     tier: 1
-    action: "Record getState(), dispatch a Space keydown to fire, read getState() straight away, then let the missile travel for 90 frames and read getState() again."
-    observation: "Straight after Space a missile is in flight (getState().missile is non-null). If the missile reaches a jet (getState().jets loses a jet during the travel), score increases per the 3/2/1 distance ruler."
+    action: "Record getState(), dispatch a Space keydown to fire, let one animation frame run and read getState(), then let the missile travel for 90 frames and read getState() again."
+    observation: "One frame after Space a missile is in flight (getState().missile is non-null). If the missile reaches a jet (getState().jets loses a jet during the travel), score increases per the 3/2/1 distance ruler."
   - id: JF5
     tier: 3
     action: "Operator launches the build and plays it, comparing against assets/reference/device-front-gameplay.jpg from the source repo."

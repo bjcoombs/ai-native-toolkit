@@ -197,9 +197,10 @@ def test_classify_jet_jf3_requires_adjacent_lane_move():
     assert rc.classify_jet("JF3", lanes(1, True)) == "fail"
 
 
-def test_jf4_program_reads_state_straight_after_space():
+def test_jf4_program_reads_state_one_frame_after_space():
     gs = {"op": "getState"}
-    assert rc.JET_PROGRAMS["JF4"] == [gs, {"op": "key", "key": " "}, gs, {"op": "frames", "n": 90}, gs]
+    space, one, travel = {"op": "key", "key": " "}, {"op": "frames", "n": 1}, {"op": "frames", "n": 90}
+    assert rc.JET_PROGRAMS["JF4"] == [gs, space, one, gs, travel, gs]
 
 
 def _jf4(missile, score_after, jets_in_flight, jets_after):
@@ -232,6 +233,8 @@ def test_classify_jet_jf4_fails_closed_on_short_or_null_snapshots():
     flying = {"lane": 1, "col": 0}
     assert rc.classify_jet("JF4", _jf4(flying, 0, 2, 2)[:2]) == "fail"
     assert rc.classify_jet("JF4", [None, None, None]) == "fail"
+    # The first getState() threw (driver returned null): never a pass.
+    assert rc.classify_jet("JF4", [None] + _jf4(flying, 0, 2, 2)[1:]) == "fail"
 
 
 def test_classify_lr_phase_and_score():
