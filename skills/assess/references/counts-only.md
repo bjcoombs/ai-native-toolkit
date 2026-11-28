@@ -245,6 +245,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `anomalies.description` | dropped |
 | `anomalies.detail` | dropped |
 
+## api_compat
+
+| Field | Kept as |
+|---|---|
+| `api_compat.present_reason` | token |
+| `api_compat.runs.path` | path (hashed when hashing is on) |
+| `api_compat.runs.tool` | token |
+| `api_compat.pins` | path (hashed when hashing is on) |
+| `api_compat.declared.path` | path (hashed when hashing is on) |
+| `api_compat.declared.tool` | token |
+
 ## archetype
 
 | Field | Kept as |

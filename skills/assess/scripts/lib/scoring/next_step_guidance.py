@@ -47,6 +47,7 @@ from typing import Any, TypedDict
 
 from lib.scoring.levels import Scalar
 from lib.scoring.next_step_guidance_backlog import BACKLOG_FLAGS, BACKLOG_HINT
+from lib.scoring.next_step_guidance_contracts import API_COMPAT_HINT, CONTRACT_FLAGS
 from lib.scoring.next_step_guidance_guards import GUARD_FLAGS, GUARD_HINT
 from lib.scoring.next_step_guidance_hooks import HOOK_FLAGS
 
@@ -447,11 +448,6 @@ _WORDING: dict[str, Wording] = {
         "No CI job that calls a model API runs on every push to the default branch or every pull "
         "request update without a `paths:` filter, a schedule or manual trigger, a label, or GitLab "
         "`rules:changes:`."),
-    "doc_staleness.kept_true.present": _flag(
-        "Add a CI step that regenerates the generated files and docs and then runs "
-        "`git diff --exit-code`, or run the doc examples as tests (`pytest --doctest-modules`).",
-        "A CI job regenerates files and stops on a diff, runs a verify script paired with an "
-        "update script, or runs doc examples as tests."),
     "ci_model_jobs.agent_evals.present": _flag(
         "Keep the agent's eval cases in an `evals/` folder, commit a baseline beside them (a "
         "snapshot, recorded model responses or a tool-budget file), and run the folder in a CI job.",
@@ -581,6 +577,7 @@ _WORDING: dict[str, Wording] = {
         "an agent, directly or through a local reusable workflow."),
     **{signal: _flag(change, done) for signal, (change, done) in BACKLOG_FLAGS.items()},  # #1324
     **{signal: _flag(change, done) for signal, (change, done) in GUARD_FLAGS.items()},  # #854
+    **{signal: _flag(change, done) for signal, (change, done) in CONTRACT_FLAGS.items()},  # #852, #853
     **{signal: _flag(change, done) for signal, (change, done) in HOOK_FLAGS.items()},  # #846
 }
 _WORDING.update({f"{name}.value": _setting(name) for name in SETTING_NAMES})
@@ -753,6 +750,7 @@ _MEASURE_HINTS = {
                      "headless fleet scan does not.",
     "backlog_ready": BACKLOG_HINT,
     "repo_guards": GUARD_HINT,
+    "api_compat": API_COMPAT_HINT,
 }
 _SETTING_HINT = ("ghreport could not read this setting (token scope or provider tier); rerun "
                  "ghreport with access to group settings and pass them to the fleet run with "

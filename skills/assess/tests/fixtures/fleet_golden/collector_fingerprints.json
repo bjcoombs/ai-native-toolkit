@@ -80,6 +80,14 @@
       },
       "revision": 1
     },
+    "core.api_compat": {
+      "repos": {
+        "grpa/sub/deep/svc2": "c86c6e79f4dffa461f8c3b2879e03c8b18ff8a34bc6b488c1b187f038dc7fd14",
+        "grpa/svc1": "f3fd7ee6071c469597a0cc345e009a31fc7db65cca514f9d0f23ee045683cdd5",
+        "grpb/lib1": "c86c6e79f4dffa461f8c3b2879e03c8b18ff8a34bc6b488c1b187f038dc7fd14"
+      },
+      "revision": 1
+    },
     "core.archetype": {
       "repos": {
         "grpa/sub/deep/svc2": "ab7a435efff4e1bc35c6b09b35bc7598ef5a1f1bd115c5f3f35dad0a0ab85994",

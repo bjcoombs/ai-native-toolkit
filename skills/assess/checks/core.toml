@@ -109,6 +109,7 @@ fragments = [
   "ci_hazards",
   "repo_guards",
   "ai_governance",
+  "api_compat",
   "org_security_policy",
   "github_secret_scanning",
   "contributor_files",
