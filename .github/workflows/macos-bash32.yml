@@ -1,0 +1,82 @@
+name: macOS bash 3.2
+
+# The ghsync and ghreport suites under macOS's /bin/bash, bash 3.2.57 (#1472).
+# A Mac user without Homebrew bash runs the skill scripts with it. Bash 3.2
+# has no mapfile, and under `set -u` it aborts on "${arr[@]}" when the array
+# is empty; the lint in tests/test_bash32_portability.py catches the first,
+# and only the real interpreter catches the second. The tests run the scripts
+# with the first `bash` on PATH (tests/gitbash.py), so the job puts a
+# directory holding a `bash` link to /bin/bash first on PATH.
+#
+# Not a required check. It runs only on a pull request or push that touches
+# the scripts, their tests or this file, as the Windows ghsync leg's path gate
+# does (windows.yml).
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "skills/ghsync/**"
+      - "skills/ghreport/**"
+      - "tests/gitbash.py"
+      - "tests/conftest.py"
+      - "tests/ghsync_gitlab_env.py"
+      - "tests/ghreport_gitlab_env.py"
+      - "tests/test_ghsync*.py"
+      - "tests/test_ghreport*.py"
+      - "tests/test_bash32_portability.py"
+      - ".github/workflows/macos-bash32.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/ghsync/**"
+      - "skills/ghreport/**"
+      - "tests/gitbash.py"
+      - "tests/conftest.py"
+      - "tests/ghsync_gitlab_env.py"
+      - "tests/ghreport_gitlab_env.py"
+      - "tests/test_ghsync*.py"
+      - "tests/test_ghreport*.py"
+      - "tests/test_bash32_portability.py"
+      - ".github/workflows/macos-bash32.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-bash32-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  bash32:
+    name: ghsync and ghreport under /bin/bash 3.2
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
+
+      # Homebrew's bash 5 can be on the runner's PATH; the link makes
+      # /bin/bash the `bash` every test and script finds first.
+      - name: Put /bin/bash first on PATH
+        run: |
+          mkdir -p "$RUNNER_TEMP/bash32"
+          ln -sf /bin/bash "$RUNNER_TEMP/bash32/bash"
+          echo "$RUNNER_TEMP/bash32" >> "$GITHUB_PATH"
+
+      - name: Check the bash on PATH is 3.2
+        run: |
+          bash --version | head -1
+          test "$(bash -c 'echo ${BASH_VERSINFO[0]}')" = 3
+
+      - name: ghsync and ghreport suites under bash 3.2
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tests
+          GIT_CONFIG_GLOBAL: /dev/null
+        run: >-
+          uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile
+          tests/test_bash32_portability.py tests/test_ghsync*.py tests/test_ghreport*.py

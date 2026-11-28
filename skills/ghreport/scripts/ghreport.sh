@@ -257,7 +257,12 @@ else
     }
 fi
 repos=()
-[ -n "$disc_out" ] && mapfile -t repos <<< "$disc_out"
+# A read loop rather than mapfile, which bash 3.2 (macOS /bin/bash) lacks.
+if [ -n "$disc_out" ]; then
+    while IFS= read -r repo; do
+        repos+=("$repo")
+    done <<< "$disc_out"
+fi
 if [ ${#repos[@]} -eq 0 ]; then
     echo "No repositories discovered for $ORG (the org is empty or nothing is accessible)." >&2
     exit 0
