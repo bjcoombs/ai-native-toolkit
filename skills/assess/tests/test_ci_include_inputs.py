@@ -106,6 +106,7 @@ def test_spec_defaults(text: str, defaults: dict[str, str | None]) -> None:
     ("$[[ inputs.version ]]", {}, None),
     ("$[[ inputs.version ]]", {"version": None}, None),
     ("$[[ inputs.version | expand_vars ]]", {"version": "2.0"}, None),
+    ("$[[ inputs.version ]]", {"version": ""}, None),
 ])
 def test_interpolate(ref: str, values: dict[str, str | None], out: str | None) -> None:
     assert interpolate(ref, values) == out
@@ -141,6 +142,11 @@ def test_an_input_with_no_value_reads_input_ref_never_ref_missing(tmp_path: Path
     assert _nested(root, app) == ("input_ref", None)
     block = scan_ci_checks(app, root)
     assert block["test_or_lint_configured"] is None and block["unresolved_includes"] == 1
+
+
+def test_a_blank_input_value_reads_input_ref_never_head(tmp_path: Path) -> None:
+    root, app = _fleet(tmp_path, _outer(""), "include:\n  - component: gl.test/grp/outer/outer@3.0\n")
+    assert _nested(root, app) == ("input_ref", None)
 
 
 def test_a_value_passed_from_the_parents_own_input_travels_down(tmp_path: Path) -> None:

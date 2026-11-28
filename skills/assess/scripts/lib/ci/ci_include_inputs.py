@@ -13,8 +13,8 @@ known for reads ``input_ref``, never ``ref_missing``, so a reader can tell the t
   the values of the file it sits in, so a value travels down a nested chain; None where unknown.
 - ``file_inputs(text, passed)``: the values a file reads, ``passed`` over its spec defaults.
 - ``interpolate(ref, values)``: ``ref`` with every input substituted, or None when one has no
-  known value or the interpolation is not a bare ``inputs.<name>`` (a function such as
-  ``| expand_vars``, or another context).
+  known value, the result is blank, or the interpolation is not a bare ``inputs.<name>`` (a
+  function such as ``| expand_vars``, or another context).
 
 Read line by line (stdlib); deterministic; no network. Inward-only imports:
 ``lib.ci.ci_include_items``, ``lib.ci.shared_tooling``. Tests: ``tests/test_ci_include_inputs.py``.
@@ -47,7 +47,8 @@ def interpolate(ref: str, values: Inputs) -> str | None:
         return found or ""
 
     out = _REF.sub(value, ref)
-    return None if unknown or "$[[" in out else out
+    # A blank result is no version GitLab can resolve, and must not read as no ref (HEAD).
+    return None if unknown or "$[[" in out or not out.strip() else out
 
 
 def scalar(raw: str) -> str | None:
