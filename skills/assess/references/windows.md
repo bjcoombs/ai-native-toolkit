@@ -18,6 +18,10 @@ grimp and lizard; the treemap and doc graph need the rest. A missing package
 leaves its block unavailable with a named reason (`no_grimp`, `no_lizard`), and
 `assess_signals.py` and `fleet.py` print the install line for whatever is
 missing.
+<!-- chat-skip:start -->
+The same line, for `/fleet` too, is under "Without uv" in the
+[Windows setup guide](../../../docs/windows.md#without-uv).
+<!-- chat-skip:end -->
 
 ## ripgrep
 

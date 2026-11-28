@@ -19,6 +19,7 @@ name: Windows
 # and passes only when the matrix result is success, so a failed, cancelled or
 # skipped leg turns it red. No leg is skipped at job level; the ghsync gate is
 # a step inside its leg, so that leg still reports success when it skips.
+# The Python 3.15 probe (#1490) is its own weekly workflow, windows-py315.yml.
 #
 # Within a leg every suite step and smoke step runs even when an earlier one
 # fails (`!cancelled()`), and -ra lists every skip and failure, so one log read
