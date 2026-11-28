@@ -2,7 +2,7 @@
 
 How another repository adopts the refiner: three GitHub workflows that check issues against a definition of ready, label the ready ones, close exact duplicates and keep a project board in step, or one GitLab CI template that does the same on GitLab ([GitLab](#gitlab)). Back to the [Map of Content](./index.md). For a one-off pass from your terminal, run [`/refine`](../skills/refine/SKILL.md) instead; it reads the same verdict and asks before each write.
 
-**Live mode is not ready yet.** Four review points from the first release can cause a wrong `agent-ready` label or a wrong duplicate close: [#1341](https://github.com/bjcoombs/ai-native-toolkit/issues/1341). Run in dry-run until that issue is closed. Dry-run is the default and writes nothing.
+**Dry-run, then live.** Every workflow writes nothing until the variable `REFINE_MODE` is `live`; unset, or any other value, is a dry-run. Nothing runs at all until `REFINE_ENABLED` is `true`. Steps 4 to 6 of [Set it up](#set-it-up) turn each on and off.
 
 **Version.** The workflows first ship in the toolkit release after 4.0.0. The examples pin `v4.1.0`, the newest release at the time of writing; each release moves the pin to itself, so copy the examples from the release you adopt. On 4.0.0 or earlier the `uses:` lines have no workflow to call.
 
@@ -28,12 +28,12 @@ The model never holds a token that can write: it runs in a job with `issues: rea
    - **API key with a spend limit (recommended for teams).** Create an API key in the Claude Console, in a workspace of its own with a monthly spend limit, and store it as the repository secret `REFINE_ANTHROPIC_API_KEY`. The workspace limit is what caps the cost: every opened issue and every comment can start a model run. When set, it wins over the other two.
    - **Workload Identity Federation.** Set the variables `REFINE_ANTHROPIC_FEDERATION_RULE_ID`, `REFINE_ANTHROPIC_ORGANIZATION_ID`, `REFINE_ANTHROPIC_SERVICE_ACCOUNT_ID` and `REFINE_ANTHROPIC_WORKSPACE_ID`, and pass them as the `anthropic_*` inputs; the callers below already grant `id-token: write`. It is used when no API key is set.
 
-   Whichever credential is chosen reaches only the model step of the read-only plan job, never a job that can write.
+   Whichever credential is chosen reaches only the model step of the read-only plan job, never a job that can write. The triage, dedupe and sweep workflows, callers and reusable ones alike, reference no secret other than `REFINE_ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` and `REFINE_PROJECT_TOKEN` (below), plus the job's own `GITHUB_TOKEN`; `tests/test_refine_workflows.py` (relative to the toolkit root) fails on any other.
 2. **Questions issue.** Open an issue for the refiner's questions and ready-buffer report, and set its number as the variable `REFINE_QUESTIONS_ISSUE`. The refiner never triages, labels or closes that issue. Without one, the questions and the report appear in each run's job summary instead.
 3. **Callers.** Add the three workflows below.
 4. **Kill switch.** Set the variable `REFINE_ENABLED` to `true`. Any other value, or none, skips every job. Set it back to `false` to stop the refiner at once.
 5. **Dry-run first.** Leave `REFINE_MODE` unset. Every job then runs its reads and its guardrails and writes nothing: each run's summary lists what live mode would have done, and the verdict, plan and actions log are kept as artifacts. Read a week of them.
-6. **Live.** Once #1341 is closed and the dry-run summaries match what you would have done, set `REFINE_MODE` to `live`.
+6. **Live.** Once the dry-run summaries match what you would have done, set `REFINE_MODE` to `live`. Unset it, or set it to anything else, to go back to dry-run; set `REFINE_ENABLED` to `false` to stop every job.
 
 ### `.github/workflows/refine-triage.yml`
 
