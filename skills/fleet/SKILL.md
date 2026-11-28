@@ -141,7 +141,8 @@ A Claude Code session on Windows runs PowerShell, so use `python` (not
 `python3`) and these forms:
 
 ```powershell
-# dependencies, once, without uv
+# dependencies, once, without uv (the line that covers /assess too is under
+# "Without uv" in docs/windows.md)
 python -m pip install --user networkx grimp lizard==1.23.0
 
 # only if rg is neither on PATH nor installed by winget

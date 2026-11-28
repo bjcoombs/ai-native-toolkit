@@ -42,9 +42,20 @@ What each one is for:
   `/issues`, `/fix-pr`, `/fix-develop`); **glab** only for GitLab hosts. Run
   `gh auth login` (or `glab auth login --hostname <host>`) once after install.
 
-Without uv, install the Python dependencies of `/assess` and `/fleet` once into
-the interpreter you run them with; the exact `pip` line is in
-[Running /assess on Windows](../skills/assess/references/windows.md).
+### Without uv
+
+Install the Python dependencies of `/assess` and `/fleet` once, into the
+interpreter you run the scripts with. This one line covers both skills:
+
+```powershell
+python -m pip install --user networkx grimp lizard==1.23.0 squarify matplotlib numpy
+```
+
+`/fleet` and the `/assess` scans need networkx, grimp and lizard; the two
+`/assess` SVG scripts need squarify, matplotlib and numpy as well. Inside a
+virtualenv, drop `--user`. When a package is missing, `assess_signals.py`,
+`fleet.py` and the SVG scripts print a `pip` line for only that package and
+point back here for the full one.
 
 ## PATH notes
 
@@ -85,8 +96,7 @@ In Claude Code, the skills run as on any other platform. For running the
 scripts by hand:
 
 - `/assess`: [Running /assess on Windows](../skills/assess/references/windows.md)
-  has the PowerShell run sequence, the no-uv dependency line and the ripgrep
-  lookup.
+  has the PowerShell run sequence and the ripgrep lookup.
 - `/fleet`: the [Windows section of the fleet skill](../skills/fleet/SKILL.md#windows)
   has the PowerShell forms for a ghsync root and for `--from-list`.
 - `/ghsync` and `/ghreport`: run the scripts from Git Bash, with `jq` and `gh`
@@ -159,3 +169,38 @@ and skip on Windows, so a coverage floor can read lower there than on Linux.
 The Linux CI jobs enforce the floors; on Windows you can drop the three
 `--cov` flags. Which tests skip and why is in
 [Contributing: CI and merge gates](contributing/ci.md).
+
+## Troubleshooting
+
+### pytest-xdist workers crash at startup
+
+On Python 3.15 under Git Bash, every pytest-xdist worker has been seen to crash
+while execnet starts it, with `OSError: [Errno 22]`, so the parallel
+`-n auto --dist loadfile` commands above fail before a test runs. CI tests
+Windows on Python 3.11, and the cause on 3.15 is not yet known.
+
+Run the suites on a tested interpreter instead. This keeps the parallel run;
+uv downloads 3.12 when it is not installed:
+
+```bash
+uv --directory skills/assess run --locked --python 3.12 pytest -v -n auto --dist loadfile
+```
+
+Use `--python 3.12` (or `3.11`) on every `uv run` line in the commands above.
+If that is not possible, run serially by replacing `-n auto --dist loadfile`
+with `-p no:xdist`, or with make:
+
+```bash
+make check XDIST="-p no:xdist"
+```
+
+```bash
+uv --directory skills/assess run --locked pytest -v -p no:xdist
+uv --directory scripts run --locked pytest -v -p no:xdist
+uv run --with pytest --with pyyaml --with jsonschema pytest -v -p no:xdist tests/
+```
+
+A serial run works but is slow: in the reported case the `skills/assess` suite
+alone took about four hours. The non-required CI job
+`windows / python 3.15 (xdist probe, not required)` in `windows.yml` runs the
+parallel commands on 3.15 and records whether the crash reproduces there.

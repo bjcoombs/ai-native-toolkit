@@ -11,7 +11,9 @@ run covers the Windows branches:
   ``RG_MISSING_REASON`` keeps the substring ``rg not on PATH``, which
   ``headless_layers.promissory_markers`` maps to the ``no_rg`` code.
 - ``missing_packages`` names the layer 2-4 Python packages that do not import,
-  and ``pip_hint`` gives the no-uv install line for them.
+  and ``pip_hint`` gives the no-uv install line for them, after a pointer
+  (``NO_UV_POINTER``) to the one line for every /assess and /fleet package
+  (``NO_UV_PACKAGES``) in ``docs/windows.md`` (#1492).
 - ``require_packages`` is the hard form for a script that cannot run without
   its packages (the SVG renderers, issue #752): it prints the install line and
   exits 1 before the first third-party import, so no traceback reaches the user.
@@ -27,7 +29,9 @@ for `rg.exe`, last path in sorted order), since a user-scope winget install may 
 `rg not on PATH` that `headless_layers.promissory_markers` maps to `no_rg`.
 `missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
 do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
-stderr; `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
+stderr. Both hints name only the missing packages and point (`NO_UV_POINTER`) at the
+"Without uv" section of `docs/windows.md`, which holds the one line for every /assess and
+/fleet package (`NO_UV_PACKAGES`, #1492); `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
 exit codes do not change. `require_packages` is the hard form (#752): `complexity-treemap.py`
 and `doc-graph-svg.py` call it before their first third-party import, so a run without uv
 and without their PEP 723 dependencies prints the `require_hint` install line (no `--user`
@@ -53,6 +57,18 @@ LAYER_PACKAGES: tuple[tuple[str, str], ...] = (
     ("grimp", "grimp"),
     ("lizard", "lizard==1.23.0"),
 )
+
+# Every package /assess and /fleet import, for the one no-uv line that covers
+# both skills: the layer packages plus the two SVG scripts' squarify,
+# matplotlib and numpy. docs/windows.md shows the line under NO_UV_SECTION
+# (tests/test_tool_lookup.py keeps the page and this tuple equal), and both
+# hints point at it, since each names only what this interpreter lacks (#1492).
+NO_UV_PACKAGES: tuple[str, ...] = (
+    "networkx", "grimp", "lizard==1.23.0", "squarify", "matplotlib", "numpy",
+)
+NO_UV_DOC = "docs/windows.md"
+NO_UV_SECTION = "Without uv"
+NO_UV_POINTER = f'The line for every /assess and /fleet package is under "{NO_UV_SECTION}" in {NO_UV_DOC}.'
 
 Which = Callable[[str], "str | None"]
 FindSpec = Callable[[str], "object | None"]
@@ -117,7 +133,7 @@ def pip_hint(missing: Iterable[str]) -> str:
     reqs = list(missing)
     names = ", ".join(r.split("==")[0] for r in reqs)
     return (f"note: {names} not installed; the blocks that need them read unavailable. "
-            f"Without uv, install them with: python -m pip install --user {' '.join(reqs)}")
+            f"{NO_UV_POINTER} Without uv, install these with: python -m pip install --user {' '.join(reqs)}")
 
 
 def warn_missing_packages(
@@ -145,7 +161,8 @@ def require_hint(missing: Iterable[str], in_venv: bool | None = None) -> str:
     in_venv = sys.prefix != sys.base_prefix if in_venv is None else in_venv
     user = "" if in_venv else " --user"
     return (f"error: {names} not installed; this script needs them. "
-            f"Run it with uv run (it reads the script's dependencies), or install them with: "
+            f"Run it with uv run (it reads the script's dependencies). {NO_UV_POINTER} "
+            f"Or install these with: "
             f"python -m pip install{user} {' '.join(reqs)}")
 
 

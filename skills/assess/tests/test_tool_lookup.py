@@ -14,6 +14,11 @@ from lib.run import headless_layers as hl
 import lib.keyhole.promissory_markers as pm
 from lib.counts_only.content_free import reason_code
 from lib.tool_lookup import (
+    LAYER_PACKAGES,
+    NO_UV_DOC,
+    NO_UV_PACKAGES,
+    NO_UV_POINTER,
+    NO_UV_SECTION,
     RG_MISSING_REASON,
     find_rg,
     missing_packages,
@@ -139,6 +144,26 @@ def test_pip_hint_gives_the_no_uv_install_line() -> None:
     hint = pip_hint(["grimp", "lizard==1.23.0"])
     assert "grimp, lizard not installed" in hint
     assert hint.endswith("python -m pip install --user grimp lizard==1.23.0")
+    assert NO_UV_POINTER in hint
+
+
+# --- one no-uv line for /assess and /fleet (#1492) ------------------------------
+
+REPO = Path(__file__).resolve().parents[3]
+
+
+def test_no_uv_packages_cover_the_layer_packages() -> None:
+    assert {req for _, req in LAYER_PACKAGES} <= set(NO_UV_PACKAGES)
+    assert NO_UV_DOC in NO_UV_POINTER and NO_UV_SECTION in NO_UV_POINTER
+
+
+def test_the_doc_the_hints_name_shows_the_full_no_uv_line() -> None:
+    page = (REPO / NO_UV_DOC).read_text(encoding="utf-8")
+    assert f"### {NO_UV_SECTION}" in page.splitlines()
+    assert f"python -m pip install --user {' '.join(NO_UV_PACKAGES)}" in page
+    # The assess reference shows the same line, so the two cannot drift apart.
+    reference = (REPO / "skills" / "assess" / "references" / "windows.md").read_text(encoding="utf-8")
+    assert f"python -m pip install --user {' '.join(NO_UV_PACKAGES)}" in reference
 
 
 def test_warn_prints_only_when_something_is_missing() -> None:
@@ -172,6 +197,7 @@ def test_require_hint_names_the_packages_and_drops_user_inside_a_venv() -> None:
     assert outside.startswith("error: lizard, numpy not installed")
     assert outside.endswith("python -m pip install --user lizard==1.23.0 numpy")
     assert require_hint(["numpy"], in_venv=True).endswith("python -m pip install numpy")
+    assert NO_UV_POINTER in outside
 
 
 def test_require_packages_exits_1_only_when_something_is_missing() -> None:

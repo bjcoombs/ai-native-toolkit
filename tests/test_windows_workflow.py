@@ -307,3 +307,49 @@ def test_long_path_step_builds_the_fixture_and_runs_the_scanners() -> None:
     # vulture is not in the locked environment; without it liveness is not measured.
     assert '--with "vulture==' in run[signals:check]
     assert (REPO / "tests" / "fixtures" / "windows_smoke" / "longpath.py").is_file()
+
+
+# The Python 3.15 probe (#1490): a job outside the matrix that tries to
+# reproduce the pytest-xdist startup crash on 3.15. It must never gate a merge.
+PROBE_ID = "python315"
+PROBE_SUITES = ("assess", "contract")
+
+
+def _probe(jobs: dict[str, Any]) -> dict[str, Any]:
+    assert PROBE_ID in jobs, f"windows.yml has no {PROBE_ID} job"
+    return jobs[PROBE_ID]
+
+
+def test_python315_probe_is_not_a_required_check() -> None:
+    jobs = _jobs()
+    probe = _probe(jobs)
+    _, agg = _aggregator(jobs)
+    needs = agg["needs"]
+    assert PROBE_ID not in (needs if isinstance(needs, list) else [needs])
+    assert probe["name"] != REQUIRED_NAME
+    assert "not required" in probe["name"]
+    assert "strategy" not in probe, "the probe must stay out of the matrix the aggregator reads"
+    assert probe["runs-on"] == "windows-latest"
+
+
+def test_python315_probe_runs_parallel_suites_that_cannot_fail_the_job() -> None:
+    steps = {s.get("id"): s for s in _probe(_jobs())["steps"] if "id" in s}
+    for sid in PROBE_SUITES:
+        step = steps[sid]
+        run = " ".join(step["run"].split())
+        assert step["continue-on-error"] is True, sid
+        assert step["shell"] == "bash", sid  # the reporter ran under Git Bash
+        assert "--python 3.15" in run, sid
+        assert "-n auto --dist loadfile" in run, sid
+        assert "set -o pipefail" in run, sid  # tee must not hide pytest's exit code
+
+
+def test_python315_probe_records_each_outcome() -> None:
+    steps = _probe(_jobs())["steps"]
+    record = next(s for s in steps if s.get("name") == "Record the 3.15 outcome")
+    assert record["if"] == "${{ !cancelled() }}"
+    assert "continue-on-error" not in record
+    for sid in PROBE_SUITES:
+        assert f"${{{{ steps.{sid}.outcome }}}}" in record["env"].values(), sid
+    assert "Errno 22" in record["run"]
+    assert "GITHUB_STEP_SUMMARY" in record["run"]
