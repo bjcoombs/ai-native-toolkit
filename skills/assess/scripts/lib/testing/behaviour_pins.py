@@ -9,10 +9,10 @@ block. Each arm is a parsed declaration or signature (``lib.testing.behaviour_pi
 never a substring, so a file holding the word ``install`` is not the ``insta`` crate:
 
 - ``scheduled_fuzzing``, ranked first, the strongest: a GitHub Actions workflow whose top-level
-  ``on`` names ``schedule`` (``lib.ci.ci_triggers.workflow_events``) and that is a fuzz workflow:
-  its file name or top-level ``name:`` holds a fuzz word (``fuzz``, ``fuzzer``, ``fuzzing``,
-  ``cifuzz``), a ``uses:`` action does (``google/oss-fuzz/infra/cifuzz/...``), or a command it
-  runs does (``cargo fuzz run``, ``go test -fuzz=FuzzParse``). Commands are the job's unmasked
+  ``on`` names ``schedule`` (``lib.ci.ci_triggers.workflow_events``) and that runs a fuzzer: an
+  unmasked ``uses:`` action holds a fuzz word (``fuzz``, ``fuzzer``, ``fuzzing``, ``cifuzz``:
+  ``google/oss-fuzz/infra/cifuzz/...``), or a command it runs is a fuzz run (``cargo fuzz run``,
+  ``go test -fuzz=FuzzParse``). The file name or ``name:`` alone never counts. Commands are the job's unmasked
   ``run:`` lines (``lib.ci.ci_job_commands.job_lines``, the #775 masking rule) after
   ``lib.ci.ci_step_follower.follow_workflow``, and the scripts, make recipes and local actions
   they call through ``StepFollower`` up to ``_MAX_FOLLOW`` levels. A command behind a passing
@@ -74,7 +74,6 @@ SCHEDULE_ARM = "scheduled-workflow"
 _EXCLUDED_DIRS = frozenset({"vendor", "third_party", "third-party", "testdata", "fixtures", "node_modules"})
 _FUZZ_WORDS = frozenset({"fuzz", "fuzzer", "fuzzers", "fuzzing", "cifuzz", "fuzztest"})
 _WORDS = re.compile(r"[^a-z0-9]+")
-_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.M)
 _USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(\S+)")
 # Commands whose operands only name files or text: `mkdir fuzz` and `cd fuzz` run no fuzzer.
 _QUIET = frozenset({"echo", "printf", ":", "true", "cd", "pushd", "popd", "ls", "mkdir", "rm", "cp", "mv",
@@ -166,9 +165,6 @@ def _scheduled_fuzz(rel: str, text: str, read_local: ReadLocal, follower: StepFo
     """A workflow on ``schedule`` that is a fuzz workflow (module docstring)."""
     if "schedule" not in (workflow_events(text) or []):
         return False
-    name = _NAME.search(text)
-    if _fuzz_word(rel.rsplit("/", 1)[-1].rsplit(".", 1)[0]) or (name is not None and _fuzz_word(name.group(1))):
-        return True
     settled = follow_workflow(text, read_local).text
     unmasked, _unsure = mask_lines(settled)
     if any((m := _USES.match(line)) is not None and _fuzz_word(m.group(1)) for line in unmasked):

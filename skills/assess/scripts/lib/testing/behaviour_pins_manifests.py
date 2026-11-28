@@ -19,7 +19,8 @@ probe's bare ``insta`` matched ``install`` in every repository):
   ``devDependencies``, ``optionalDependencies`` and ``peerDependencies``; an ``@fast-check/``
   package reads as ``fast-check``.
 - **JVM** (``maven_groups``, ``gradle_groups``): the ``groupId`` of a ``pom.xml``
-  ``<dependency>`` (parsed with ``xml.etree``), and in a Gradle build file a quoted
+  ``<dependency>`` (parsed with ``xml.etree``) outside ``<dependencyManagement>``, which only
+  manages versions for child modules, and in a Gradle build file a quoted
   ``group:artifact`` coordinate or a ``group:`` map entry outside comments (``strip_code``, a
   small lexer that keeps ``//`` inside a string, so a URL is not a comment); in a version
   catalog (``*.versions.toml``) a library's ``module`` or ``group``.
@@ -176,11 +177,20 @@ def maven_groups(text: str) -> set[str]:
     except ET.ParseError:
         return set()
     out: set[str] = set()
-    for node in root.iter():
-        if isinstance(node.tag, str) and node.tag.rsplit("}", 1)[-1] == "dependency":
-            for child in node:
-                if isinstance(child.tag, str) and child.tag.rsplit("}", 1)[-1] == "groupId" and child.text:
-                    out.add(child.text.strip())
+
+    def walk(node: ET.Element) -> None:
+        for child in node:
+            tag = child.tag.rsplit("}", 1)[-1] if isinstance(child.tag, str) else ""
+            if tag == "dependencyManagement":
+                continue   # manages versions for child modules; uses nothing itself
+            if tag == "dependency":
+                group = next((g.text.strip() for g in child if isinstance(g.tag, str)
+                              and g.tag.rsplit("}", 1)[-1] == "groupId" and g.text), None)
+                if group:
+                    out.add(group)
+            walk(child)
+
+    walk(root)
     return out
 
 

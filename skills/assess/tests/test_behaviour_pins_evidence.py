@@ -70,8 +70,7 @@ def test_a_fuzz_crate_and_a_nightly_schedule_read_scheduled_fuzzing_first(tmp_pa
 
 
 @pytest.mark.parametrize("files", [
-    {".github/workflows/daily_fuzz.yaml": _workflow("\n  schedule:\n    - cron: '0 0 * * *'", "make check")},
-    {".github/workflows/w.yml": _workflow("\n  schedule:\n    - cron: '0 0 * * *'", "make check", name="Fuzz parser")},
+    {".github/workflows/daily_fuzz.yaml": _workflow("\n  schedule:\n    - cron: '0 0 * * *'", "cargo fuzz run x")},
     {".github/workflows/w.yml": _workflow("[schedule]", "go test ./parse -run=^$ -fuzz=FuzzParse -fuzztime=5m")},
     {".github/workflows/w.yml": _workflow("[schedule, push]", "uvx --from ./python/py-fuzzer fuzz --bin x 0-500")},
     {".github/workflows/w.yml": _workflow("[schedule]", "pytest -m fuzz")},
@@ -98,6 +97,7 @@ def test_each_form_of_a_scheduled_fuzz_workflow_counts(tmp_path: Path, files: di
     {".github/workflows/w.yml": _workflow("[schedule]", 'pytest -k "not fuzz"')},
     {".github/workflows/w.yml": _workflow("[schedule]", "pytest --deselect tests/fuzz/test_parse.py")},
     {".github/workflows/w.yml": _workflow("[schedule]", "cd fuzz && make")},
+    {".github/workflows/fuzz.yml": _workflow("[schedule]", "cargo install cargo-fuzz", name="Fuzz")},
     {".github/workflows/w.yml": _workflow("[schedule]", "mkdir -p fuzz")},
     {".github/workflows/w.yml": _workflow("[schedule]", "bash vendor/nightly.sh"),
      "vendor/nightly.sh": "#!/bin/sh\ncargo fuzz run parse\n"},
@@ -231,6 +231,8 @@ def test_a_reader_fault_reads_unavailable(tmp_path: Path, monkeypatch: pytest.Mo
                  "<groupId>com.approvaltests</groupId><artifactId>approvaltests</artifactId>"
                  "</dependency></dependencies></project>"}, ["snapshot_tests"]),
     ({"pom.xml": "<project><!-- net.jqwik --><name>net.jqwik</name></project>"}, []),
+    ({"pom.xml": "<project><dependencyManagement><dependencies><dependency><groupId>net.jqwik</groupId>"
+                 "</dependency></dependencies></dependencyManagement></project>"}, []),
     ({"build.gradle.kts": 'dependencies {\n    testImplementation("net.jqwik:jqwik:1.8.0")\n}\n'}, ["property_tests"]),
     ({"build.gradle": "dependencies {\n    // testImplementation 'net.jqwik:jqwik:1.8.0'\n}\n"}, []),
     ({"gradle/libs.versions.toml": '[libraries]\njqwik = { module = "net.jqwik:jqwik", version = "1.8" }\n'},
