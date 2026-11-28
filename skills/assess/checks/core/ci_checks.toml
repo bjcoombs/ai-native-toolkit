@@ -6,7 +6,7 @@ id = "core.ci_checks"
 kind = "collector"
 title = "CI runs a test or lint command"
 summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command. Whether such a line can fail its job on ordinary changes: not masked, and not outside the ordinary triggers. Whether such a line runs a linter. The value is null when no check is found but a CI file pulls its jobs from elsewhere. It is also null when no check is found and the tree tracks a CI file the scan does not parse. It is null under --platform when most sampled merged pull requests carry an external CI check. It is null when a root Prow OWNERS_ALIASES is the only CI evidence."
-issues = [698, 775, 782, 787, 919, 920, 928, 1152, 1179, 1180, 1357]
+issues = [698, 775, 782, 787, 919, 920, 928, 1152, 1179, 1180, 1339, 1357]
 callable = "lib.ci.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
 reads = ["repo_root", "ghsync_root", "gitlab_merged_ci", "external_ci", "gitlab_include_renames"]
@@ -17,7 +17,7 @@ whys.ci_checks = "It reads whether CI runs tests or linters on ordinary changes 
 shapes = [
   { path = "ci_checks", type = "lib.ci.ci_checks:CiChecksBlock" },
 ]
-revision = 9
+revision = 10
 unknown_reasons = [
   { code = "included_jobs", carried_in = "enforced_basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API." },
   { code = "merged_config_partial", carried_in = "basis", means = "GitLab's merged CI configuration was read and runs no check, but jobs may be missing from it. The lint API does not expand an include under rules: or a trigger: child pipeline.", next_step = "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false." },
