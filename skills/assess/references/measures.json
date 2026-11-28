@@ -435,7 +435,7 @@
               "eq_signal": null,
               "text": "CI runs an API compatibility check: is true",
               "title": "API compatibility checked by CI",
-              "fix": "Run a compatibility check in CI against the last release (apidiff, japicmp, api-extractor run, griffe check, cargo semver-checks, buf breaking). Or commit a test that compares the public exports with a fixed list and run the tests in CI.",
+              "fix": "Run a compatibility check in CI: cargo semver-checks, buf breaking or api-extractor run. apidiff only prints a report, so exit 1 when its output lists a change. japicmp needs --error-on-* or a breakBuild* setting. Or run a test that compares the exports with a fixed list.",
               "why": "An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it.",
               "why_source": "",
               "input_class": "head_structure",

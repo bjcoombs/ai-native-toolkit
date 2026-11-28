@@ -292,6 +292,14 @@ def test_a_gitlab_hidden_job_counts_through_extends(tmp_path: Path) -> None:
     assert _block(root)["runs"] == [{"path": ".gitlab-ci.yml", "tool": "buf-breaking"}]
 
 
+def test_a_gitlab_hidden_script_replaced_by_the_extending_job_does_not_count(tmp_path: Path) -> None:
+    ci = ".compat:\n  script:\n    - cargo semver-checks\ntest:\n  extends: .compat\n  script:\n    - cargo test\n"
+    assert _block(_repo(tmp_path, {".gitlab-ci.yml": ci}))["runs"] == []
+    kept = ".compat:\n  before_script:\n    - cargo semver-checks\ntest:\n  extends: .compat\n  script:\n    - cargo test\n"
+    assert _block(_repo(tmp_path / "k", {".gitlab-ci.yml": kept}))["runs"] == [
+        {"path": ".gitlab-ci.yml", "tool": "cargo-semver-checks"}]
+
+
 def test_a_gitlab_hidden_job_taken_by_reference_reads_not_measured(tmp_path: Path) -> None:
     ci = ".api:\n  script:\n    - buf breaking --against main\napi:\n  script: !reference [.api, script]\n"
     block = _block(_repo(tmp_path, {".gitlab-ci.yml": ci}))
@@ -340,6 +348,8 @@ def test_a_gradle_japicmp_task_counts_only_when_it_fails_on_modification(tmp_pat
     ("apidiff old new || { echo broke; exit 1; }",),            # nor does a grouped fallback
     ("apidiff old new; rc=$?; exit $rc",),                      # rc holds apidiff's 0
     ("apidiff old new > report.txt", "test -f other || exit 1"),  # the exit reads nothing apidiff wrote
+    ("out=$(apidiff old new)", 'if [ -n "$output" ]; then exit 1; fi'),  # $output is not $out
+    ("apidiff old new > /dev/null", "grep -q x /dev/null && exit 1"),    # /dev/null holds nothing
 ])
 def test_an_exit_that_cannot_react_to_apidiff_does_not_count(tmp_path: Path, runs: tuple[str, ...]) -> None:
     body = "      - run: |\n" + "".join(f"          {r}\n" for r in runs)   # one step, one shell
@@ -354,3 +364,12 @@ def test_a_kotlin_dsl_japicmp_fail_setting_counts(tmp_path: Path) -> None:
     root = _repo(tmp_path, {"settings.gradle.kts": "rootProject.name = \"widget\"\n",
                             "build.gradle.kts": build, WF: _workflow("./gradlew check")})
     assert _block(root)["runs"] == [{"path": WF, "tool": "japicmp"}]
+
+
+def test_gitlab_is_read_through_the_merged_view(tmp_path: Path) -> None:
+    """An included template's ``script:`` runs in the job that extends it, unless that job sets its own."""
+    files = {".gitlab-ci.yml": "include:\n  - local: ci/compat.yml\napi:\n  extends: .compat\n",
+             "ci/compat.yml": ".compat:\n  script:\n    - buf breaking --against main\n"}
+    assert _block(_repo(tmp_path / "a", files))["runs"] == [{"path": ".gitlab-ci.yml", "tool": "buf-breaking"}]
+    replaced = {**files, ".gitlab-ci.yml": files[".gitlab-ci.yml"] + "  script:\n    - make test\n"}
+    assert _block(_repo(tmp_path / "b", replaced))["runs"] == []

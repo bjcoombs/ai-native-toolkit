@@ -67,7 +67,7 @@ That generated output and its source agree, so an agent editing one does not qui
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `api-compat.1` API compatibility checked by CI (shared with Structure) | `api_compat` | CI runs an API compatibility check: is true (`api_compat.present eq true`) | `measured` | yes | - | positive | - | - | An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it. | Run a compatibility check in CI against the last release (apidiff, japicmp, api-extractor run, griffe check, cargo semver-checks, buf breaking). Or commit a test that compares the public exports with a fixed list and run the tests in CI. |
+| `api-compat.1` API compatibility checked by CI (shared with Structure) | `api_compat` | CI runs an API compatibility check: is true (`api_compat.present eq true`) | `measured` | yes | - | positive | - | - | An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it. | Run a compatibility check in CI: cargo semver-checks, buf breaking or api-extractor run. apidiff only prints a report, so exit 1 when its output lists a change. japicmp needs --error-on-* or a breakBuild* setting. Or run a test that compares the exports with a fixed list. |
 
 Also carries this tag, listed under its first tag:
 

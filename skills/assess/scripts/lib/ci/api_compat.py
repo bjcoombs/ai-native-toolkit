@@ -35,9 +35,10 @@ Masking follows the #775 rule (``lib.ci.ci_masking.mask_lines``): ``|| true``, `
 (``ci_unsure``) is unsettled, never credit. A followed script or recipe line with a ``||`` fallback
 that does not re-raise does not count and is not followed (``lib.ci.ci_job_commands.commands``). Only
 shell bodies are read: GitHub ``run:``, GitLab ``script:`` and ``before_script:`` (GitLab ignores an
-``after_script:`` failure). On GitLab a job whose ``when:`` or every ``rules:`` entry is ``never``
+``after_script:`` failure). GitLab is read as GitLab merges it (``lib.ci.ci_merged_view``:
+local includes, and an ``extends:`` job's effective ``script:``). On GitLab a job whose ``when:`` or every ``rules:`` entry is ``never``
 or ``manual`` runs nothing, and a hidden job (``.compat:``) runs only as far as a visible job that
-runs ``extends:`` it; a tool in a hidden job nothing extends, in a file that uses anchors or
+runs ``extends:`` it without setting that body itself; a tool in a hidden job nothing extends, in a file that uses anchors or
 ``!reference``, is unsettled.
 
 ``present`` is true when a tool runs, or a pinning test is tracked and CI runs tests. Otherwise
@@ -62,7 +63,9 @@ from lib.ci.agent_evals import _idle
 from lib.ci.check_command import is_info_invocation
 from lib.ci.ci_action_inputs import ReadLocal
 from lib.ci.ci_build_follower import Followed
+from lib.ci.ci_includes import merged_config
 from lib.ci.ci_masking import IndentTree, mask_lines, parse_lines
+from lib.ci.ci_merged_view import merged_view
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_job_commands import OPERATOR as _OPERATOR
@@ -207,7 +210,12 @@ def _output_refs(line: str) -> list[str]:
     capture = _CAPTURE.match(text)
     refs = [f"${capture.group(1)}", f"${{{capture.group(1)}}}"] if capture else []
     tail = text[text.find("apidiff"):]
-    return refs + [m.group(1) for m in _OUTPUT_FILE.finditer(tail)]
+    return refs + [m.group(1) for m in _OUTPUT_FILE.finditer(tail) if not m.group(1).startswith("/dev/")]
+
+
+def _names(ref: str, text: str) -> bool:
+    """Whether ``text`` names ``ref`` as a whole word: ``$out`` is not ``$output``."""
+    return re.search(r"(?<![\w./-])" + re.escape(ref) + r"(?![\w./-])", text) is not None
 
 
 def _checks_output(words: list[str], unit: list[str]) -> bool:
@@ -223,7 +231,7 @@ def _checks_output(words: list[str], unit: list[str]) -> bool:
     if piped and any(_reraises(w, held) for w in _after(first, words)):
         return True
     refs = _output_refs(unit[0])
-    return any(any(r in ci_line_text(line) for r in refs) and any(_reraises(c["words"], held)
+    return any(any(_names(r, ci_line_text(line)) for r in refs) and any(_reraises(c["words"], held)
                                                                for c in _commands(_shell(line)))
                for line in unit[1:])
 
@@ -333,23 +341,32 @@ def _extends(tree: IndentTree, top: int) -> list[str]:
     return out
 
 
-def _gitlab_jobs(tree: IndentTree) -> tuple[set[int], set[int]]:
-    """``(running, untaken)``: the top-level GitLab jobs that run on a pipeline (visible, not a
-    global keyword, not idle, or hidden and extended by one that runs), and the hidden jobs
-    nothing that runs extends."""
+def _gitlab_jobs(tree: IndentTree) -> tuple[dict[int, frozenset[str]], set[int]]:
+    """``(running, untaken)``: each top-level GitLab job that runs on a pipeline with the shell
+    bodies of it that run, and the hidden jobs nothing that runs extends. A visible job that is not
+    a global keyword and not idle runs all of ``_GITLAB_BODY``. A hidden job runs a body only
+    through a job that runs, ``extends:`` it and does not set that body itself: GitLab's
+    ``extends`` replaces an array, so ``test: {extends: .compat, script: [...]}`` runs its own
+    ``script:``, never the template's."""
     tops = {i: line.key for i, line in enumerate(tree.lines) if line.structural and line.level == 0 and line.key
             and not tree.ancestors(i)}
     idle = _idle(tree)
-    running = {i for i, key in tops.items() if not key.startswith(".") and key not in _GLOBALS and i not in idle}
+    running = {i: _GITLAB_BODY for i, key in tops.items()
+               if not key.startswith(".") and key not in _GLOBALS and i not in idle}
     by_name = {key: i for i, key in tops.items()}
     queue = list(running)
     while queue:
-        for name in _extends(tree, queue.pop()):
+        e = queue.pop()
+        own = frozenset(tree.lines[k].key for k in tree.children(e)) & _GITLAB_BODY
+        for name in _extends(tree, e):
             j = by_name.get(name)
-            if j is not None and j not in running and j not in idle:
-                running.add(j)
+            if j is None or j in idle or not tops[j].startswith("."):
+                continue
+            kept = running.get(j, frozenset()) | (running[e] - own)
+            if kept != running.get(j):
+                running[j] = kept
                 queue.append(j)
-    untaken = {i for i, key in tops.items() if key.startswith(".") and i not in running}
+    untaken = {i for i, key in tops.items() if key.startswith(".") and not running.get(i)}
     return running, untaken
 
 
@@ -363,7 +380,7 @@ def _job_lines(text: str, gitlab: bool) -> tuple[list[tuple[list[str], list[str]
     lines = text.splitlines()
     unmasked, unsure = mask_lines(text)
     tree = IndentTree(parse_lines(lines))
-    running, untaken = _gitlab_jobs(tree) if gitlab else (set(), set())
+    running, untaken = _gitlab_jobs(tree) if gitlab else ({}, set())
     spans: dict[int, list[str]] = {}
     raws: dict[int, list[str]] = {}
     hidden: list[str] = []
@@ -379,7 +396,7 @@ def _job_lines(text: str, gitlab: bool) -> tuple[list[tuple[list[str], list[str]
         shell = start if gitlab else tree.body(i)   # a GitHub step is its own shell; a GitLab job one
         if gitlab and start in untaken:
             hidden.append(line)
-        elif not gitlab or start in running:
+        elif not gitlab or tree.lines[tree.body(i)].key in running.get(start, frozenset()):
             if line.strip():
                 spans.setdefault(shell, []).append(line)
                 raws.setdefault(shell, []).append(lines[i])
@@ -457,6 +474,22 @@ def _pins(tracked: frozenset[str], read_local: ReadLocal) -> list[str]:
     return out
 
 
+def gitlab_texts(repo: Path, raw: str, reader: _Reader) -> list[str]:
+    """The GitLab texts to read, as GitLab merges them (``lib.ci.ci_merged_view``, #1180): each
+    source with its merged jobs blanked, then the rendered merged jobs, so an ``extends:`` job runs
+    its effective ``script:`` (an array the template's is replaced by) and a local include is
+    read. A rendered line the view could not settle is left out and marks the reading unsettled.
+    With no view (no readable merged configuration), the root file alone, read with
+    ``_gitlab_jobs``'s own ``extends:`` rule."""
+    config = merged_config(repo)
+    view = merged_view(config) if config is not None and config.sources[0] == raw else None
+    if view is None:
+        return [raw]
+    reader.unsettled |= bool(view.unsettled) or bool(config is not None and config.open)
+    rendered = "\n".join("" if i in view.unsettled else line for i, line in enumerate(view.rendered.splitlines()))
+    return [*view.texts, rendered]
+
+
 def scan_api_compat(repo_root: Path, ci_checks: Mapping[str, object] | None = None) -> ApiCompatBlock:
     """Build the ``api_compat`` block (module docstring)."""
     repo = repo_root.resolve()
@@ -470,18 +503,20 @@ def scan_api_compat(repo_root: Path, ci_checks: Mapping[str, object] | None = No
     for rel in files:
         gitlab = rel in CI_CONFIG_FILES
         raw = read_config(repo, rel)
-        text = raw if gitlab else follow_workflow(raw, read_local).text
-        jobs, hidden, doubt, actions = _job_lines(text, gitlab)
+        texts = gitlab_texts(repo, raw, reader) if gitlab else [follow_workflow(raw, read_local).text]
         reader.report_only = set()
-        tools = set(actions)
-        for lines, raw_lines in jobs:
-            tools |= reader.lines(lines, raw=raw_lines)
+        tools: set[str] = set()
+        for text in texts:
+            jobs, hidden, doubt, actions = _job_lines(text, gitlab)
+            tools |= actions
+            for lines, raw_lines in jobs:
+                tools |= reader.lines(lines, raw=raw_lines)
+            unsure_hit |= bool(_Reader(read_local, tracked).lines(doubt))
+            unsure_hit |= bool(_ALIASING.search(text)) and bool(_Reader(read_local, tracked).lines(hidden))
         for tool in sorted(tools):
             runs[(rel, tool)] = None
         for tool in sorted(reader.report_only - tools):
             quiet[(rel, tool)] = None
-        unsure_hit |= bool(_Reader(read_local, tracked).lines(doubt))
-        unsure_hit |= bool(_ALIASING.search(raw)) and bool(_Reader(read_local, tracked).lines(hidden))
     run_rows = [ApiCompatRun(path=rel, tool=tool) for rel, tool in runs]
     reached = {tool for _, tool in runs}
     declared = {t: paths for t, paths in _declared(tracked, read_local, frozenset(files)).items() if t not in reached}

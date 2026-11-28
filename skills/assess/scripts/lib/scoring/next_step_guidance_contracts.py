@@ -17,10 +17,11 @@ CONTRACT_FLAGS: dict[str, tuple[str, str]] = {
         "A CI job regenerates files and stops on a diff, runs a verify script paired with an "
         "update script, or runs doc examples as tests."),
     "api_compat.present": (
-        "Run an API compatibility check in CI against the last release (`apidiff`, `japicmp`, "
-        "`api-extractor run`, `griffe check`, `cargo semver-checks`, `buf breaking`), or commit a "
-        "test that pins the public exports (`assert set(__all__) == set(EXPECTED_ALL)`) and run "
-        "the tests in CI.",
+        "Run an API compatibility check in CI against the last release (`api-extractor run`, "
+        "`griffe check`, `cargo semver-checks`, `buf breaking`). `apidiff` only prints its report: "
+        "check its output and `exit 1` when it lists a change. `japicmp` needs an `--error-on-*` "
+        "flag or a `breakBuild*` setting set to true. Or commit a test that pins the public exports "
+        "(`assert set(__all__) == set(EXPECTED_ALL)`) and run the tests in CI.",
         "A CI job runs a compatibility tool that turns the job red on a breaking change, or a committed test "
         "compares the public exports with a fixed list and CI runs the tests."),
 }
