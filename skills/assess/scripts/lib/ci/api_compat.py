@@ -19,7 +19,8 @@ as text, and Python test files are parsed with ``ast``, never imported.
   turn the job red (``can_stop``): ``apidiff`` exits 0 on an incompatible change, so it needs a
   re-raise (``exit 1``) that a read of its output decides (``_decides``: ``test ! -s out.txt || exit 1``)
   in the job, script or recipe that runs it, on the same line or a later one, or a test of its ``$(...)`` output that decides one
-  (``if [ -n "$(apidiff a b)" ]; then exit 1; fi``, ``inline_apidiff``); the japicmp CLI needs an
+  (``if [ -n "$(apidiff a b)" ]; then exit 1; fi``, ``then`` on the next line too, an ``&&`` chain or
+  ``||`` fallback, ``inline_apidiff``); a CI step's pipe is read as written (#1617); the japicmp CLI needs an
   ``--error-on-*`` flag, and its Maven or Gradle plugin a ``breakBuild*`` or ``failOn*`` setting
   true. A run that cannot stop the job is listed under ``declared``, never counted.
 - **Pinning test (``pins``).** A tracked test file pins the public exports: a Python test whose
@@ -313,6 +314,20 @@ def _and_chain(rest: list[str]) -> list[str]:
     return out
 
 
+def _branch_reraises(rest: list[str], held: frozenset[str] = frozenset()) -> bool:
+    """Whether the ``&&`` chain or ``||`` fallback opening ``rest`` holds a re-raise no later passing
+    ``||`` outside a group rescues (``{ echo broke; exit 1; } || true``, which ``_rescued`` misses)."""
+    def raises(parts: list[str]) -> bool:
+        return any(_reraises(_words(p), held) for p in parts)
+    depth, ops = 0, []   # the operators outside any group, before the next ``;``
+    for k in range(2, len(rest), 2):
+        depth += sum(rest[k - 1].count(c) for c in "{(") - sum(rest[k - 1].count(c) for c in "})")
+        ops += [k] if depth <= 0 else []
+    ops = ops[:next((n for n, k in enumerate(ops) if rest[k] == ";"), len(ops))]
+    branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
+    return raises(branch) and all(raises(_OPERATOR.split(fallback(rest[k + 1:]))[::2]) for k in ops if rest[k] == "||")
+
+
 def _decides(parts: list[str], refs: list[str], later: list[str], held: frozenset[str], piped: bool = False) -> bool:
     """Whether a pipeline in the operator-split ``parts`` (commands at the even indexes) that reads
     apidiff's output (names one of ``refs``, or, with ``piped``, the first pipeline, which apidiff
@@ -333,8 +348,7 @@ def _decides(parts: list[str], refs: list[str], later: list[str], held: frozense
             if polarity == "pos" and rest[:1] in ([";"], []) and any(_reraises(c, held) for c in _then_body(rest, later)):
                 return True
         elif polarity is not None and len(rest) > 1 and (polarity, rest[0]) in (("pos", "&&"), ("neg", "||")):
-            branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
-            if any(_reraises(_words(p), held) for p in branch):
+            if _branch_reraises(rest, held):
                 return True
         i = j + 2
     return False
@@ -382,10 +396,11 @@ def _tested_substitution(words: list[str]) -> tuple[str, list[str]] | None:
 
 def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
     """The commands of an ``if``'s ``then`` branch, up to ``else``, ``elif`` or ``fi``: from the
-    operator-split ``parts`` after the condition, then from the ``later`` lines of the shell."""
+    operator-split ``parts`` after the condition, then from the ``later`` lines of the shell.
+    Empty when a passing fallback rescues the ``fi`` on a later line (``fi || true``)."""
     cmds = [command_words(p.strip().strip("(){} ")) for p in parts[1::2]]
-    cmds += [c["words"] for line in later for c in _commands(_shell(line))]
-    if not cmds or cmds[0][:1] != ["then"]:
+    cmds += [c["words"] for line in later for c in _commands(_shell(line)) if not c["masked"]]
+    if not cmds or cmds[0][:1] != ["then"] or _fi_rescued(cmds[:len(parts[1::2])], later):
         return []
     out: list[list[str]] = []
     for cmd in [cmds[0][1:], *cmds[1:]]:
@@ -393,6 +408,19 @@ def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
             break
         out.append(cmd)
     return out
+
+
+def _fi_rescued(same: list[list[str]], later: list[str]) -> bool:
+    """Whether the ``fi`` closing the tested ``if`` (nested blocks counted) is on a ``later`` line a
+    passing fallback rescues (``fi || true``); one on the test's own line is the caller's ``_rescued``."""
+    depth = 1
+    for k, cmds in enumerate([same, *([c["words"] for c in _commands(_shell(line))] for line in later)]):
+        for words in cmds:
+            head = next((w for w in words if w not in ("then", "else", "do")), "")
+            depth += (head == "if") - (head == "fi")
+            if depth <= 0:
+                return k > 0 and _rescued(later[k - 1])
+    return False
 
 
 def inline_apidiff(text: str, later: list[str]) -> bool | None:
@@ -409,11 +437,11 @@ def inline_apidiff(text: str, later: list[str]) -> bool | None:
         if tested is None or tool_of(tested[1]) != "apidiff":
             continue
         flag, rest = tested[0], parts[i + 1:]
-        op, nxt = (rest[0], command_words(rest[1].strip().strip("(){} "))) if len(rest) > 1 else ("", [])
-        if words[0] == "if":
-            stops = flag == "-n" and op == ";" and any(_reraises(c) for c in _then_body(rest, later))
-        else:
-            stops = (flag, op) in (("-n", "&&"), ("-z", "||")) and _reraises(nxt)
+        op = rest[0] if len(rest) > 1 else ""
+        if words[0] == "if":   # ``then`` after ``;`` or on the next line
+            stops = flag == "-n" and op in (";", "") and any(_reraises(c) for c in _then_body(rest, later))
+        else:   # the chain or fallback ``_decides`` reads
+            stops = (flag, op) in (("-n", "&&"), ("-z", "||")) and _branch_reraises(rest)
         found = found or stops
     return found
 
@@ -478,6 +506,7 @@ class _Reader:
         lines before masking (a CI file's), which apidiff's output check reads: masking drops an
         ``if`` condition such as ``[ -s out.txt ]`` that names the output."""
         found: set[str] = set()
+        as_written = raw is not None   # a CI file's shell: masking may have dropped a piped apidiff
         raw = raw if raw is not None else lines
         for index, line in enumerate(lines):
             commands = list(_commands(_shell(line)))
@@ -486,6 +515,8 @@ class _Reader:
                 found.add("apidiff")
             elif inline is not None:
                 self.report_only.add("apidiff")
+            if as_written and not any(c["masked"] for c in commands):
+                found |= self._piped_apidiff(raw[index:])
             for cmd in commands:
                 tool = tool_of(cmd["words"]) if not cmd["masked"] else None
                 if tool is not None and can_stop(tool, cmd["words"], raw[index:]):
@@ -506,6 +537,16 @@ class _Reader:
                 self.unsettled |= unsettled or (followed.kind == "workflow" and bool(followed.unknown))
                 found |= self.lines(list(followed.commands), depth + 1, (*path, *followed.paths))
         return found
+
+    def _piped_apidiff(self, raw: list[str]) -> set[str]:
+        """``{"apidiff"}`` when a CI line as written pipes apidiff into a deciding check, which
+        masking with pipefail off drops (``apidiff a b | grep -q . && exit 1``, lib/docs)."""
+        text = ci_line_text(raw[0])
+        cmds = [c["words"] for c in _commands(_shell(text)) if tool_of(c["words"]) == "apidiff"]
+        if cmds and not _rescued(text) and any(_checks_output(words, raw) for words in cmds):
+            return {"apidiff"}
+        self.report_only |= {"apidiff"} if cmds else set()
+        return set()
 
     def _npm(self, words: list[str], depth: int, path: tuple[str, ...]) -> set[str]:
         """The tools a root ``package.json`` script runs, for ``npm run <t>`` and its kin."""
@@ -571,6 +612,14 @@ def _gitlab_jobs(tree: IndentTree) -> tuple[dict[int, frozenset[str]], set[int]]
     return running, untaken
 
 
+def _dropped_if(lines: list[str], unmasked: list[str], tree: IndentTree, i: int) -> bool:
+    """Whether a line masking blanked is kept beside its text as written: a ``fi`` (its ``|| true``
+    rescues), or an ``if`` test alone on its line whose next line in the body survives (lib/docs)."""
+    text, nxt = ci_line_text(lines[i]).lstrip(), i + 1
+    return re.match(r"fi\b", text) is not None or (text.startswith("if ") and nxt < len(unmasked)
+                                                   and bool(unmasked[nxt].strip()) and tree.body(nxt) == tree.body(i))
+
+
 def _job_lines(text: str, gitlab: bool) -> tuple[list[tuple[list[str], list[str]]], list[str], list[str], set[str]]:
     """``(shells, untaken, unsure, actions)``: the unmasked lines of each shell that runs (a GitHub
     ``run:`` step, a running GitLab job's ``before_script:`` and ``script:``) beside the same
@@ -598,7 +647,7 @@ def _job_lines(text: str, gitlab: bool) -> tuple[list[tuple[list[str], list[str]
         if gitlab and start in untaken:
             hidden.append(line)
         elif not gitlab or tree.lines[tree.body(i)].key in running.get(start, frozenset()):
-            if line.strip():
+            if line.strip() or _dropped_if(lines, unmasked, tree, i):
                 spans.setdefault(shell, []).append(line)
                 raws.setdefault(shell, []).append(lines[i])
             if unsure[i].strip():
