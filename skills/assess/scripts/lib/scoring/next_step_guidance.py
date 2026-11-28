@@ -48,6 +48,7 @@ from typing import Any, TypedDict
 from lib.scoring.levels import Scalar
 from lib.scoring.next_step_guidance_backlog import BACKLOG_FLAGS, BACKLOG_HINT
 from lib.scoring.next_step_guidance_guards import GUARD_FLAGS, GUARD_HINT
+from lib.scoring.next_step_guidance_hooks import HOOK_FLAGS
 
 # The guardrail deny rule the permissions wording names (#1153); ``/assess --fix`` writes it,
 # with the repository's default branch in place of ``main`` (``lib/starter_templates.py``, #1154).
@@ -571,11 +572,6 @@ _WORDING: dict[str, Wording] = {
         "`.claude/settings.json` is tracked in git and its `permissions` lists at least one entry, "
         "or, with `--managed-settings`, a managed settings source on the machine running the "
         "check does."),
-    "agent_ops.summary.hooks_present": _flag(
-        "Commit an agent hook: a `hooks` entry in `.claude/settings.json` or a script in "
-        "`.claude/hooks/`.",
-        "`git ls-files .claude` lists a settings file with a `hooks` entry or a script under "
-        "`.claude/hooks/`."),
     "agent_ops.summary.agent_work_present": _flag(
         "Commit the agent work the repository runs on a schedule or trigger: a workflow with a "
         "`schedule`, `issues`, `issue_comment` or `pull_request` trigger whose steps run an agent "
@@ -585,6 +581,7 @@ _WORDING: dict[str, Wording] = {
         "an agent, directly or through a local reusable workflow."),
     **{signal: _flag(change, done) for signal, (change, done) in BACKLOG_FLAGS.items()},  # #1324
     **{signal: _flag(change, done) for signal, (change, done) in GUARD_FLAGS.items()},  # #854
+    **{signal: _flag(change, done) for signal, (change, done) in HOOK_FLAGS.items()},  # #846
 }
 _WORDING.update({f"{name}.value": _setting(name) for name in SETTING_NAMES})
 

@@ -42,7 +42,8 @@ the ``owner_exclusions`` block's ``declines``; ``level_result`` reads them from 
 the caller passes its own. A record covers the condition ids it lists (for the agent-level
 marker, only those tagged ``agent_context`` or ``agent_runtime``; for a Copilot review opt-out,
 ``copilot_opt_out`` from ``lib/ai_governance.py`` (#851), none, as it is shown and never
-applied: ``SOURCE_TAGS``), or, with ``conditions``
+applied; for disabled hook files, ``hooks_disabled`` from ``lib/agents/harness_settings.py``
+(#846), the hook condition it lists, which carries an agent tag: ``SOURCE_TAGS``), or, with ``conditions``
 None, every positive condition tagged ``agent_context`` or ``agent_runtime`` (``declined_ids``); a
 hazard is never declined, and a hazard's ``requires`` never passes ``declined`` on to it. A covered condition reads ``declined`` whatever its criteria say: never met,
 never counted, out of the denominator, and never holding a Step gate, so the Step it gates stays
@@ -249,10 +250,13 @@ AGENT_TAGS = frozenset({"agent_context", "agent_runtime"})
 AGENTS_MARKER = "agents_marker"
 # A Copilot review opt-out's source (lib.ai_governance.COPILOT_OPT_OUT, #851).
 COPILOT_OPT_OUT = "copilot_opt_out"
+# Disabled hook files' source (lib.agents.harness_settings.HOOKS_DISABLED, #846).
+HOOKS_DISABLED = "hooks_disabled"
 # Source -> the truth tags a record from it may decline: a scoped source never covers a condition
 # without one of them, whatever it lists, so a detector never takes an unrelated condition out.
 # A Copilot review opt-out has no tag: no condition is about Copilot review, so it is shown, never applied.
-SOURCE_TAGS: dict[str, frozenset[str]] = {AGENTS_MARKER: AGENT_TAGS, COPILOT_OPT_OUT: frozenset()}
+SOURCE_TAGS: dict[str, frozenset[str]] = {AGENTS_MARKER: AGENT_TAGS, COPILOT_OPT_OUT: frozenset(),
+                                           HOOKS_DISABLED: AGENT_TAGS}
 
 
 def scan_not_applicable(cond: Mapping[str, Any], by_id: Mapping[str, Mapping[str, Any]]) -> str | None:

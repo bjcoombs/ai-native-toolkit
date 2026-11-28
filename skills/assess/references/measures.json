@@ -1831,7 +1831,7 @@
               "eq_signal": null,
               "text": "Agent hooks are committed: is true",
               "title": "Agent hooks are committed",
-              "fix": "Commit the hooks that run checks around agent actions.",
+              "fix": "Commit the hooks that run checks around agent actions: in .claude/settings.json, .gemini/settings.json, .cursor/hooks.json or a .github/hooks/*.json file. A hook file renamed with a .disabled suffix reads as declined while no other hook counts.",
               "why": "Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it.",
               "why_source": "",
               "input_class": "config_text",
@@ -2952,7 +2952,7 @@
     {
       "name": "agent_ops",
       "title": "Agent-operations guardrails",
-      "summary": "Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job. Whether an agent job that can write files can rewrite an instruction file or its own workflow with no CODEOWNERS owner on it.",
+      "summary": "Committed permission allowlists, hooks, sandbox rules and routines, read from the settings and hook files of Claude Code, Gemini CLI, Cursor, Copilot (.github/hooks) and VS Code auto-approve as one set. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job. Whether an agent job that can write files can rewrite an instruction file or its own workflow with no CODEOWNERS owner on it.",
       "collector": "core.agent_ops",
       "reads": [
         "repo_root",
@@ -2978,6 +2978,7 @@
           "agent_ops.managed.sources.kind": "token",
           "agent_ops.managed.state": "token",
           "agent_ops.settings.default_mode": "token",
+          "agent_ops.settings.tool": "token",
           "agent_ops.summary.agent_instruction_rewrite_reason": "token",
           "agent_ops.summary.agent_job_write_access_reason": "token",
           "agent_ops.summary.agent_jobs_least_privilege_reason": "token",
@@ -5030,7 +5031,7 @@
     {
       "name": "owner_exclusions",
       "title": "Owner exclusions",
-      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which is shown and declines no condition.",
+      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which is shown and declines no condition, and a record of tracked hook files with a .disabled suffix, which declines the hook condition while no live hook counts.",
       "collector": "core.owner_exclusions",
       "reads": [
         "repo_root"

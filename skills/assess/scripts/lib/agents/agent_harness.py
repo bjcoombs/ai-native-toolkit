@@ -36,6 +36,10 @@ absent-file finding), ``detail`` and a one-line ``fix``:
   overrides a user who disabled hooks.
 - ``broad_allow``: ``Bash``, ``Bash(*)``, ``Bash(:*)``, ``Bash(**)`` or
   ``Bash(*:*)`` in ``permissions.allow`` (spaces ignored).
+- ``broad_auto_approve`` (#846): ``.vscode/settings.json`` auto-approves every terminal
+  command (a ``chat.tools.terminal.autoApprove`` key of ``*`` or a match-all regex) or every
+  tool (``chat.tools.autoApprove`` / ``chat.tools.global.autoApprove`` true); the VS Code twin
+  of ``broad_allow``, read by ``lib.agents.harness_settings.auto_approve``.
 - ``credential_mount``: a devcontainer file that mounts a host credential
   directory (``~/.ssh``, ``~/.aws``, ``~/.config/gcloud`` ...).
 - ``hidden_unicode``: zero-width or bidirectional-control characters in an
@@ -70,7 +74,8 @@ arguments or leading `VAR=value` assignments. Finding kinds: `tracked_local_sett
 `tracked_env_file` (path only), `missing_env_deny` (only where Claude Code is
 configured: a `.claude/` directory or a `CLAUDE.md`), `hooks_forced_on`
 (`disableAllHooks: false`), `broad_allow` (`Bash`, `Bash(*)`, `Bash(:*)`,
-`Bash(**)`, `Bash(*:*)`),
+`Bash(**)`, `Bash(*:*)`), `broad_auto_approve` (a VS Code auto-approve of every terminal command
+or every tool, #846),
 `credential_mount` (a devcontainer file mounting `~/.ssh`, `~/.aws`,
 `~/.config/gcloud` ...), `hidden_unicode` (zero-width and bidi controls in an
 instruction, rule, skill, command or agent file, reported as code points; a
@@ -99,6 +104,7 @@ from lib.instructions.claude_config import parse_frontmatter
 from lib.history.git_churn import tracked_files
 from lib.ci.shared_tooling import ON_KEY
 from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
+from lib.agents.harness_settings import auto_approve, load
 
 ItemKind = Literal[
     "settings_hook", "frontmatter_hook", "env", "api_key_helper", "mcp_server", "cursor_hook",
@@ -106,6 +112,7 @@ ItemKind = Literal[
 FindingKind = Literal[
     "tracked_local_settings", "tracked_env_file", "missing_env_deny", "hooks_forced_on",
     "broad_allow", "credential_mount", "hidden_unicode", "privileged_comment_trigger",
+    "broad_auto_approve",
 ]
 
 
@@ -485,6 +492,18 @@ class _Scan:
                     f"`{rule}` lets agents run any shell command without asking",
                     "Allow the specific commands agents need, e.g. `Bash(npm run test *)`.")
 
+    def auto_approve_findings(self) -> None:
+        path = self.root / ".vscode/settings.json"
+        text = self.read(path)
+        data = load(path, jsonc=True) if text is not None else None
+        rules = auto_approve(data) if data is not None else None
+        for key in rules.broad if rules is not None else []:
+            self.finding(
+                "broad_auto_approve", self.rel(path), _line_of(text or "", json.dumps(key)),
+                f"`{key}` lets agents run any terminal command without asking",
+                "Auto-approve the specific commands agents need, e.g. "
+                '`"chat.tools.terminal.autoApprove": {"npm test": true}`.')
+
     def credential_mounts(self) -> None:
         files = [self.root / ".devcontainer.json"]
         files += sorted(p for p in (self.root / ".devcontainer").rglob("*") if p.is_file())
@@ -606,6 +625,7 @@ def _scan_root(repo: Path, root: Path, excludes: tuple[set[str], list[str]] | No
         scan.tracked_secrets()
     scan.env_deny(settings)
     scan.settings_findings(settings)
+    scan.auto_approve_findings()
     scan.credential_mounts()
     scan.hidden_unicode(agent_files)
     scan.workflows()
