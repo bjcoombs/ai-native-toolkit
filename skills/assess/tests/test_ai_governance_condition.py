@@ -224,6 +224,7 @@ def test_an_error_annotation_alone_is_not_an_act() -> None:
             ' || echo "::error::add the Assisted-by trailer"\n')
     assert enforces_disclosure(step) is False
     assert enforces_disclosure(step.replace('trailer"\n', 'trailer"; exit 1\n')) is True
+    assert enforces_disclosure(step.replace('::error::add the Assisted-by trailer', 'please exit 1')) is False
 
 
 @pytest.mark.parametrize("exit_call", ["sys.exit(0)", "sys.exit()", "raise SystemExit", "raise SystemExit(0)"])

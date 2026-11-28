@@ -97,6 +97,7 @@ _OPERAND_AFTER = re.compile(r"^(?:\s*(?:not\s+)?in\s+[\w$]|[gimsuy]*\s*\.test\s*
 _OUTPUT = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*|(?:\bprint|console\.\w+|core\.\w+)\s*\((?:[^()\n]|\([^()\n]*\))*\)"
                      r"|::(?:error|warning|notice)[^\n]*")
 _SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*(?:\./)?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
+_ECHO = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*")
 _ASSIGNED = re.compile(r"^\s*(?:-\s+)?(?:export\s+|const\s+|let\s+|var\s+)?\$?\{?([A-Za-z_]\w*)\}?\s*(?::|=(?!=))")
 _WRITTEN = re.compile(r">\s*([\w./-]+)")
 _CD = re.compile(r"\bcd\s+([\w./-]+)\s*(?:&&|;)")
@@ -149,7 +150,8 @@ def enforces_disclosure(text: str, env: str = "") -> bool:
     names = read_names(clean + "\n" + env)
     named = any(_tests_marker(_OUTPUT.sub("", line)) and (_READS.search(line) or any(
         re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", line) for n in names)) for line in clean.splitlines())
-    return bool((_READS.search(clean) or _READS.search(env)) and named and _ACTS.search(clean))
+    # an act quoted in an echo or printf is a message, not an exit
+    return bool((_READS.search(clean) or _READS.search(env)) and named and _ACTS.search(_ECHO.sub("", clean)))
 
 
 def _tests_marker(line: str) -> bool:
