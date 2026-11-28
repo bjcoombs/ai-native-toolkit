@@ -437,7 +437,7 @@ Instruction files above the repository root load in a local session but never re
 
 A public interface stays stable only when a check stops a breaking change. A compatibility tool CI runs, or a test that pins the exports, turns an agent's accidental break of a contract into a red check, not a downstream bug report.
 
-Whether a GitHub Actions or GitLab CI step runs an API compatibility tool (apidiff, api-extractor, griffe check, cargo semver-checks, buf breaking, japicmp, revapi), directly or through a committed script, make recipe, Maven or Gradle build, or package.json script. Whether a test pins the public exports while CI runs tests. Tools named only in build files are listed as declared, never counted.
+Whether a GitHub Actions or GitLab CI step runs an API compatibility tool: apidiff, api-extractor, griffe check, cargo semver-checks, buf breaking, japicmp or revapi. The step may run it through a committed script, a make recipe, a Maven or Gradle build, or a package.json script. Whether a test pins the public exports while CI runs tests. A tool named only in a build file is listed as declared, never counted.
 
 - Collector: `core.api_compat`, reading `repo_root`, `ci_checks`.
 - Network: no.
@@ -447,7 +447,7 @@ Whether a GitHub Actions or GitLab CI step runs an API compatibility tool (apidi
 - Evidence: `api_compat.present` head_structure (measured).
 - Not measured when:
   - `tests_not_read`: A test pins the public exports, but whether CI runs tests is not settled (ci_checks.enforced_check_runs is null or the block is absent). Nothing to change: this reads as not measured until the CI test run can be read.
-  - `ci_not_read`: A compatibility tool is named in a build file, or found in a form whose exit status the step may hide, and a CI file this reader cannot follow may run it: a CI system it does not parse, a GitLab include, or a step the follower could not settle. Nothing to change if the tool runs; calling it from a GitHub Actions or GitLab CI step the scan reads lets it count.
+  - `ci_not_read`: A compatibility tool is named in a build file, or found in a form whose exit status the step may hide. A CI file this reader cannot follow may run it. Examples are a CI system it does not parse, a GitLab include, or a step the follower could not settle. Nothing to change if the tool runs; calling it from a GitHub Actions or GitLab CI step the scan reads lets it count.
 
 Why the signals named here matter:
 
