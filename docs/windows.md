@@ -176,8 +176,11 @@ The Linux CI jobs enforce the floors; on Windows you can drop the three
 
 On Python 3.15 under Git Bash, every pytest-xdist worker has been seen to crash
 while execnet starts it, with `OSError: [Errno 22]`, so the parallel
-`-n auto --dist loadfile` commands above fail before a test runs. CI tests
-Windows on Python 3.11, and the cause on 3.15 is not yet known.
+`-n auto --dist loadfile` commands above fail before a test runs. The CI
+probe below ran the same commands on CPython 3.15.2 under Git Bash with every
+worker up, so the crash depends on the local setup (interpreter build or
+install location, Git Bash version, or an environment detail) rather than on
+3.15 and pytest-xdist as such. Its cause is not yet known.
 
 Run the suites on a tested interpreter instead. This keeps the parallel run;
 uv downloads 3.12 when it is not installed:
@@ -205,4 +208,5 @@ uv run --with pytest --with pyyaml --with jsonschema pytest -v -p no:xdist tests
 A serial run works but is slow: in the reported case the `skills/assess` suite
 alone took about four hours. The non-required CI job
 `windows / python 3.15 (xdist probe, not required)` in `windows.yml` runs the
-parallel commands on 3.15 and records whether the crash reproduces there.
+parallel commands on 3.15 on every pull request and records whether the crash
+reproduces there.
