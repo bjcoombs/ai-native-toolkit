@@ -164,11 +164,12 @@ DRILL = [{"unit": "grp"}, {"unit": "grp/sub"}, {"unit": "grp/sub", "repo": "grp/
          {"unit": "grp/sub", "repo": "grp/sub/proj2", "tag": "docs", "cond": {"row": 0, "level": 2}}]
 
 
-def _drill(name: str, states: list[dict[str, Any]]) -> list[str]:
+def _drill(name: str, states: list[dict[str, Any]], bundle: dict[str, Any] | None = None) -> list[str]:
     """Each drill state's Drill-down section of the ``name`` golden, drawn by the shipped script under Node."""
     if NODE is None:
         pytest.skip("node is not on PATH")
-    script, bundle = _parts(fx.goldens()[f"expected-{name}.html"])
+    script, golden = _parts(fx.goldens()[f"expected-{name}.html"])
+    bundle = golden if bundle is None else bundle
     runner = RUNNER.split("const out")[0] + ("process.stdout.write(JSON.stringify(input.states.map(function (s) {"
                                              " return api.SECTIONS[5](b, Object.assign({view: \"ownership\"}, s)); })));")
     done = subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle, "states": states}),
@@ -197,6 +198,10 @@ def test_the_drill_runs_org_unit_repository_tag_condition_and_stays_byte_identic
     assert all(c["unmet"] == c["measured"] - c["met"] for r in full["repos"] for c in r["tags"] or [])
     assert next(r for r in full["repos"] if r["key"] == "grp/proj4")["tags"] is None  # a failed scan: not measured
     assert "Truth tags: not measured" in _drill("full", [{"unit": "grp", "repo": "grp/proj4"}])[0]
+    proj2 = next(r for r in full["repos"] if r["key"] == "grp/sub/proj2")
+    proj2["cells"] = []  # no cell for the row: the condition is plain text, with no empty tier below it
+    bare = _drill("full", [DRILL[3]], full)[0]
+    assert "data-row" not in bare and "Instruction docs, level 1: not on this repository's grid" in _text(bare).replace(" :", ":")
     for name in ("counts-only", "hashed"):  # every tier names no repository, unit, URL or person
         _, bundle = _parts(fx.goldens()[f"expected-{name}.html"])
         r = next(x for x in bundle["repos"] if x["tags"])

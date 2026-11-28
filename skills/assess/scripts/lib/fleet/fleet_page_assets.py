@@ -268,8 +268,9 @@ SCRIPT = r"""
     if (!t || !r.tags) { return ""; }
     var out = "<div class=\"panel\"><p><strong>" + esc(t.title) + "</strong> on " + esc(r.key) + "</p>";
     out += t.conditions.length ? "<ul>" + t.conditions.map(function (c) {
-      return "<li><button class=\"link\" data-row=\"" + c.row + "\" data-level=\"" + c.level + "\">"
-        + esc(condName(bundle, c)) + "</button>: " + esc(condState(bundle, cellOf(r, c.row), c.level)) + "</li>";
+      var cell = cellOf(r, c.row), name = esc(condName(bundle, c));  // no cell, no tier below: plain text
+      return "<li>" + (cell ? "<button class=\"link\" data-row=\"" + c.row + "\" data-level=\"" + c.level + "\">"
+        + name + "</button>" : name) + ": " + esc(condState(bundle, cell, c.level)) + "</li>";
     }).join("") + "</ul>" : "<p>No condition on the team grid carries this tag.</p>";
     out += "<p class=\"muted\">Each state is its practice's reading on the grid, so it can show a condition held "
       + "that the counted met and unmet above leave out.</p>";
