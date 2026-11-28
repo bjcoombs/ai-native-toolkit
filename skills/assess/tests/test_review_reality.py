@@ -110,7 +110,7 @@ def test_review_reality_unreviewed_required_review_is_hollow(world) -> None:
         "approved_share": 0.0, "bot_review_share": 0.0, "self_merged_share": 1.0,
         "review_required": True, "hollow_required_review": True,
         "required_approval_bypassed": True,
-        "merge_queue": False, "merge_queue_source": "ruleset",
+        "merge_queue": None, "merge_queue_source": None,
         "sequence": ["unreviewed"] * 10, "bot_sequence": ["none"] * 10,
     }
     # The ruleset already said yes: the protection read is skipped.
@@ -384,7 +384,7 @@ def test_without_a_committed_queue_unreadable_rules_leave_merge_queue_unknown(wo
     (None, None, True, (True, "committed")),
     (False, None, True, (True, "committed")),   # the protection read was refused
     (False, False, True, (None, None)),          # rules say no; classic protection is not read for it
-    (False, True, False, (False, "ruleset")),
+    (False, True, False, (None, None)),          # a classic-protection queue is not read: not a no
     (None, None, False, (None, None)),
     (False, True, None, (None, None)),           # the committed read was unsettled: not a no
 ])

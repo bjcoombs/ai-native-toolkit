@@ -114,9 +114,8 @@ rules are read as they stand now, so `oldest_merged_days_ago` travels with them.
 (#856, GitHub only; absent on GitLab) is True from `ruleset` when the effective rules carry a
 `merge_queue` rule. Where the rules or the protection could not be read, a committed merge
 queue (`lib/ci/review_rules.py`: a `merge_group` workflow trigger or a Mergify `queue_rules`)
-makes it True from `committed`; it is False (`ruleset`) only when the rules were read with no
-queue and the committed read found none (an unread one is not a no), else null with a null
-source. Counts, shares and booleans only: no title or login reaches
+makes it True from `committed`; otherwise it is null with a null source, never False: the rules
+endpoint lists ruleset rules only, so a queue set through classic protection is not read. Counts, shares and booleans only: no title or login reaches
 the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
 sample's merged merge requests (`scan_gitlab_review_reality(project, mrs, notes=...)`) and
@@ -310,15 +309,12 @@ def merge_queue(ruleset_queue: bool | None, required: bool | None,
     True from ``ruleset`` when the effective rules carry a ``merge_queue`` rule. Where the
     rules or the protection could not be read (``ruleset_queue`` or ``required`` None), a
     committed merge queue (``lib.ci.review_rules``: a ``merge_group`` trigger or a Mergify
-    ``queue_rules``) reads True from ``committed``. False only when the rules were read with no
-    queue and the committed read found none (``committed`` False; None is not a no); otherwise
-    None, never a false no."""
+    ``queue_rules``) reads True from ``committed``. Otherwise None, never a false no: the rules
+    endpoint lists ruleset rules only, so a queue set through classic protection is not read."""
     if ruleset_queue:
         return True, "ruleset"
     if committed and (ruleset_queue is None or required is None):
         return True, "committed"
-    if ruleset_queue is False and committed is False:
-        return False, "ruleset"
     return None, None
 
 

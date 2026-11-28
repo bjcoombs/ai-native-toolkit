@@ -198,16 +198,19 @@ def test_a_ruleset_counts_only_when_active_and_requiring_review(
     ({".github/review-rubrics/api.md": "x", ".github/workflows/r.yml":
       _workflow("pull_request", "review --rubric .github/review-rubrics/api.md")},
      [("review_guide", ".github/review-rubrics")]),
-    ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat ./docs/rubrics/*")},
-     [("review_guide", "docs/rubrics")]),
-    ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml":
-      _workflow("pull_request", "echo hi") + "# reads docs/rubrics\n"}, []),
-    ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("schedule", "cat docs/rubrics/a.md")}, []),
-    ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat docs/rubrics-old/a")}, []),
+    ({"docs/review/rubrics/a.md": "x", ".github/workflows/r.yml":
+      _workflow("pull_request", "cat ./docs/review/rubrics/*")}, [("review_guide", "docs/review/rubrics")]),
+    # a product's own grading code is not review guidance
+    ({"tests/rubrics/test_grade.py": "x", ".github/workflows/r.yml": _workflow("pull_request", "pytest tests/rubrics")},
+     []),
+    ({"docs/review/rubrics/a.md": "x", ".github/workflows/r.yml":
+      _workflow("pull_request", "echo hi") + "# reads docs/review/rubrics\n"}, []),
+    ({"docs/review/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("schedule", "cat docs/review/rubrics/a.md")}, []),
+    ({"docs/review/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat docs/review/rubrics-old/a")}, []),
     ({"docs/guides/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat docs/guides/a.md")}, []),
     # a paths filter says when the workflow runs, not that it uses the folder
-    ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml":
-      "name: d\non:\n  pull_request:\n    paths: ['docs/rubrics/**']\njobs:\n  b:\n    runs-on: x\n"
+    ({"docs/review/rubrics/a.md": "x", ".github/workflows/r.yml":
+      "name: d\non:\n  pull_request:\n    paths: ['docs/review/rubrics/**']\njobs:\n  b:\n    runs-on: x\n"
       "    steps:\n      - run: mkdocs build\n"}, []),
 ])
 def test_a_review_guide_directory_counts_when_a_pull_request_workflow_names_it(

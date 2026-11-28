@@ -497,7 +497,7 @@ REVIEW_REALITY: JsonDict = {
                               "GitHub only (#856): merges to the default branch go through a queue. "
                               "True from the rules' merge_queue rule; where the rules or the "
                               "protection could not be read, from a committed merge queue "
-                              "(review_rules); null when neither settles it."),
+                              "(review_rules); null otherwise, never false (a classic-protection queue is not read)."),
         "merge_queue_source": _field({"type": ["string", "null"]},
                                      "ruleset (the platform's rules) or committed (the review_rules "
                                      "block); null when merge_queue is null."),

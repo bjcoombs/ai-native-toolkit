@@ -24,7 +24,7 @@ git-tracked files, each parsed, never matched as text:
   ``enforcement`` is unsettled. The ref scope is not read (a known limit);
 - ``review_guide``: a tracked directory whose name marks review guidance (``review-guidelines``,
   ``review_checklist``, ``code-review-criteria``, or a folder of grading sheets such as
-  ``rubrics``) that a workflow running on proposed changes
+  ``rubrics`` under a parent whose name says review, ``docs/review/rubrics``) that a workflow running on proposed changes
   (an ``on:`` naming a ``review_automation.REVIEW_EVENTS`` event) names as a path, outside its
   ``on:`` block (a ``paths:`` filter only says when the workflow runs). Comment text never counts;
   a workflow whose ``on:`` cannot be read is unsettled, as for the merge queue.
@@ -69,8 +69,16 @@ _RULESETS = ".github/rulesets/"
 _EXCLUDED_DIRS = frozenset({"vendor", "third_party", "third-party", "testdata", "fixtures", "node_modules"})
 _GUIDE_DIR = re.compile(
     r"(?:[a-z0-9]+[-_.])*(?:code[-_]?)?review[-_]?"
-    r"(?:rubrics?|guidelines?|rules|criteria|checklists?|standards?)"
-    r"|(?:[a-z0-9]+[-_.])*rubrics?")
+    r"(?:rubrics?|guidelines?|rules|criteria|checklists?|standards?)")
+# A grading-sheet folder counts only under a parent whose name says review (``docs/review/rubrics``):
+# a bare ``tests/rubrics`` is a product's own code.
+_SHEETS_DIR = re.compile(r"(?:[a-z0-9]+[-_.])*rubrics?")
+
+
+def _is_guide(path: str) -> bool:
+    parts = [p.lower() for p in PurePosixPath(path).parts]
+    return bool(_GUIDE_DIR.fullmatch(parts[-1])) or (
+        bool(_SHEETS_DIR.fullmatch(parts[-1])) and any("review" in p for p in parts[:-1]))
 
 
 class _Unsettled(Exception):
@@ -250,7 +258,7 @@ class _Scan:
 
     def guides(self, workflows: list[tuple[str, str]]) -> None:
         dirs = sorted({p for r in self.tracked for p in _parents(r)
-                       if _GUIDE_DIR.fullmatch(PurePosixPath(p).name.lower())})
+                       if _is_guide(p)})
         if not dirs:
             return
         texts = [_without_on(text) for _, text in workflows
