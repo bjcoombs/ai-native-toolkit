@@ -742,3 +742,20 @@ def test_a_rescued_multi_line_check_does_not_count(tmp_path: Path, lines: tuple[
     script = _repo(tmp_path / "s", {"hack/api.sh": "#!/bin/sh\n" + "".join(f"{line}\n" for line in lines),
                                     WF: _workflow("hack/api.sh")})
     assert _block(script)["runs"] == []
+
+
+@pytest.mark.parametrize("lines", [
+    ("apidiff -incompatible old new | grep -q . && exit 1 &",),          # #1634: a background job's exit
+    ("apidiff -incompatible old new > o.txt", "[ -s o.txt ] && exit 1 &"),
+    ("apidiff -incompatible old new > o.txt; [ -s o.txt ] && exit 1 &",),
+    ('test -n "$(apidiff -incompatible old new)" && exit 1 &',),
+    ("apidiff -incompatible old new > o.txt", "if [ -s o.txt ]; then", "  exit 1 &", "fi"),
+    ("apidiff -incompatible old new > o.txt", "if [ -s o.txt ]; then", "  exit 1", "fi &"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]; then', "  exit 1 &", "fi"),
+])
+def test_a_backgrounded_re_raise_does_not_count(tmp_path: Path, lines: tuple[str, ...]) -> None:
+    step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == []
+    script = _repo(tmp_path / "s", {"hack/api.sh": "#!/bin/sh\n" + "".join(f"{line}\n" for line in lines),
+                                    WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == []

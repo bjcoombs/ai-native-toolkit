@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from lib.ci.apidiff_reraise import SUBSHELL, branch_reraises, exits, line_ends, reraises
+from lib.ci.apidiff_reraise import SUBSHELL, backgrounded, branch_reraises, exits, line_ends, reraises
 from lib.ci.ci_job_commands import OPERATOR
 
 
@@ -44,3 +44,12 @@ def test_line_ends_credits_only_an_unconditional_exit(line: str, want: bool) -> 
 def test_a_quoted_parenthesis_is_not_a_subshell() -> None:
     assert SUBSHELL.match(" ( exit 1 )") and SUBSHELL.match("then ( exit 1 )") and SUBSHELL.match(" { ( exit 1 )")
     assert not SUBSHELL.match(' echo "API break (see above)"') and not SUBSHELL.match(" [ $(wc -l < f) -gt 0 ]")
+
+
+@pytest.mark.parametrize(("line", "want"), [
+    ("[ -s o.txt ] && exit 1 &", True), ("exit 1 &", True), ("fi &", True),
+    ("apidiff a b > o.txt 2>&1", False), ("apidiff a b &> o.txt", False), ("apidiff a b |& tee o.txt", False),
+    ("[ -s o.txt ] && exit 1", False), ('echo "R&D" && exit 1', False), ("echo 'a & b'", False),
+])
+def test_backgrounded_reads_a_bare_ampersand_outside_quotes(line: str, want: bool) -> None:
+    assert backgrounded(line) is want
