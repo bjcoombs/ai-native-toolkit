@@ -349,6 +349,7 @@ class _Walk:
         self.seen: set[tuple[str, str | None, str]] = set()
         self.slots: list[Slot] = []
         self.texts: dict[tuple[str, str | None, str], str] = {}
+        self.walked: dict[tuple[str, str | None, str], list[Inputs]] = {}  # #1339
         self.conditional = False  # the item being read sits under an include with rules:
 
     def record(self, item: IncludeItem, ident: str | None, status: IncludeStatus,
@@ -376,6 +377,8 @@ class _Walk:
                 again = self.texts.get(key)
                 self.slots.append(Slot(None, self.conditional, frozenset(
                     name for name, _ in _entries(again, 0)[0]) if again is not None else None))
+                if again is not None:  # other inputs may pin other nested files (#1339)
+                    self.walk_once(key, again, source, depth, line, passed)
                 continue
             if len(self.seen) + len(keys) >= MAX_FILES:
                 return "file_limit"
@@ -386,12 +389,18 @@ class _Walk:
             texts.append(text)
         self.seen.update(keys)  # only once the whole item has read
         self.texts.update(zip(keys, texts, strict=True))
-        for text in texts:
+        for key, text in zip(keys, texts, strict=True):
             index = len(self.files)
             self.files.append(IncludedFile(text, depth, line))
-            self.walk(text, source, depth + 1, line, file_inputs(text, passed))
+            self.walk_once(key, text, source, depth, line, passed)
             self.slots.append(Slot(index, self.conditional))  # after its own includes
         return "resolved"
+
+    def walk_once(self, key: tuple[str, str | None, str], text: str, source: _Source, depth: int,
+                  line: int, passed: Inputs) -> None:
+        if (values := file_inputs(text, passed)) not in self.walked.setdefault(key, []):  # #1339
+            self.walked[key].append(values)
+            self.walk(text, source, depth + 1, line, values)
 
     def walk(self, text: str, here: _Source, depth: int, top_line: int | None,
              values: Inputs) -> None:

@@ -151,6 +151,21 @@ def test_a_blank_input_value_reads_input_ref_never_head(tmp_path: Path) -> None:
     assert _nested(root, app) == ("input_ref", None)
 
 
+def test_a_file_included_twice_with_other_inputs_walks_each_pin(tmp_path: Path) -> None:
+    item = "  - component: gl.test/grp/outer/outer@3.0\n    inputs:\n      version: '{}'\n"
+    ci = "include:\n" + item.format("1.0") + item.format("2.0")
+    root, app = _fleet(tmp_path, _outer(None), ci)
+    statuses = [r["status"] for r in resolve_includes(app.resolve(), root.resolve()).includes]
+    assert statuses == ["resolved"] * 4  # outer, unit@1.0, outer again, unit@2.0
+    assert scan_ci_checks(app, root)["test_or_lint_configured"] is True  # 2.0 runs pytest
+
+
+def test_a_file_included_twice_with_the_same_inputs_walks_once(tmp_path: Path) -> None:
+    item = "  - component: gl.test/grp/outer/outer@3.0\n    inputs:\n      version: '2.0'\n"
+    root, app = _fleet(tmp_path, _outer(None), "include:\n" + item + item)
+    assert len(resolve_includes(app.resolve(), root.resolve()).includes) == 3
+
+
 def test_a_value_passed_from_the_parents_own_input_travels_down(tmp_path: Path) -> None:
     middle = ("spec:\n  inputs:\n    pin:\n      default: '2.0'\n---\ninclude:\n"
               "  - component: gl.test/grp/outer/outer@3.0\n    inputs:\n      version: $[[ inputs.pin ]]\n")
