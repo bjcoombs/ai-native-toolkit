@@ -607,9 +607,10 @@
                           "depth_limit",
                           "file_limit",
                           "unparsed",
-                          "ref_missing"
+                          "ref_missing",
+                          "input_ref"
                         ],
-                        "description": "resolved; toolkit_gate (the toolkit's own regression gate template, known to run no project tests); or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed, ref_missing (a pin the clone does not hold)."
+                        "description": "resolved; toolkit_gate (the toolkit's own regression gate template, known to run no project tests); or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed, ref_missing (a pin the clone does not hold), input_ref (a $[[ inputs.<name> ]] ref with no value known from the include's inputs or the spec default)."
                       },
                       "ref_basis": {
                         "enum": [

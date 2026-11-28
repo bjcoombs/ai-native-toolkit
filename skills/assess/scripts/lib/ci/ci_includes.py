@@ -5,7 +5,9 @@
 top-level ``include:`` and, where the included file is on disk, returns its text:
 ``local:`` from the checkout, ``project:`` and ``component:`` from the clone
 ``<ghsync_root>/<path>/<last>-main`` at ``ref:`` (a pin the clone does not hold is
-``ref_missing``), ``template:`` / ``remote:`` are ``not_offline``. The toolkit's own regression
+``ref_missing``; a ref by ``$[[ inputs.<name> ]]`` takes the include's ``inputs:``, else the file's
+spec default, ``lib.ci.ci_include_inputs``, #1339, and with neither is ``input_ref``),
+``template:`` / ``remote:`` are ``not_offline``. The toolkit's own regression
 gate (#1152) is ``toolkit_gate`` and counts as read: its exact ``remote:`` URL, or a ``component:``
 whose file, read from the clone, runs what ``GATE_TEMPLATE`` runs; a lookalike name alone is read
 like any component (#1179). Nested includes are walked to
@@ -55,6 +57,7 @@ from lib.history.git_churn import tracked_files
 from lib.ci.ci_include_items import (
     KINDS as KINDS, IncludeItem as IncludeItem, IncludeKind as IncludeKind, _split_flow, _unquote,
     include_items as include_items)
+from lib.ci.ci_include_inputs import Inputs, file_inputs, interpolate, item_inputs
 from lib.ci.shared_tooling import component_source, pin
 
 GITLAB_CI = ".gitlab-ci.yml"
@@ -68,11 +71,11 @@ RenameBasis = Literal["followed", "checked", "not_checked"]
 RENAME_BASES: tuple[RenameBasis, ...] = ("followed", "checked", "not_checked")
 IncludeStatus = Literal[
     "resolved", "toolkit_gate", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
-    "depth_limit", "file_limit", "unparsed", "ref_missing",
+    "depth_limit", "file_limit", "unparsed", "ref_missing", "input_ref",
 ]
 STATUSES: tuple[IncludeStatus, ...] = (
     "resolved", "toolkit_gate", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
-    "depth_limit", "file_limit", "unparsed", "ref_missing",
+    "depth_limit", "file_limit", "unparsed", "ref_missing", "input_ref",
 )
 
 
@@ -320,6 +323,15 @@ def _read_at(clone: Path, ref: str | None) -> _Source | IncludeStatus:
     return _Source(clone, head, "head") if head is not None else "not_cloned"
 
 
+def _ident(item: IncludeItem) -> str | None:
+    """``IncludeRecord.id``: the project or component a roll-up dedupes on; None otherwise."""
+    if item.kind == "project":
+        return f"gitlab_project:{item.source.strip('/').lower()}"
+    if item.kind == "component":
+        return f"gitlab_component:{component_source(item.source).lower()}"
+    return None
+
+
 def _written(item: IncludeItem) -> str:
     """An include item as written, ``<kind>: <source>`` (``Slot.include``)."""
     return f"{item.kind}: {item.source}"
@@ -353,7 +365,7 @@ class _Walk:
         self.slots.append(Slot(None, conditional, TOOLKIT_GATE_JOBS))
 
     def read_all(self, source: _Source, paths: list[str], depth: int,
-                 line: int) -> IncludeStatus:
+                 line: int, passed: Inputs) -> IncludeStatus:
         """Read every file of one item: ``resolved``, or the reason it could not."""
         texts: list[str] = []
         keys: list[tuple[str, str | None, str]] = []
@@ -377,11 +389,12 @@ class _Walk:
         for text in texts:
             index = len(self.files)
             self.files.append(IncludedFile(text, depth, line))
-            self.walk(text, source, depth + 1, line)
+            self.walk(text, source, depth + 1, line, file_inputs(text, passed))
             self.slots.append(Slot(index, self.conditional))  # after its own includes
         return "resolved"
 
-    def walk(self, text: str, here: _Source, depth: int, top_line: int | None) -> None:
+    def walk(self, text: str, here: _Source, depth: int, top_line: int | None,
+             values: Inputs) -> None:
         items, _has_section, dropped = include_items(text)
         for _ in range(dropped):
             self.records.append({"kind": "unknown", "id": None, "status": "unparsed",
@@ -392,15 +405,12 @@ class _Walk:
                 self.gate(item, None, depth, self.conditional or item.conditional)
                 continue
             outer, self.conditional = self.conditional, self.conditional or item.conditional
-            self.one(item, here, depth, item.line if top_line is None else top_line)
+            self.one(item, here, depth, item.line if top_line is None else top_line, values)
             self.conditional = outer
 
-    def one(self, item: IncludeItem, here: _Source, depth: int, line: int) -> None:
-        ident: str | None = None
-        if item.kind == "project":
-            ident = f"gitlab_project:{item.source.strip('/').lower()}"
-        elif item.kind == "component":
-            ident = f"gitlab_component:{component_source(item.source).lower()}"
+    def one(self, item: IncludeItem, here: _Source, depth: int, line: int, values: Inputs) -> None:
+        ident = _ident(item)
+        passed = item_inputs(item.inputs, values)  # #1339: the values the included file reads
         if depth > MAX_DEPTH:
             self.record(item, ident, "depth_limit", None, depth)
             return
@@ -415,7 +425,7 @@ class _Walk:
             if rel is None:
                 self.record(item, ident, "bad_path", None, depth)
                 return
-            self.finish(item, ident, here, [rel], depth, line)
+            self.finish(item, ident, here, [rel], depth, line, passed)
             return
         if self.root is None:
             self.record(item, ident, "no_root", None, depth)
@@ -436,6 +446,9 @@ class _Walk:
                 self.record(item, ident, "bad_path", None, depth)
                 return
             paths = []
+        if ref is not None and (ref := interpolate(ref, values)) is None:
+            self.record(item, ident, "input_ref", None, depth)  # #1339: no value is known
+            return
         source, self.rename = _project_source(self.root, project, ref, self.renames)
         if isinstance(source, str):
             self.record(item, ident, source, None, depth)
@@ -445,7 +458,7 @@ class _Walk:
             if found is None:
                 return
             paths = [found]
-        self.finish(item, ident, source, paths, depth, line)
+        self.finish(item, ident, source, paths, depth, line, passed)
 
     def component(self, item: IncludeItem, ident: str | None, source: _Source, name: str,
                   depth: int) -> str | None:
@@ -462,13 +475,13 @@ class _Walk:
         return found[0]
 
     def finish(self, item: IncludeItem, ident: str | None, source: _Source, paths: list[str],
-               depth: int, line: int) -> None:
+               depth: int, line: int, passed: Inputs) -> None:
         if len(self.seen) >= MAX_FILES:
             self.record(item, ident, "file_limit", None, depth)
             return
         at = len(self.records)
         self.record(item, ident, "resolved", source.basis, depth)  # before its nested includes
-        status = self.read_all(source, paths, depth, line)
+        status = self.read_all(source, paths, depth, line, passed)
         if status != "resolved":
             self.records[at] = {**self.records[at], "status": status, "ref_basis": None}
             self.slots.append(Slot(None, self.conditional, include=_written(item)))
@@ -487,7 +500,7 @@ def resolve_includes(repo_root: Path, ghsync_root: Path | None = None,
         return EMPTY
     walk = _Walk(repo_root, ghsync_root.resolve() if ghsync_root is not None else None, renames)
     walk.seen.add((str(repo_root), None, GITLAB_CI))
-    walk.walk(text, own, 1, None)
+    walk.walk(text, own, 1, None, file_inputs(text, {}))
     return Resolution(tuple(walk.files), tuple(walk.records), text, tuple(walk.slots))
 
 

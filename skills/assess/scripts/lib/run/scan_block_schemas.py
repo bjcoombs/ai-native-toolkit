@@ -237,7 +237,8 @@ CI_CHECKS: JsonDict = {
                                  "no_root, not_cloned, file_missing, "
                                  "not_offline (template, remote), glob, bad_path, depth_limit, "
                                  "file_limit, unparsed, ref_missing (a pin the clone does not "
-                                 "hold)."),
+                                 "hold), input_ref (a $[[ inputs.<name> ]] ref with no value "
+                                 "known from the include's inputs or the spec default)."),
                 "ref_basis": _field({"enum": ["ref", "head", "worktree", None]},
                                     "How the file was read: at the pinned ref, at the clone's "
                                     "HEAD (no pin), or from the work tree; null when not "

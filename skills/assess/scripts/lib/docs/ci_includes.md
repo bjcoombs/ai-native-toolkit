@@ -112,6 +112,13 @@ disk, returns its text so those scans read the included jobs too:
   ``ref_missing``: reading HEAD instead could credit, or deny, the wrong
   version. No ``ref:`` reads HEAD (``ref_basis: head``), the project's default
   branch in a ghsync clone.
+- **A ref by input** (#1339): ``$[[ inputs.<name> ]]`` in a ``ref:`` or a component's
+  ``@<version>`` is substituted first (``lib/ci/ci_include_inputs.py``). The value comes from
+  the ``inputs:`` of the include item that read the file, else from the file's own
+  ``spec: inputs: <name>: default:`` (before its ``---``). A value passed as another input
+  (``version: $[[ inputs.pin ]]``) is resolved in the including file, so values travel down a
+  nested chain. With no known value, or an interpolation that is not a bare
+  ``inputs.<name>`` (``| expand_vars``), the item is ``input_ref``, never ``ref_missing``.
 - ``component: <host>/<project path>/<name>@<version>``: the project
   ``<project path>`` resolved as above, file ``templates/<name>.yml`` or
   ``templates/<name>/template.yml``, at ``<version>`` when the clone holds it.
@@ -182,7 +189,7 @@ published), and `Resolution.includes` one `IncludeRecord` per item, published as
 |-------|-------|
 | `kind` | `local`, `project`, `component`, `template`, `remote`, `unknown` (an `unparsed` entry: its kind is not known, so it never counts as `local`, #959) |
 | `id` | `gitlab_project:<path>` / `gitlab_component:<path>` (lowercased, the `shared_tooling` id); null for the other kinds. Kept in counts-only output (ID rule) |
-| `status` | `resolved`; `toolkit_gate` (the toolkit's own gate template, known to run no project tests, #1152); or why not: `no_root` (no `--ghsync-root`), `not_cloned`, `file_missing`, `not_offline`, `glob`, `bad_path`, `depth_limit`, `file_limit`, `unparsed` (an `include:` entry naming no item this reader parses, including an unquoted YAML tag, anchor or alias such as `!reference [x]`), `ref_missing` |
+| `status` | `resolved`; `toolkit_gate` (the toolkit's own gate template, known to run no project tests, #1152); or why not: `no_root` (no `--ghsync-root`), `not_cloned`, `file_missing`, `not_offline`, `glob`, `bad_path`, `depth_limit`, `file_limit`, `unparsed` (an `include:` entry naming no item this reader parses, including an unquoted YAML tag, anchor or alias such as `!reference [x]`), `ref_missing`, `input_ref` (a `$[[ inputs.<name> ]]` ref with no value known, #1339) |
 | `ref_basis` | `ref`, `head`, `worktree`; null unless resolved |
 | `depth` | 1 for the repository's own include; nested records follow their parent |
 

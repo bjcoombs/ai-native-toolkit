@@ -7,6 +7,8 @@ flow list or mapping, bare strings; ``file:`` as a scalar, flow list or block li
 whether a section exists and how many entries named no item this reader parses.
 ``conditional`` is true when the item has a ``rules:`` key (#1180): GitLab may leave it out, so
 the merged configuration (``ci_includes.merged_config``) never settles what it defines.
+``inputs`` holds the item's ``inputs:`` as ``(name, raw value)`` pairs (#1339), block or flow;
+a value that is not one line (a list, a map) is ``""``. ``lib.ci.ci_include_inputs`` reads them.
 Inward-only imports: ``lib.ci.shared_tooling``. Tests: ``tests/test_ci_includes.py``.
 """
 from __future__ import annotations
@@ -33,9 +35,12 @@ class IncludeItem:
     ref: str | None
     line: int
     conditional: bool = False  # the item has rules: (#1180): GitLab may leave it out
+    inputs: tuple[tuple[str, str], ...] = ()  # #1339: inputs: as (name, raw value) pairs
 
 
 _KEY = re.compile(r"""^["']?(project|component|local|template|remote|file|ref|rules)["']?\s*:(.*)$""")
+_INPUTS = re.compile(r"""^["']?inputs["']?\s*:(.*)$""")
+_PAIR = re.compile(r"""^(?P<key>"[^"]*"|'[^']*'|[\w.-]+)\s*:(?:\s+(?P<value>.*))?$""")
 
 
 # --- parsing -----------------------------------------------------------------
@@ -88,12 +93,27 @@ def _values(raw: str) -> list[str]:
 _ITEM_KINDS: tuple[IncludeKind, ...] = ("project", "component", "local", "template", "remote")
 
 
-def _item(keys: dict[str, list[str]], line: int) -> IncludeItem | None:
+def _pair(text: str) -> tuple[str, str] | None:
+    """``name: value`` -> ``(name, value)``; None for a row that is no plain mapping key."""
+    match = _PAIR.match(text.strip())
+    return (_unquote(match.group("key")), (match.group("value") or "").strip()) if match else None
+
+
+def _flow_inputs(value: str) -> list[tuple[str, str]]:
+    """``{a: 1, b: x}`` -> its pairs; a value that is not a flow map gives none."""
+    if not value.startswith("{"):
+        return []
+    return [p for raw in _split_flow(value) if (p := _pair(raw)) is not None]
+
+
+def _item(keys: dict[str, list[str]], line: int,
+          inputs: list[tuple[str, str]] | None = None) -> IncludeItem | None:
     for kind in _ITEM_KINDS:
         if keys.get(kind):
             refs = keys.get("ref") or []
             return IncludeItem(kind, keys[kind][0], tuple(keys.get("file") or ()),
-                               refs[0] if refs else None, line, "rules" in keys)
+                               refs[0] if refs else None, line, "rules" in keys,
+                               tuple(inputs or ()))
     return None
 
 
@@ -112,11 +132,14 @@ def _flow_item(text: str, line: int) -> IncludeItem | None:
     if not text.startswith("{"):
         return _scalar_item(text, line)
     keys: dict[str, list[str]] = {}
+    inputs: list[tuple[str, str]] = []
     for pair in _split_flow(text):
         match = _KEY.match(pair)
         if match:
             keys[match.group(1)] = _values(match.group(2))
-    return _item(keys, line)
+        elif (found := _INPUTS.match(pair)) is not None:
+            inputs = _flow_inputs(found.group(1).strip())
+    return _item(keys, line, inputs)
 
 
 def include_items(text: str) -> tuple[list[IncludeItem], bool, int]:
@@ -148,13 +171,26 @@ class _BlockReader:
         self.pending_file = False
         self.dropped = 0  # entries that named no parsable item
         self.started = False  # an entry is open (a "- " item, or the single mapping)
+        self.inputs: list[tuple[str, str]] = []  # #1339: the open item's inputs:
+        self.inputs_col: int | None = None  # the column of its names; None: not inside inputs:
+        self.in_inputs = False
 
     def flush(self) -> None:
-        if (done := _item(self.keys, self.line)) is not None:
+        if (done := _item(self.keys, self.line, self.inputs)) is not None:
             self.out.append(done)
         elif self.started:
             self.dropped += 1
         self.keys, self.pending_file, self.started = {}, False, False
+        self.inputs, self.inputs_col, self.in_inputs = [], None, False
+
+    def input_row(self, content: str, col: int) -> None:
+        """A row under ``inputs:``: a name at the first row's column; a deeper row belongs to
+        the last name's value, which is then no one-line scalar."""
+        self.inputs_col = col if self.inputs_col is None else self.inputs_col
+        if col == self.inputs_col and (pair := _pair(content)) is not None:
+            self.inputs.append(pair)
+        elif col > self.inputs_col and self.inputs:
+            self.inputs[-1] = (self.inputs[-1][0], "")
 
     def start_item(self, content: str, col: int, number: int) -> tuple[str, int] | None:
         """A new ``- `` item: its first key's text and column, or None when the item is
@@ -163,7 +199,7 @@ class _BlockReader:
         self.line = number
         rest = content[1:].lstrip()
         self.key_col = col + len(content) - len(rest)
-        if _KEY.match(rest):
+        if _KEY.match(rest) or _INPUTS.match(rest):
             self.started = True
             return rest, self.key_col
         whole = _flow_item(rest, number) if rest.startswith("{") else _scalar_item(rest, number)
@@ -193,6 +229,14 @@ class _BlockReader:
         return self.out
 
     def key(self, content: str, col: int) -> None:
+        if self.in_inputs and self.key_col is not None and col > self.key_col:
+            self.input_row(content, col)
+            return
+        self.in_inputs = False
+        if self.key_col is not None and col == self.key_col and (found := _INPUTS.match(content)):
+            self.pending_file, value = False, found.group(1).strip()
+            self.inputs, self.inputs_col, self.in_inputs = _flow_inputs(value), None, not value
+            return
         # ">=": an indentless sequence (`- a.yml` at the key column) is valid YAML.
         if self.pending_file and self.key_col is not None and col >= self.key_col \
                 and content.startswith("-"):
