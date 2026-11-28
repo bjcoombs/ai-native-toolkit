@@ -397,5 +397,5 @@ def test_a_maven_revapi_check_goal_meets(tmp_path: Path) -> None:
 def test_a_revapi_run_that_cannot_stop_the_build_is_declared(tmp_path: Path, config: str, goal: str, line: str) -> None:
     root = _repo(tmp_path, {"pom.xml": REVAPI_POM.format(config=config, goal=goal), WF: _workflow(line)})
     block = _block(root)
-    assert block["runs"] == [] and block["present"] is False
+    assert block["runs"] == [] and block["present"] is not True   # a report goal's site phase reads unsettled
     assert "revapi" in {row["tool"] for row in block["declared"]}   # listed, never counted
