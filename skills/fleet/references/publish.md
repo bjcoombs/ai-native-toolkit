@@ -255,8 +255,8 @@ The session, in order:
    `<folder> <url or new>` per shard. For each shard with a URL, export its collections into
    `exports/<folder>/`, as for one artifact. A folder name escapes `:` and every upper-case
    letter, so two shards never share a folder on a case-insensitive file system. A recorded
-   shard whose folder is missing or holds no `<collection>.json` is refused; an exported empty
-   collection is the file `[]`.
+   shard whose folder is missing, or lacks `runs.json`, `units.json` or `repos.json`, is refused,
+   naming them; an exported empty collection is the file `[]`.
 2. Run `plan` with `--org-dir "<history>/<org>"`. It writes `out/publish/plan.json`, whose
    `steps` list the pages in publish order (the index, then each shard), `index.html`, and per
    shard `out/publish/shards/<folder>/` with `page.html`, `capabilities.json`, `plan.json` and

@@ -33,8 +33,8 @@ refused unless ``OUT/publish/plan.json`` names it. Without ``--org-dir`` a run t
 refused, as before. A run that fits one artifact on its own but not with the strays and targets
 the artifact already stores (earlier runs and units, strays, targets) stays one artifact and is
 refused, naming the strays to remove or saying there are none, whether or not ``--org-dir`` was
-passed. A shard folder under ``--exports`` holding no ``<collection>.json`` is
-no export, so a recorded shard with an empty folder is refused.
+passed. A shard folder under ``--exports`` is read as it is, so a recorded shard whose folder
+lacks ``runs.json``, ``units.json`` or ``repos.json`` is refused, naming them.
 
 ``record`` keeps the artifact URL in ``ORG_DIR/publish.json`` (the fleet's history directory for
 the org), so the next run publishes to the same artifact. ``url`` prints that URL on stdout, or
@@ -135,8 +135,8 @@ def _data(out: Path) -> dict[str, Any]:
 
 def _exports(folder: Path, *, fill: bool = True) -> dict[str, list[StoredDoc]]:
     """The ``<collection>.json`` files in ``folder``; with ``fill``, a missing stored collection is an
-    empty one (a first publish has nothing stored). A shard's folder is read without ``fill``, so an
-    empty folder reads as no export and a recorded shard is refused (``plan_sharded``)."""
+    empty one (a first publish has nothing stored). A shard's folder is read without ``fill``, so a
+    recorded shard missing a stored collection is refused (``plan_sharded``)."""
     exports: dict[str, list[StoredDoc]] = {c: [] for c in STORED_COLLECTIONS} if fill else {}
     for path in sorted(folder.glob("*.json")):
         exports[path.stem] = read_export(_json(path), path.stem)

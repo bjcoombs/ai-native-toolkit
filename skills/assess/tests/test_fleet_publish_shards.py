@@ -20,6 +20,7 @@ from lib.fleet.fleet_targets_import import target_doc_id
 FLEET = Path(__file__).resolve().parents[2] / "fleet" / "scripts"
 SUB, OTHER = "ownership/grp/sub", "ownership/grp/other"
 URL = "https://claude.ai/artifact/"
+EMPTY: dict[str, list[Any]] = {"runs": [], "units": [], "repos": []}  # a shard stored empty
 
 
 def _script(name: str) -> ModuleType:
@@ -46,7 +47,7 @@ def test_a_two_shard_plan_has_publish_steps_for_both_shards_and_the_index_in_pla
     org = tmp_path / "history" / "grp"
     pss.record_shard(org, URL + "sub", SUB)
     pss.record_shard(org, URL + "other", OTHER)
-    exports: dict[str, Any] = {shard_folder(SUB): {"runs": []}, shard_folder(OTHER): {"runs": []}}
+    exports: dict[str, Any] = {shard_folder(SUB): dict(EMPTY), shard_folder(OTHER): dict(EMPTY)}
     sharded = pss.plan_sharded(_data(), exports, run_id=fx.DATES[-1], registry=pss.read_shards(org), allow_names=True)
     assert sharded is not None
     steps = sharded["summary"]["steps"]
@@ -71,13 +72,15 @@ def test_a_recorded_shard_without_its_export_is_refused(tmp_path: Path) -> None:
 
 
 def test_a_recorded_shard_with_an_empty_export_folder_is_refused(tmp_path: Path) -> None:
-    """#1635 (5): a folder with no collection in it is no export; an exported empty collection is."""
+    """#1635 (5): a folder missing any stored collection is no export, so the missing ones are
+    named; every stored collection exported empty is a shard stored empty."""
     org = tmp_path / "grp"
     pss.record_shard(org, URL + "sub", SUB)
-    with pytest.raises(PublishError, match="holds no collection"):
-        pss.plan_sharded(_data(), {shard_folder(SUB): {}}, run_id=fx.DATES[-1], registry=pss.read_shards(org),
-                         allow_names=True)
-    assert pss.plan_sharded(_data(), {shard_folder(SUB): {"targets": []}}, run_id=fx.DATES[-1],
+    for given, named in (({}, "runs.json, units.json, repos.json"), ({"runs": []}, "units.json, repos.json")):
+        with pytest.raises(PublishError, match=f"holds no {named};"):
+            pss.plan_sharded(_data(), {shard_folder(SUB): given}, run_id=fx.DATES[-1],
+                             registry=pss.read_shards(org), allow_names=True)
+    assert pss.plan_sharded(_data(), {shard_folder(SUB): dict(EMPTY)}, run_id=fx.DATES[-1],
                             registry=pss.read_shards(org), allow_names=True) is not None
 
 
@@ -119,7 +122,7 @@ def test_a_retired_shard_needs_no_export_and_stays_in_the_registry(tmp_path: Pat
     org = tmp_path / "grp"
     pss.record_shard(org, URL + "sub", SUB)
     pss.record_shard(org, URL + "gone", "ownership/grp/gone")  # a unit that has left the fleet
-    sharded = pss.plan_sharded(_data(), {shard_folder(SUB): {"runs": []}}, run_id=fx.DATES[-1], registry=pss.read_shards(org),
+    sharded = pss.plan_sharded(_data(), {shard_folder(SUB): dict(EMPTY)}, run_id=fx.DATES[-1], registry=pss.read_shards(org),
                                allow_names=True)
     assert sharded is not None and sharded["summary"]["retired"] == ["ownership/grp/gone"]
     assert "ownership/grp/gone" not in [s["key"] for s in sharded["summary"]["steps"]]
@@ -130,7 +133,7 @@ def test_a_shard_over_the_cap_with_its_strays_is_refused(tmp_path: Path) -> None
     org = tmp_path / "grp"
     pss.record_shard(org, URL + "sub", SUB)
     strays = [{"doc_id": f"x{i}", "version": 1, "data": {}} for i in range(25_000)]
-    exports: dict[str, Any] = {shard_folder(SUB): {"junk": strays}}
+    exports: dict[str, Any] = {shard_folder(SUB): {**EMPTY, "junk": strays}}
     with pytest.raises(ShardTooLarge, match=r"needs about 250\d\d documents with its stored targets and strays"):
         pss.plan_sharded(_data(), exports, run_id=fx.DATES[-1], registry=pss.read_shards(org), allow_names=True)
 
@@ -169,8 +172,9 @@ def test_the_cli_plans_shards_with_org_dir_and_prints_them(tmp_path: Path, capsy
     assert cli.main(["plan", str(out), "--exports", str(exports), "--org-dir", str(org), "--allow-names"]) == 2
     (exports / shard_folder(SUB)).mkdir()  # an empty folder is no export (#1635)
     assert cli.main(["plan", str(out), "--exports", str(exports), "--org-dir", str(org), "--allow-names"]) == 2
-    assert "holds no collection" in capsys.readouterr().err
-    (exports / shard_folder(SUB) / "runs.json").write_text("[]", encoding="utf-8")  # stored empty: a list
+    assert "holds no runs.json, units.json, repos.json" in capsys.readouterr().err
+    for collection in EMPTY:  # stored empty: each an empty list
+        (exports / shard_folder(SUB) / f"{collection}.json").write_text("[]", encoding="utf-8")
     assert cli.main(["plan", str(out), "--exports", str(exports), "--org-dir", str(org), "--allow-names"]) == 0
     err = capsys.readouterr().err
     assert "sharded into 3 artifact(s) plus an index" in err and "plan again" in err
