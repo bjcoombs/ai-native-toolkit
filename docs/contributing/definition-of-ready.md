@@ -104,4 +104,4 @@ Nothing in the body or comments waits on a human call: no unanswered question to
 
 The refiner workflows run only while the repository variable `REFINE_ENABLED` is `true`, and run as a dry-run, writing nothing, until the variable `REFINE_MODE` is `live`. Setting `REFINE_MODE` to `live` turns on its writes; unsetting it returns to dry-run, and setting `REFINE_ENABLED` to `false` stops every job. [Backlog refinement](../refine.md) has the setup and the credentials.
 
-The `/issues` triage pass applies `agent-ready` by its own sizing judgement today. Making it apply this same checklist is part of [#1317](https://github.com/bjcoombs/ai-native-toolkit/issues/1317).
+The `/issues` triage pass applies this same checklist before it sets `agent-ready`: its Readiness Check step (`skills/issues/SKILL.md`, relative to the repository root) runs `skills/refine/scripts/refine.py`, keeps every issue the script marks `not_ready` at `needs-triage`, and decides the judgement items in its own research, sizing and dependency steps.

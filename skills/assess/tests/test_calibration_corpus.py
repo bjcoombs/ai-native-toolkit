@@ -283,6 +283,27 @@ def test_an_offline_diff_of_a_platform_seeded_corpus_is_refused(
     assert "seeded with --platform" in capsys.readouterr().err
 
 
+def test_a_platform_diff_of_an_offline_seeded_corpus_is_refused(
+        corpus: tuple[Path, Path, dict[str, Path]], capsys: pytest.CaptureFixture[str]) -> None:
+    """#1628: the reverse of the refusal above. Offline, backlog-ready.2 reads not_measured, so a
+    --platform diff would print a line per repository that looks like a regression."""
+    root, out, _ = corpus
+    expected = cc.load_corpus(out)
+    expected[0]["states"]["backlog-ready.2"] = "not_measured"  # what an offline seed writes
+    cc.write_expected(out, expected[0])
+    assert not cc.platform_seeded(cc.load_corpus(out))
+    called: list[int] = []
+
+    def platform(rows: list[FleetRow], targets: Any, options: ScanOptions) -> list[FleetRow]:
+        called.append(1)
+        return rows
+
+    assert cli.main(["diff", str(root), "--corpus", str(out), "--platform"], scan=fake_scan,
+                    platform=platform) == 2
+    captured = capsys.readouterr()
+    assert "seeded without --platform" in captured.err and captured.out == "" and not called
+
+
 def test_the_row_split_counts_every_state_of_the_rows_conditions(
         corpus: tuple[Path, Path, dict[str, Path]], capsys: pytest.CaptureFixture[str]) -> None:
     states = {"r1": {"x.1": "met", "x.2": "not_measured", "y.1": "met"},

@@ -644,6 +644,22 @@ def test_corpus_discriminates() -> None:
     assert split["met"] >= 1 and split["unmet"] >= 1, split
 
 
+def test_the_corpus_check_runs_once_corpus_files_exist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1628: ``test_corpus_discriminates`` skips only while no corpus file exists; a corpus whose
+    files lack the backlog-ready row fails it, and one that discriminates passes."""
+    monkeypatch.setattr(cc, "CORPUS_DIR", tmp_path / "corpus")
+    with pytest.raises(pytest.skip.Exception, match="no corpus expected-state files"):
+        test_corpus_discriminates()
+    _write_corpus(tmp_path / "corpus", [None, None])
+    with pytest.raises(AssertionError, match="predate the backlog-ready row"):
+        test_corpus_discriminates()
+    _write_corpus(tmp_path / "corpus", ["met", "not_measured"])
+    with pytest.raises(AssertionError):
+        test_corpus_discriminates()
+    _write_corpus(tmp_path / "corpus", ["met", "unmet"])
+    test_corpus_discriminates()
+
+
 def _write_corpus(corpus_dir: Path, states: list[str | None]) -> None:
     for n, state in enumerate(states):
         cc.write_expected(corpus_dir, {"corpus_version": cc.CORPUS_VERSION, "repo": f"h:{n:016x}",
