@@ -620,6 +620,8 @@ def test_a_masked_or_inverted_step_pipe_does_not_count(tmp_path: Path, line: str
     assert block["runs"] == [] and block["present"] is False
     masked = f"      - continue-on-error: true\n        run: {STEP_PIPE}\n"
     assert _block(_repo(tmp_path / "m", {WF: _workflow(extra=masked)}))["runs"] == []
+    keyword = f"      - continue-on-error: true\n        run: |\n          fi; {STEP_PIPE}\n"   # a kept ``fi`` line
+    assert _block(_repo(tmp_path / "k", {WF: _workflow(extra=keyword)}))["runs"] == []
 
 
 INLINE_CHAINS = [
@@ -719,6 +721,10 @@ def test_an_exit_in_a_group_or_then_branch_ends_the_shell_past_a_later_fallback(
     ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  echo x", "elif true", "then", "  exit 1", "fi"),   # elif's exit
     ('if [ -n "$(apidiff -incompatible old new)" ]; then', "  echo x", "elif true", "then", "  exit 1", "fi"),
     ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", "  echo x", "elif true", "then", "  exit 1", "fi"),
+    ('test -n "$(apidiff -incompatible old new)" && echo broke && { false && exit 1; } || true',),   # false skips the exit
+    ('test -n "$(apidiff -incompatible old new)" && echo broke && echo false; true',),   # ``false`` is echo's argument
+    ('test -n "$(apidiff -incompatible old new)" && echo exit 1',),
+    ("apidiff -incompatible old new > out.txt; grep -q . out.txt && echo false",),
     ('[ -z "$(apidiff -incompatible old new)" ] || { echo "{"; false; } || true',),   # a quoted brace
     ('apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo "}"; false; } || true',),
     ("apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 0; } || true",),

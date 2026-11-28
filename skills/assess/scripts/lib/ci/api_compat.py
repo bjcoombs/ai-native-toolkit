@@ -64,7 +64,7 @@ import json
 import posixpath
 import re
 from collections.abc import Mapping
-from itertools import takewhile
+from itertools import dropwhile, takewhile
 from pathlib import Path
 
 from lib.ci.agent_evals import _idle
@@ -216,15 +216,12 @@ def _rest(text: str, words: list[str]) -> list[str]:
 
 def _reraises(words: list[str], held: frozenset[str] = frozenset()) -> bool:
     """A command that ends its script red: ``exit`` or ``return`` with a non-zero literal or a
-    variable other than ``$?`` or one ``held`` (assigned ``$?``), or ``false`` (``then exit 1`` inside an ``if`` too)."""
-    for i, word in enumerate(words):
-        code = words[i + 1].strip('"') if i + 1 < len(words) else ""
-        zero = code in ("", "0", "$?") or code.strip("${}") in held   # ``$?`` after apidiff is its 0
-        if word in ("exit", "return") and not zero:
-            return True
-        if word == "false" and i in (0, 1):
-            return True
-    return False
+    variable other than ``$?`` or one ``held`` (assigned ``$?``), or ``false``, as the command itself
+    (after a ``then``, ``else`` or ``do``), never an argument (``echo false``, ``echo exit 1``)."""
+    head = list(dropwhile(lambda w: w in ("then", "else", "do"), words))
+    code = head[1].strip('"') if len(head) > 1 else ""
+    zero = code in ("", "0", "$?") or code.strip("${}") in held   # ``$?`` after apidiff is its 0
+    return (head[:1] in (["exit"], ["return"]) and not zero) or head[:1] == ["false"]
 
 
 def _output_refs(line: str) -> list[str]:
@@ -321,7 +318,8 @@ def _branch_reraises(rest: list[str], held: frozenset[str] = frozenset()) -> boo
     def ends(m: int) -> bool:   # ``exit N`` the test reaches unconditionally: chained, or in its ``{ }``
         ops, group = rest[0:m:2], "".join(rest[1:m + 1])
         return _exits(_words(rest[m])) and not any(map(_SUBSHELL.match, rest[1:m + 1:2])) and (
-            all(o == "&&" for o in ops) or ops == ["||"] or (rest[m - 1] == ";" and command_words(rest[1])[:1] == ["{"]
+            all(o == "&&" for o in ops) and all(_words(p)[:1] in (["echo"], ["printf"]) for p in rest[1:m:2])
+            or ops == ["||"] or (rest[m - 1] == ";" and command_words(rest[1])[:1] == ["{"]
                                                             and group.count("{") == 1 and "}" not in group))
     branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
     tails = [branch] + [_OPERATOR.split(fallback(rest[k + 1:]))[::2] for k in range(2, len(rest), 2) if rest[k] == "||"]
@@ -617,7 +615,8 @@ def _gitlab_jobs(tree: IndentTree) -> tuple[dict[int, frozenset[str]], set[int]]
 def _dropped_if(lines: list[str], unmasked: list[str], tree: IndentTree, i: int) -> bool:
     """Whether a blanked line is kept as written: ``fi``/``elif``/``else``, or a lone ``if`` test whose next line survives (lib/docs)."""
     text, nxt = ci_line_text(lines[i]).lstrip(), i + 1
-    return re.match(r"(?:fi|elif|else)\b", text) is not None or (text.startswith("if ") and nxt < len(unmasked)
+    kept = any(ci_line_text(u).strip("|>-+ ") and tree.body(j) == tree.body(i) for j, u in enumerate(unmasked))   # not masked
+    return kept and re.match(r"(?:fi|elif|else)\b", text) is not None or (text.startswith("if ") and nxt < len(unmasked)
                                                    and bool(unmasked[nxt].strip()) and tree.body(nxt) == tree.body(i))
 
 
