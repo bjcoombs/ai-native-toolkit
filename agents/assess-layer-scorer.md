@@ -554,6 +554,7 @@ rg 'coderabbit|copilot|codeclimate|sonarqube|sonarcloud' "$REPO_ROOT"/.github/wo
 
 - Evidence of review is `reviewed_share` and `approved_share`; a bot that submits reviews moves them. `bot_review_share` is weak corroboration that some bot comments on pull requests, never on its own evidence of review: deploy-preview, coverage and dependency bots comment without reviewing. A configured review bot with `reviewed_share` near 0 is the Partial case.
 - `hollow_required_review: true` or `required_approval_bypassed: true` caps the layer at Partial whatever is configured; cite the flag that fired: required review that merges bypass is a gate that reads Present and is hollow. The report writer adds it as a Layer 7 row of the "Says one thing, does another" section.
+- **Rules kept as code** (#856): when the `level` block's `layer-7-review.1` condition carries `evidence`, cite each arm in that order (`merge_queue`, `policy_bot`, `prow_owners`, `ruleset_json`, `review_guide`) with the file from the matching `review_rules.rules` entry. It is evidence only: committed config does not prove the app or rule is live, so it never raises Layer 7 on its own and is cited only while that condition is met. `review_reality.merge_queue` with `merge_queue_source: committed` means the platform rules could not be read and the committed queue stands in; say so. `review_rules.catch_all_owners: true` means the OWNERS files name one owner for everything, which reviews nothing.
 
 **Scoring:**
 - Present: Automated review bot active on PRs, providing design-level feedback

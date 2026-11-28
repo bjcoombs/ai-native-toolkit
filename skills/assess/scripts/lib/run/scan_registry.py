@@ -111,6 +111,7 @@ from lib.skill_library import scan_skill_library
 from lib.ci.ci_model_jobs import scan_ci_model_jobs
 from lib.ci.ci_hazards import scan_ci_hazards
 from lib.testing.behaviour_pins import pins_or_unknown
+from lib.ci.review_rules import rules_or_unknown
 from lib.ci.repo_guards import guards_or_unknown
 from lib.ai_governance import scan_ai_governance
 from lib.ci.api_compat import scan_api_compat
@@ -420,6 +421,10 @@ SCANS: tuple[ScanSpec, ...] = (
     _spec("merged_sample", merged_sample, offline_fn=offline_merged_sample),
     # Every sampled GitLab merge request's notes, read once, kept as facts (#716).
     _spec("gitlab_note_facts", gitlab_note_facts),
+    # Merge and review rules kept as code (issue #856): a merge queue, a policy-bot policy, Prow
+    # OWNERS, a committed ruleset and a review rubric a workflow names. Offline file reads; evidence
+    # on the review condition, and review_reality's merge queue when the platform rules are unread.
+    _spec("review_rules", rules_or_unknown),
     # Offline the sample is a reason, which the block passes through (#908).
     _spec("review_reality", review_reality_from_sample, offline_fn=review_reality_from_sample),
     # Delivery figures (#715): time to merge, first human comment, AI review;

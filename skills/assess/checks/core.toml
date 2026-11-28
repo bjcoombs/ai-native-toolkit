@@ -68,6 +68,7 @@ fragments = [
   "config_drift",
   "merged_sample",
   "gitlab_note_facts",
+  "review_rules",
   "review_reality",
   "delivery",
   "backlog_outcomes",
