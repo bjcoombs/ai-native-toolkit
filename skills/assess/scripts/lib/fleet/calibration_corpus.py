@@ -27,6 +27,13 @@ default model). Measuring the commit's tree, offline and with the history window
 from the commit (``lib.history.history_window.anchored_since``), keeps the states a function
 of the pinned commit and the toolkit code alone.
 
+- ``platform``: the backlog-ready row's level 2 (#1324) reads the issue tracker, which the
+  offline scan never reaches, so offline it reads ``not_measured`` in every repository. With a
+  ``platform`` callable (``calibration_corpus.py --platform``) ``observe`` runs the fleet platform
+  pass for ``PLATFORM_READS`` alone (``backlog_ready``) after the offline scan; every other block
+  stays a function of the pinned commit. Those level 2 states move as the trackers move, so a
+  corpus seeded with ``--platform`` is diffed with it, and a ``backlog-ready.2`` diff line can be
+  a tracker's own change rather than the toolkit's.
 - ``seed``: an expected-state file per scanned clone, from this toolkit's run.
 - ``refusals``: before any scan, an expected file with no clone under the root
   (``no_clone``), or a clone whose ``HEAD`` is not its pinned commit (``wrong_commit``) is
@@ -44,6 +51,11 @@ of the pinned commit and the toolkit code alone.
   ``not_measured_anywhere``, since the offline run cannot read it at all rather than every
   repository lacking it. It reads the run's states, or the
   expected files alone (``report``), so it needs no clones.
+
+- ``row_split``: how a row's conditions fall across the corpus, ``{condition: {state: count}}``
+  over every state, read from the expected files alone; ``split_lines`` prints it, and
+  ``tests/test_backlog_ready.py::test_corpus_discriminates`` asserts from it that
+  ``backlog-ready.2`` is met in at least one repository and unmet in at least one.
 
 Tests: ``tests/test_calibration_corpus.py``.
 """
@@ -69,6 +81,7 @@ MET_IN_NONE, MET_IN_ALL = "met_in_none", "met_in_all"
 NOT_MEASURED_ANYWHERE = "not_measured_anywhere"
 NO_CLONE, WRONG_COMMIT, SCAN_FAILED = "no_clone", "wrong_commit", "scan_failed"
 _FIELDS = frozenset({"corpus_version", "repo", "pinned", "levels_version", "states"})
+PLATFORM_READS = ("backlog_ready",)  # the platform blocks a --platform corpus run reads (#1324)
 
 
 class CorpusError(ValueError):
@@ -174,10 +187,21 @@ def commit_refusals(expected: Sequence[ExpectedState], targets: Sequence[Target]
     return out
 
 
+# The platform pass over the offline rows: ``lib.fleet.fleet_platform.run_platform`` bound to
+# ``PLATFORM_READS`` by the command, or a stub in tests.
+PlatformFn = Callable[[list[FleetRow], Sequence[Target], ScanOptions], list[FleetRow]]
+
+
 def observe(targets: Sequence[Target], model: MaturityModel, jobs: int,
-            scan: ScanFn = scan_target) -> tuple[list[Observed], list[Refusal]]:
-    """Scan ``targets`` as ``/fleet`` does; each ok row's states, and a refusal per failed scan."""
-    rows = run_fleet(targets, ScanOptions(window=WINDOW), jobs, scan)
+            scan: ScanFn = scan_target,
+            platform: PlatformFn | None = None) -> tuple[list[Observed], list[Refusal]]:
+    """Scan ``targets`` as ``/fleet`` does; each ok row's states, and a refusal per failed scan.
+    With ``platform`` its blocks are joined into the ok rows before their states are read."""
+    options = ScanOptions(window=WINDOW)
+    rows = run_fleet(targets, options, jobs, scan)
+    if platform is not None:
+        joined = {r["repo"]: r for r in platform([r for r in rows if r["status"] == STATUS_OK], targets, options)}
+        rows = [joined.get(r["repo"], r) for r in rows]
     observed: list[Observed] = []
     refused: list[Refusal] = []
     for row in rows:
@@ -235,3 +259,17 @@ def discrimination_lines(rows: Sequence[Discrimination]) -> list[str]:
 
 def refusal_lines(refusals: Sequence[Refusal]) -> list[str]:
     return [f"refused {r['repo'].removeprefix('h:')}: {r['reason']}" for r in sorted(refusals, key=lambda r: r["repo"])]
+
+
+def row_split(states_by_repo: Mapping[str, Mapping[str, str]], row: str) -> dict[str, dict[str, int]]:
+    """Each ``<row>.<level>`` condition's count of repositories per state (every state, 0 kept)."""
+    prefix = f"{row}."
+    cids = sorted({c for states in states_by_repo.values() for c in states if c.startswith(prefix)})
+    return {cid: {s: sum(states.get(cid) == s for states in states_by_repo.values()) for s in STATES}
+            for cid in cids}
+
+
+def split_lines(split: Mapping[str, Mapping[str, int]], repos: int) -> list[str]:
+    """``<condition>: met 2, unmet 7, not_measured 3 (of 12)``, states with no repository left out."""
+    return [f"{cid}: " + ", ".join(f"{s} {n}" for s, n in counts.items() if n) + f" (of {repos})"
+            for cid, counts in split.items()]

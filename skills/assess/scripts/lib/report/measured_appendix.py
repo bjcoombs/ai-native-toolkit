@@ -33,7 +33,10 @@ measured). Its first line starts `In place:`
 measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
 The `agent_ops` line adds "permissions set centrally (managed settings on this machine) in k
 of n" where a run read them under `--managed-settings` and they credited the practice (#1153).
-The skip codes are `signals.FULL_RUN_ONLY_REASONS` plus the scan plan's not-run code, imported,
+The `backlog_ready` line states a truncated issue-tracker read (#1324, #1323 criterion 5): "the issue
+tracker read stopped at its page cap in k of n" where `outcomes.truncated` is true or a metric reads
+`window_truncated` or `open_truncated`, naming those codes, so a partial read never passes for a
+whole one. The skip codes are `signals.FULL_RUN_ONLY_REASONS` plus the scan plan's not-run code, imported,
 never listed (#918). Tests: `tests/test_measured_appendix.py`.
 """
 from __future__ import annotations
@@ -95,6 +98,36 @@ def _central(name: str, documents: Sequence[Mapping[str, object]]) -> int:
                and summary.get("permissions_source") == "managed")
 
 
+# The reasons a backlog_ready metric reads when its issue list stopped at the page cap (#1323, #1324).
+TRUNCATED_REASONS = ("window_truncated", "open_truncated")
+_METRICS = ("first_response_median_days", "untriaged_after_7d_share", "close_open_ratio")
+
+
+def _truncated(name: str, documents: Sequence[Mapping[str, object]]) -> tuple[int, list[str]]:
+    """How many documents' issue-tracker read stopped at a page cap, and the metric reasons it left."""
+    if name != "backlog_ready":
+        return 0, []
+    count, codes = 0, set()
+    for doc in documents:
+        block = doc.get(name)
+        if not isinstance(block, Mapping):
+            continue
+        outcomes = block.get("outcomes")
+        hit = {c for m in _METRICS if (c := block.get(f"{m}_reason")) in TRUNCATED_REASONS}
+        if hit or (isinstance(outcomes, Mapping) and outcomes.get("truncated") is True):
+            count += 1
+            codes |= {str(c) for c in hit}
+    return count, sorted(codes)
+
+
+def _truncated_text(count: int, total: int, codes: list[str]) -> str:
+    """The stated truncated read: the counts read stay measured, a metric the cap would bias is not."""
+    text = f"the issue tracker read stopped at its page cap in {count} of {total}"
+    if codes:
+        text += f" ({', '.join(codes)}: the metric it would bias is not measured)"
+    return text + ", so its counts cover part of the tracker"
+
+
 def _state(block: object) -> str | None:
     """None when the block was measured, else its reason code."""
     if isinstance(block, Mapping) and block.get("available") is False:
@@ -141,6 +174,9 @@ def measured_section(documents: Sequence[Mapping[str, object]],
             unread += 1
         if central := _central(name, documents):
             line += f"{';' if ':' in line else ':'} permissions {CENTRAL} in {central} of {total}"
+        cut, cut_codes = _truncated(name, documents)
+        if cut:
+            line += f"{';' if ':' in line else ':'} {_truncated_text(cut, total, cut_codes)}"
         ran.append(line)
     scope = "1 repository" if total == 1 else f"{total} repositories"
     measured = len(ran) - unread

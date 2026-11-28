@@ -45,13 +45,18 @@ end, so a share over it could read met while others sit untriaged. One exception
 not measured: when no issue opened in the window got a response and the overdue ones decide the
 median, the median is null with ``no_response`` and ``first_response_met`` is false, since any
 later response is already past the threshold. Each
-``<x>_met`` bool is null whenever its metric is not measured: not measured is never unmet.
+``<x>_met`` bool is null whenever its metric is not measured: not measured is never unmet. A null
+``<x>_met`` carries ``<x>_met_reason`` (#1324), the code the backlog-ready condition reports: its
+metric's reason, or for ``first_response_met`` over a measured median ``window_truncated``,
+``response_unread``, or ``response_pending`` (unanswered issues younger than the threshold could
+still tip it).
 
 Block fields this module adds to ``backlog_ready``::
 
     {"first_response_median_days": float | None, "untriaged_after_7d_share": float | None,
      "close_open_ratio": float | None, "<metric>_reason": str (beside a null metric),
      "first_response_met": bool | None, "untriaged_met": bool | None, "close_open_met": bool | None,
+     "<x>_met_reason": str (beside a null <x>_met),
      "outcomes": {"available": True, "window_days": int, "opened": int, "closed": int,
                   "responded": int, "no_response_count": int, "response_unread": int,
                   "open_after_7d": int, "untriaged_after_7d": int, "truncated": bool,
@@ -83,6 +88,7 @@ NO_RESPONSE = "no_response"
 RESPONSE_UNREAD = "response_unread"
 WINDOW_TRUNCATED = "window_truncated"
 OPEN_TRUNCATED = "open_truncated"
+RESPONSE_PENDING = "response_pending"
 METRICS = ("first_response_median_days", "untriaged_after_7d_share", "close_open_ratio")
 _DAY = 86400.0
 
@@ -114,8 +120,11 @@ class BacklogReadyOutcomesBlock(BacklogReadyBlock):
     close_open_ratio: float | None
     close_open_ratio_reason: NotRequired[str]
     first_response_met: bool | None
+    first_response_met_reason: NotRequired[str]
     untriaged_met: bool | None
+    untriaged_met_reason: NotRequired[str]
     close_open_met: bool | None
+    close_open_met_reason: NotRequired[str]
     outcomes: BacklogOutcomesCounts
 
 
@@ -151,6 +160,19 @@ def _unmeasured(code: str) -> dict[str, Any]:
         fields[f"{metric}_reason"] = code
     fields.update(first_response_met=None, untriaged_met=None, close_open_met=None,
                   outcomes={"available": False, "reason": code})
+    return _met_reasons(fields, code)
+
+
+_MET = {"first_response_met": "first_response_median_days", "untriaged_met": "untriaged_after_7d_share",
+        "close_open_met": "close_open_ratio"}
+
+
+def _met_reasons(fields: dict[str, Any], first_response: str) -> dict[str, Any]:
+    """A null ``<x>_met`` gets ``<x>_met_reason``, so the condition names why (#1324): its metric's
+    reason, or ``first_response`` for a median measured but not settled against the threshold."""
+    for met, metric in _MET.items():
+        if fields.get(met) is None:
+            fields[f"{met}_reason"] = fields.get(f"{metric}_reason") or first_response
     return fields
 
 
@@ -220,7 +242,7 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
         "untriaged_after_7d": untriaged_n, "truncated": read.truncated,
         "thresholds_from_config": from_config,
     }
-    return fields
+    return _met_reasons(fields, WINDOW_TRUNCATED if dropped else RESPONSE_UNREAD if unread else RESPONSE_PENDING)
 
 
 def scan_backlog_ready_outcomes(repo_root: Path, backlog_outcomes: OutcomeRead) -> BacklogReadyOutcomesBlock:

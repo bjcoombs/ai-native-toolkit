@@ -60,9 +60,9 @@ Block (``backlog_ready`` in run-context.json)::
      "labels_from_config": bool}
 
 Counts-only output keeps the booleans, the counts and the reason codes; no path, label or text
-from a file leaves the run. The ``backlog-ready`` row is held in a test model
-(``tests/fixtures/backlog_ready/levels.toml``) until #1324 places it, so its signals sit in
-``signal_grades.STAGED_BLOCKS``. Tests: ``tests/test_backlog_ready.py``.
+from a file leaves the run. The ``backlog-ready`` row is in the default model
+(``levels/default.toml``, #1324) as a practice that gates no Step; level 1 is
+``backlog-ready.1``. Tests: ``tests/test_backlog_ready.py``.
 """
 from __future__ import annotations
 

@@ -311,6 +311,185 @@
       ]
     },
     {
+      "id": "backlog-ready",
+      "title": "Backlog kept agent-ready",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "backlog-ready.1",
+          "truth": [
+            "agent_context",
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "config_only",
+          "counts": false,
+          "criteria": [
+            {
+              "key": "backlog-ready.1:backlog_ready.required_form_field",
+              "signal": "backlog_ready.required_form_field",
+              "producer": {
+                "scan": "backlog_ready",
+                "collector": "core.backlog_ready"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "An issue form has a required field, or a GitLab template the six sections: is true",
+              "title": "New issues are asked for structure",
+              "fix": "Commit an issue form under .github/ISSUE_TEMPLATE/ with a body field set to required: true, or a GitLab issue template with the six ready sections.",
+              "why": "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.",
+              "why_source": "",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            },
+            {
+              "key": "backlog-ready.1:backlog_ready.untriaged_on_open",
+              "signal": "backlog_ready.untriaged_on_open",
+              "producer": {
+                "scan": "backlog_ready",
+                "collector": "core.backlog_ready"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A workflow or scheduled GitLab job labels new issues untriaged: is true",
+              "title": "New issues are marked untriaged when they arrive",
+              "fix": "Add a workflow on issues: types: [opened] that adds an untriaged label (gh issue edit --add-label, or a labeler action); on GitLab, include the refinement template or schedule a job that adds one.",
+              "why": "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.",
+              "why_source": "",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            },
+            {
+              "key": "backlog-ready.1:backlog_ready.ready_label_documented",
+              "signal": "backlog_ready.ready_label_documented",
+              "producer": {
+                "scan": "backlog_ready",
+                "collector": "core.backlog_ready"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A ready label is documented with its criteria: is true",
+              "title": "A ready label is documented with its criteria",
+              "fix": "Document the ready label in a Markdown file, the label in backticks, with a list of the criteria an issue must meet under it.",
+              "why": "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.",
+              "why_source": "",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            },
+            {
+              "key": "backlog-ready.1:backlog_ready.stale_job_safe",
+              "signal": "backlog_ready.stale_job_safe",
+              "producer": {
+                "scan": "backlog_ready",
+                "collector": "core.backlog_ready"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "No stale job can close a ready issue: is true",
+              "title": "No stale job can close a ready issue",
+              "fix": "Set exempt-issue-labels on actions/stale to the ready label, or days-before-issue-close: -1, so a ready issue is never closed for age.",
+              "why": "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.",
+              "why_source": "",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "id": "backlog-ready.2",
+          "truth": [
+            "agent_context",
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "verified",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "backlog-ready.2:backlog_ready.first_response_met",
+              "signal": "backlog_ready.first_response_met",
+              "producer": {
+                "scan": "backlog_ready",
+                "collector": "core.backlog_ready"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "The median wait for a first response, unanswered issues included, is within first_response_max_days: is true",
+              "title": "New issues get a first response in time",
+              "fix": "Answer, label or close new issues within first_response_max_days (default 2); set the threshold in [backlog_ready] in .assess/config.toml.",
+              "why": "A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current.",
+              "why_source": "https://chaoss.community/kb/metric-time-to-first-response/",
+              "input_class": "platform",
+              "grade": "verified",
+              "counts": true
+            },
+            {
+              "key": "backlog-ready.2:backlog_ready.untriaged_met",
+              "signal": "backlog_ready.untriaged_met",
+              "producer": {
+                "scan": "backlog_ready",
+                "collector": "core.backlog_ready"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "At most untriaged_max_share of open issues older than 7 days are untriaged: is true",
+              "title": "Open issues do not sit untriaged",
+              "fix": "Triage open issues older than 7 days, so at most untriaged_max_share (default 0.10) carry no label or an untriaged label.",
+              "why": "A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current.",
+              "why_source": "",
+              "input_class": "platform",
+              "grade": "verified",
+              "counts": true
+            },
+            {
+              "key": "backlog-ready.2:backlog_ready.close_open_met",
+              "signal": "backlog_ready.close_open_met",
+              "producer": {
+                "scan": "backlog_ready",
+                "collector": "core.backlog_ready"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "Issues close at least close_open_min_ratio as fast as they open: is true",
+              "title": "Issues close as fast as they open",
+              "fix": "Close or decline issues at least close_open_min_ratio (default 0.9) as fast as they open over window_days.",
+              "why": "A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current.",
+              "why_source": "",
+              "input_class": "platform",
+              "grade": "verified",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "ci-skip-label",
       "title": "A label skips every CI check",
       "scope": "team",
@@ -1947,6 +2126,8 @@
         "agent-consistency.1",
         "agent-consistency.2",
         "agent-rewrites-instructions.1",
+        "backlog-ready.1",
+        "backlog-ready.2",
         "guardrails-stated.1",
         "guardrails-stated.2",
         "layer-0-instructions.1",
@@ -1958,6 +2139,8 @@
         "agent-consistency.1",
         "agent-consistency.2",
         "agent-rewrites-instructions.1",
+        "backlog-ready.1",
+        "backlog-ready.2",
         "guardrails-stated.1",
         "guardrails-stated.2",
         "layer-0-instructions.1",
@@ -1967,6 +2150,8 @@
       ],
       "shared": [
         "agent-rewrites-instructions.1",
+        "backlog-ready.1",
+        "backlog-ready.2",
         "layer-0-instructions.2"
       ],
       "why": "That an agent starts each task knowing how this repository works and how to check its own change.",
@@ -2010,6 +2195,8 @@
       "conditions": [
         "agent-job-write-access.1",
         "agent-least-privilege.1",
+        "backlog-ready.1",
+        "backlog-ready.2",
         "layer-7-review.1",
         "layer-7-review.2",
         "layer-8-agent-ops.1",
@@ -2029,7 +2216,9 @@
       ],
       "shared": [
         "agent-job-write-access.1",
-        "agent-least-privilege.1"
+        "agent-least-privilege.1",
+        "backlog-ready.1",
+        "backlog-ready.2"
       ],
       "why": "That people stay in the loop on what agents change, and that what agents may do is agreed and visible.",
       "why_source": ""
@@ -2083,6 +2272,16 @@
       ],
       "conditions": [
         "agent-rewrites-instructions.1"
+      ]
+    },
+    {
+      "tags": [
+        "agent_context",
+        "governance"
+      ],
+      "conditions": [
+        "backlog-ready.1",
+        "backlog-ready.2"
       ]
     },
     {
@@ -2811,18 +3010,31 @@
       "privacy": {
         "written": true,
         "strings_kept": {
+          "backlog_ready.close_open_met_reason": "token",
           "backlog_ready.close_open_ratio_reason": "token",
           "backlog_ready.first_response_median_days_reason": "token",
+          "backlog_ready.first_response_met_reason": "token",
           "backlog_ready.outcomes.reason": "token",
           "backlog_ready.required_form_field_reason": "token",
           "backlog_ready.stale_job_safe_reason": "token",
           "backlog_ready.untriaged_after_7d_share_reason": "token",
+          "backlog_ready.untriaged_met_reason": "token",
           "backlog_ready.untriaged_on_open_reason": "token"
         }
       },
       "used_by": {
-        "rows": [],
-        "conditions": [],
+        "rows": [
+          "backlog-ready"
+        ],
+        "conditions": [
+          "backlog-ready.1:backlog_ready.required_form_field",
+          "backlog-ready.1:backlog_ready.untriaged_on_open",
+          "backlog-ready.1:backlog_ready.ready_label_documented",
+          "backlog-ready.1:backlog_ready.stale_job_safe",
+          "backlog-ready.2:backlog_ready.first_response_met",
+          "backlog-ready.2:backlog_ready.untriaged_met",
+          "backlog-ready.2:backlog_ready.close_open_met"
+        ],
         "findings": []
       },
       "unknown_reasons": [
@@ -2897,6 +3109,11 @@
           "next_step": "Nothing to change; close or triage old open issues to bring the list under the cap."
         },
         {
+          "code": "response_pending",
+          "means": "The median wait is not settled yet: issues opened recently, not yet answered and younger than first_response_max_days, could put it either side of the threshold.",
+          "next_step": "Nothing to change; the condition settles once those issues are answered or pass the threshold."
+        },
+        {
           "code": "no_response",
           "means": "No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days.",
           "next_step": "Answer, label or close new issues within first_response_max_days."
@@ -2905,16 +3122,6 @@
       "evidence": [
         {
           "signal": "backlog_ready.close_open_met",
-          "input_class": "platform",
-          "grade": "verified"
-        },
-        {
-          "signal": "backlog_ready.close_open_ratio",
-          "input_class": "platform",
-          "grade": "verified"
-        },
-        {
-          "signal": "backlog_ready.first_response_median_days",
           "input_class": "platform",
           "grade": "verified"
         },
@@ -2939,11 +3146,6 @@
           "grade": "config_only"
         },
         {
-          "signal": "backlog_ready.untriaged_after_7d_share",
-          "input_class": "platform",
-          "grade": "verified"
-        },
-        {
           "signal": "backlog_ready.untriaged_met",
           "input_class": "platform",
           "grade": "verified"
@@ -2955,7 +3157,8 @@
         }
       ],
       "grades": [
-        "unclassified"
+        "config_only",
+        "verified"
       ],
       "why": "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.",
       "why_source": ""
@@ -6404,6 +6607,7 @@
         "agent_consistency",
         "agent_environment",
         "agent_ops",
+        "backlog_ready",
         "ci_checks",
         "ci_hazards",
         "ci_model_jobs",
@@ -6995,6 +7199,7 @@
         "agent_consistency",
         "agent_environment",
         "agent_ops",
+        "backlog_ready",
         "ci_checks",
         "ci_hazards",
         "ci_model_jobs",
@@ -7196,25 +7401,7 @@
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "close_open_ratio is not measured; its reason says why"
-    },
-    {
-      "path": "backlog_ready.close_open_ratio",
-      "title": "Issues closed over issues opened in the window of window_days (default 90)",
-      "type": "number",
-      "collector": "core.backlog_ready",
-      "input_class": "platform",
-      "grade": "verified",
       "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window; window_truncated: the window list hit its page cap"
-    },
-    {
-      "path": "backlog_ready.first_response_median_days",
-      "title": "Median days to a first response by a person other than the author (issues opened in the window)",
-      "type": "number",
-      "collector": "core.backlog_ready",
-      "input_class": "platform",
-      "grade": "verified",
-      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response was not read; window_truncated: none read did, the list capped; no_response: none did, all past the threshold"
     },
     {
       "path": "backlog_ready.first_response_met",
@@ -7223,7 +7410,7 @@
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "first_response_median_days is not measured (its reason says why), or issues whose wait is not known yet could tip the median"
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue got a response; response_unread or window_truncated: a response or issue was not read; response_pending: young unanswered issues could tip the median"
     },
     {
       "path": "backlog_ready.ready_label_documented",
@@ -7253,22 +7440,13 @@
       "null_means": "stale_input_unresolved: no stale job closes ready issues for certain, but one sets an input to an expression"
     },
     {
-      "path": "backlog_ready.untriaged_after_7d_share",
-      "title": "Share of open issues older than 7 days with no label or an untriaged label",
-      "type": "number",
-      "collector": "core.backlog_ready",
-      "input_class": "platform",
-      "grade": "verified",
-      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no open issue is older than 7 days; open_truncated: the open-issue list hit its page cap"
-    },
-    {
       "path": "backlog_ready.untriaged_met",
       "title": "At most untriaged_max_share of open issues older than 7 days are untriaged",
       "type": "bool",
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "untriaged_after_7d_share is not measured; its reason says why"
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no open issue is older than 7 days; open_truncated: the open-issue list hit its page cap"
     },
     {
       "path": "backlog_ready.untriaged_on_open",

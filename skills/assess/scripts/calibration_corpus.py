@@ -4,16 +4,21 @@ Run by hand, against local clones of the corpus repositories at their pinned com
 ghsync layout (``<root>/<path>/<repo>/<repo>-main``). The logic is in
 ``lib/fleet/calibration_corpus.py``.
 
-    uv run --locked scripts/calibration_corpus.py diff CLONE_ROOT [--corpus DIR] [--jobs N]
-    uv run --locked scripts/calibration_corpus.py seed CLONE_ROOT [--corpus DIR] [--jobs N]
-    uv run --locked scripts/calibration_corpus.py report [--corpus DIR]
+    uv run --locked scripts/calibration_corpus.py diff CLONE_ROOT [--corpus DIR] [--jobs N] [--platform]
+    uv run --locked scripts/calibration_corpus.py seed CLONE_ROOT [--corpus DIR] [--jobs N] [--platform]
+    uv run --locked scripts/calibration_corpus.py report [--corpus DIR] [--row ROW]
 
 - ``diff`` refuses an expected file with no clone, a clone at another commit and a clone
   that fails to scan; otherwise it prints one line per condition whose state moved, then
   the non-discriminating conditions of the run.
 - ``seed`` writes an expected-state file for every clone under the root, from this
   toolkit's run.
-- ``report`` prints the non-discriminating conditions of the expected files alone.
+- ``report`` prints the non-discriminating conditions of the expected files alone; with
+  ``--row`` (``backlog-ready``, #1324) it first prints how each of that row's conditions falls
+  across the corpus, counts only.
+- ``--platform`` also reads the issue tracker for ``backlog_ready`` (``cc.PLATFORM_READS``)
+  through the fleet platform pass, so level 2 of the backlog-ready row is measured; it needs
+  network and gh or glab signed in. Seed and diff a corpus the same way.
 
 ``diff`` and ``report`` refuse a corpus directory with no expected-state files, and ``seed``
 a clone root with no clones; ``seed`` prints each key it writes.
@@ -25,12 +30,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.fleet import calibration_corpus as cc
-from lib.fleet.runner import ScanFn, discover_root, scan_target
+from lib.fleet.fleet_platform import DEFAULT_PLATFORM_TIMEOUT, run_platform
+from lib.fleet.runner import FleetRow, ScanFn, ScanOptions, Target, discover_root, scan_target
 from lib.scoring.level_tally import default_model
 
 
@@ -42,6 +49,10 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         if name != "report":
             p.add_argument("clone_root", type=Path, help="The ghsync root holding the corpus clones.")
             p.add_argument("--jobs", type=int, default=4, help="Clones scanned at a time (default: %(default)s).")
+            p.add_argument("--platform", action="store_true",
+                           help="Also read the issue tracker for backlog_ready (network, gh or glab).")
+        else:
+            p.add_argument("--row", help="Print how this row's conditions fall across the corpus.")
         p.add_argument("--corpus", type=Path, default=cc.CORPUS_DIR, help="The expected-state files.")
     return parser.parse_args(argv)
 
@@ -51,7 +62,15 @@ def _print(lines: list[str]) -> None:
         print(line)
 
 
-def main(argv: list[str] | None = None, scan: ScanFn = scan_target) -> int:
+def _platform(jobs: int) -> cc.PlatformFn:
+    def read(rows: list[FleetRow], targets: Sequence[Target], options: ScanOptions) -> list[FleetRow]:
+        return run_platform(rows, targets, options, jobs=jobs, timeout=DEFAULT_PLATFORM_TIMEOUT,
+                            names=list(cc.PLATFORM_READS))
+    return read
+
+
+def main(argv: list[str] | None = None, scan: ScanFn = scan_target,
+         platform: cc.PlatformFn | None = None) -> int:
     args = _parse(argv)
     try:
         expected = cc.load_corpus(args.corpus)
@@ -62,19 +81,26 @@ def main(argv: list[str] | None = None, scan: ScanFn = scan_target) -> int:
         print(f"error: no expected-state files in {args.corpus}", file=sys.stderr)
         return 2
     if args.command == "report":
-        _print(cc.discrimination_lines(cc.discrimination({e["repo"]: e["states"] for e in expected})))
+        states = {e["repo"]: e["states"] for e in expected}
+        if args.row:
+            _print(cc.split_lines(cc.row_split(states, args.row), len(states)))
+        _print(cc.discrimination_lines(cc.discrimination(states)))
         return 0
     if not args.clone_root.is_dir():
         print(f"error: {args.clone_root} is not a directory", file=sys.stderr)
         return 2
     targets = discover_root(args.clone_root)
     model = default_model()
+    if args.platform and platform is None:
+        platform = _platform(args.jobs)
+    if not args.platform:
+        platform = None
     if args.command == "seed":
         if not targets:
             print(f"error: no clones under {args.clone_root} (ghsync layout <path>/<repo>/<repo>-main)",
                   file=sys.stderr)
             return 2
-        observed, refused = cc.observe(targets, model, args.jobs, scan)
+        observed, refused = cc.observe(targets, model, args.jobs, scan, platform)
         if refused:
             _print(cc.refusal_lines(refused))
             return 2
@@ -89,7 +115,7 @@ def main(argv: list[str] | None = None, scan: ScanFn = scan_target) -> int:
         return 2
     keys = {e["repo"] for e in expected}
     corpus_targets = [t for t in targets if cc.repo_key(t.repo) in keys]
-    observed, refused = cc.observe(corpus_targets, model, args.jobs, scan)
+    observed, refused = cc.observe(corpus_targets, model, args.jobs, scan, platform)
     if refused:
         _print(cc.refusal_lines(refused))
         return 2

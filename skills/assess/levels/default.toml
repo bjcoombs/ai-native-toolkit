@@ -372,6 +372,16 @@
 #   .mvn/maven.config, a reactor pom, or a script, recipe, action or pom a CI step leads to,
 #   through the shared CI-step follower). With no CI file and no root pom it is unknown
 #   (no_ci_files). Both graded measured (head_structure), read from the committed files.
+# - Backlog kept agent-ready (lib/backlog_ready.py, #1322, and lib/backlog_ready_outcomes.py,
+#   #1323; placed by #1324): level 1 reads the intake configuration committed at HEAD, all of
+#   backlog_ready.required_form_field, untriaged_on_open, ready_label_documented and
+#   stale_job_safe. It is config_text, so it is listed, never counted. Level 2 reads the issue
+#   tracker through the platform pass, all of first_response_met, untriaged_met and
+#   close_open_met against the [backlog_ready] thresholds in .assess/config.toml. It is platform
+#   evidence, graded verified and counted. Both levels are tagged agent_context and governance. Without --platform, or with gh or glab signed out,
+#   level 2 is unknown (no_network, no_platform_auth, unsupported_host), never unmet; a read that
+#   stopped at its page cap is unknown for the metric it would bias (window_truncated,
+#   open_truncated). It gates no Step.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does
@@ -799,6 +809,31 @@ aggregation = "min"
   level = 1
   truth = ["agent_context"]
   criteria = [{ signal = "skill_library.present", op = "eq", value = true }]
+
+[[rows]]
+id = "backlog-ready"
+title = "Backlog kept agent-ready"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["agent_context", "governance"]
+  criteria = [
+    { signal = "backlog_ready.required_form_field", op = "eq", value = true },
+    { signal = "backlog_ready.untriaged_on_open", op = "eq", value = true },
+    { signal = "backlog_ready.ready_label_documented", op = "eq", value = true },
+    { signal = "backlog_ready.stale_job_safe", op = "eq", value = true },
+  ]
+
+  [[rows.levels]]
+  level = 2
+  truth = ["agent_context", "governance"]
+  criteria = [
+    { signal = "backlog_ready.first_response_met", op = "eq", value = true },
+    { signal = "backlog_ready.untriaged_met", op = "eq", value = true },
+    { signal = "backlog_ready.close_open_met", op = "eq", value = true },
+  ]
 
 [[steps]]
 step = 1

@@ -1,14 +1,13 @@
-# Check manifest fragment: the backlog_ready collector and the signals it owns. Layout and
-# merge order: skills/assess/checks/core.toml. The backlog-ready row is held in a test model
-# (tests/fixtures/backlog_ready/levels.toml) until #1324 places it, so this fragment has no
-# condition entries and its block is in signal_grades.STAGED_BLOCKS.
+# Check manifest fragment: the backlog_ready collector and the signals and conditions it owns.
+# Layout and merge order: skills/assess/checks/core.toml. The backlog-ready row is in the default
+# model (levels/default.toml, placed by #1324) as a practice; it gates no Step.
 
 [[entries]]
 id = "core.backlog_ready"
 kind = "collector"
 title = "Backlog kept agent-ready (intake configuration)"
 summary = "How new issues are taken in and answered. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue. The tracker itself is read too: time to a first response, the untriaged share and issues closed over opened."
-issues = [1322, 1406, 1323]
+issues = [1322, 1406, 1323, 1324]
 callable = "lib.backlog_ready_outcomes:scan_backlog_ready_outcomes"
 publishes = ["backlog_ready"]
 reads = ["repo_root", "backlog_outcomes"]
@@ -19,7 +18,7 @@ whys.backlog_ready = "An agent handed an issue with no structure, never triaged 
 shapes = [
   { path = "backlog_ready", type = "lib.backlog_ready_outcomes:BacklogReadyOutcomesBlock" },
 ]
-revision = 4
+revision = 5
 unknown_reasons = [
   { code = "form_unreadable", block = "backlog_ready", means = "No issue form read has a required field, and a GitHub issue form could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.", next_step = "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue." },
   { code = "gitlab_template_unreadable", block = "backlog_ready", means = "No form or template read meets the bar. A GitLab issue template could not be read: it is too large or could not be opened.", next_step = "Nothing to change if the template has the six sections; a GitLab issue template under the size limit lets the scan read its headings." },
@@ -35,6 +34,7 @@ unknown_reasons = [
   { code = "response_unread", block = "backlog_ready", means = "A first response may exist that was not read: a long timeline, the note cap or an unclassified account.", next_step = "Run again with gh or glab signed in as an account that can read users; the caps are fixed." },
   { code = "window_truncated", block = "backlog_ready", means = "The window's issue list passed the read cap, so issues may be missing. The ratio is not taken, nor the median when no issue read was answered.", next_step = "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window." },
   { code = "open_truncated", block = "backlog_ready", means = "The open-issue list passed the read cap, so the untriaged share would cover only part of it and is not taken.", next_step = "Nothing to change; close or triage old open issues to bring the list under the cap." },
+  { code = "response_pending", block = "backlog_ready", means = "The median wait is not settled yet: issues opened recently, not yet answered and younger than first_response_max_days, could put it either side of the threshold.", next_step = "Nothing to change; the condition settles once those issues are answered or pass the threshold." },
   { code = "no_response", block = "backlog_ready", means = "No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days.", next_step = "Answer, label or close new issues within first_response_max_days." },
 ]
   [entries.privacy]
@@ -45,6 +45,9 @@ unknown_reasons = [
   "backlog_ready.untriaged_after_7d_share_reason" = "token"
   "backlog_ready.close_open_ratio_reason" = "token"
   "backlog_ready.outcomes.reason" = "token"
+  "backlog_ready.first_response_met_reason" = "token"
+  "backlog_ready.untriaged_met_reason" = "token"
+  "backlog_ready.close_open_met_reason" = "token"
 
 [[entries]]
 id = "core:backlog_ready.required_form_field"
@@ -86,36 +89,6 @@ evidence = "config_text"
 null_means = "stale_input_unresolved: no stale job closes ready issues for certain, but one sets an input to an expression"
 
 [[entries]]
-id = "core:backlog_ready.first_response_median_days"
-kind = "signal"
-title = "Median days to a first response by a person other than the author (issues opened in the window)"
-collector = "core.backlog_ready"
-path = "backlog_ready.first_response_median_days"
-type = "number"
-evidence = "platform"
-null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response was not read; window_truncated: none read did, the list capped; no_response: none did, all past the threshold"
-
-[[entries]]
-id = "core:backlog_ready.untriaged_after_7d_share"
-kind = "signal"
-title = "Share of open issues older than 7 days with no label or an untriaged label"
-collector = "core.backlog_ready"
-path = "backlog_ready.untriaged_after_7d_share"
-type = "number"
-evidence = "platform"
-null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no open issue is older than 7 days; open_truncated: the open-issue list hit its page cap"
-
-[[entries]]
-id = "core:backlog_ready.close_open_ratio"
-kind = "signal"
-title = "Issues closed over issues opened in the window of window_days (default 90)"
-collector = "core.backlog_ready"
-path = "backlog_ready.close_open_ratio"
-type = "number"
-evidence = "platform"
-null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window; window_truncated: the window list hit its page cap"
-
-[[entries]]
 id = "core:backlog_ready.first_response_met"
 kind = "signal"
 title = "The median wait for a first response, unanswered issues included, is within first_response_max_days"
@@ -123,7 +96,7 @@ collector = "core.backlog_ready"
 path = "backlog_ready.first_response_met"
 type = "bool"
 evidence = "platform"
-null_means = "first_response_median_days is not measured (its reason says why), or issues whose wait is not known yet could tip the median"
+null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue got a response; response_unread or window_truncated: a response or issue was not read; response_pending: young unanswered issues could tip the median"
 
 [[entries]]
 id = "core:backlog_ready.untriaged_met"
@@ -133,7 +106,7 @@ collector = "core.backlog_ready"
 path = "backlog_ready.untriaged_met"
 type = "bool"
 evidence = "platform"
-null_means = "untriaged_after_7d_share is not measured; its reason says why"
+null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no open issue is older than 7 days; open_truncated: the open-issue list hit its page cap"
 
 [[entries]]
 id = "core:backlog_ready.close_open_met"
@@ -143,4 +116,61 @@ collector = "core.backlog_ready"
 path = "backlog_ready.close_open_met"
 type = "bool"
 evidence = "platform"
-null_means = "close_open_ratio is not measured; its reason says why"
+null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window; window_truncated: the window list hit its page cap"
+
+[[entries]]
+id = "core.cond.backlog-ready.1.required_form_field"
+kind = "condition"
+title = "New issues are asked for structure"
+key = "backlog-ready.1:backlog_ready.required_form_field"
+why = "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up."
+fix = "Commit an issue form under .github/ISSUE_TEMPLATE/ with a body field set to required: true, or a GitLab issue template with the six ready sections."
+
+[[entries]]
+id = "core.cond.backlog-ready.1.untriaged_on_open"
+kind = "condition"
+title = "New issues are marked untriaged when they arrive"
+key = "backlog-ready.1:backlog_ready.untriaged_on_open"
+why = "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up."
+fix = "Add a workflow on issues: types: [opened] that adds an untriaged label (gh issue edit --add-label, or a labeler action); on GitLab, include the refinement template or schedule a job that adds one."
+
+[[entries]]
+id = "core.cond.backlog-ready.1.ready_label_documented"
+kind = "condition"
+title = "A ready label is documented with its criteria"
+key = "backlog-ready.1:backlog_ready.ready_label_documented"
+why = "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up."
+fix = "Document the ready label in a Markdown file, the label in backticks, with a list of the criteria an issue must meet under it."
+
+[[entries]]
+id = "core.cond.backlog-ready.1.stale_job_safe"
+kind = "condition"
+title = "No stale job can close a ready issue"
+key = "backlog-ready.1:backlog_ready.stale_job_safe"
+why = "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up."
+fix = "Set exempt-issue-labels on actions/stale to the ready label, or days-before-issue-close: -1, so a ready issue is never closed for age."
+
+[[entries]]
+id = "core.cond.backlog-ready.2.first_response_met"
+kind = "condition"
+title = "New issues get a first response in time"
+key = "backlog-ready.2:backlog_ready.first_response_met"
+why = "A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current."
+why_source = "https://chaoss.community/kb/metric-time-to-first-response/"
+fix = "Answer, label or close new issues within first_response_max_days (default 2); set the threshold in [backlog_ready] in .assess/config.toml."
+
+[[entries]]
+id = "core.cond.backlog-ready.2.untriaged_met"
+kind = "condition"
+title = "Open issues do not sit untriaged"
+key = "backlog-ready.2:backlog_ready.untriaged_met"
+why = "A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current."
+fix = "Triage open issues older than 7 days, so at most untriaged_max_share (default 0.10) carry no label or an untriaged label."
+
+[[entries]]
+id = "core.cond.backlog-ready.2.close_open_met"
+kind = "condition"
+title = "Issues close as fast as they open"
+key = "backlog-ready.2:backlog_ready.close_open_met"
+why = "A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current."
+fix = "Close or decline issues at least close_open_min_ratio (default 0.9) as fast as they open over window_days."

@@ -238,3 +238,48 @@ def test_seed_refuses_a_root_with_no_clones_and_names_each_key_it_writes(
     code, lines = _run(["seed", str(tmp_path / "clones"), "--corpus", str(tmp_path / "c")], capsys)
     keys = sorted(cc.repo_key(f"org/{n}").removeprefix("h:") for n in ("r1", "r2"))
     assert code == 0 and lines[:2] == [f"wrote {k}" for k in keys]
+
+
+# --- the platform pass and the row split (#1324) ---------------------------------------
+
+
+def test_platform_blocks_join_before_the_states_are_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                         capsys: pytest.CaptureFixture[str]) -> None:
+    """Offline, ``c`` reads unmet; the stub platform pass sets it in r1 only, so its states move."""
+    monkeypatch.setattr(cli, "default_model", _model)
+    for name in ("r1", "r2"):
+        _clone(tmp_path / "clones", name, {"a": True, "b": False, "c": False})
+    seen: list[list[str]] = []
+
+    def platform(rows: list[FleetRow], targets: Any, options: ScanOptions) -> list[FleetRow]:
+        seen.append(sorted(r["repo"] for r in rows))
+        assert options.window == cc.WINDOW
+        return [{**r, "scans": {"fake": {**(r["scans"] or {})["fake"], "c": r["repo"] == "org/r1"}}}
+                for r in rows if r["repo"] == "org/r1"]
+
+    out = tmp_path / "c"
+    assert cli.main(["seed", str(tmp_path / "clones"), "--corpus", str(out), "--platform"],
+                    scan=fake_scan, platform=platform) == 0
+    assert seen == [["org/r1", "org/r2"]]
+    states = {e["repo"]: e["states"]["c.1"] for e in cc.load_corpus(out)}
+    assert states == {cc.repo_key("org/r1"): "met", cc.repo_key("org/r2"): "unmet"}
+    capsys.readouterr()
+    # Without --platform the stub is not called, and the diff names the platform-read condition.
+    code, lines = _run(["diff", str(tmp_path / "clones"), "--corpus", str(out)], capsys)
+    assert code == 1 and seen == [["org/r1", "org/r2"]]
+    assert [line for line in lines if " c.1:" in line and not line.startswith("non-")] == [
+        f"{cc.repo_key('org/r1').removeprefix('h:')} c.1: expected met, got unmet"]
+
+
+def test_the_row_split_counts_every_state_of_the_rows_conditions(
+        corpus: tuple[Path, Path, dict[str, Path]], capsys: pytest.CaptureFixture[str]) -> None:
+    states = {"r1": {"x.1": "met", "x.2": "not_measured", "y.1": "met"},
+              "r2": {"x.1": "unmet", "x.2": "met"}, "r3": {"x.1": "unmet"}}
+    split = cc.row_split(states, "x")
+    assert list(split) == ["x.1", "x.2"]
+    assert split["x.1"] == {"met": 1, "unmet": 2, "not_applicable": 0, "not_measured": 0, "declined": 0}
+    assert split["x.2"]["met"] == 1 and split["x.2"]["not_measured"] == 1
+    assert cc.split_lines(split, 3) == ["x.1: met 1, unmet 2 (of 3)", "x.2: met 1, not_measured 1 (of 3)"]
+    _, out, _ = corpus
+    code, lines = _run(["report", "--corpus", str(out), "--row", "b"], capsys)
+    assert code == 0 and lines[0] == "b.1: met 1, unmet 2 (of 3)"

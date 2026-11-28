@@ -254,6 +254,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `backlog_ready.untriaged_after_7d_share_reason` | token |
 | `backlog_ready.close_open_ratio_reason` | token |
 | `backlog_ready.outcomes.reason` | token |
+| `backlog_ready.first_response_met_reason` | token |
+| `backlog_ready.untriaged_met_reason` | token |
+| `backlog_ready.close_open_met_reason` | token |
 
 ## broken_instruction_refs
 

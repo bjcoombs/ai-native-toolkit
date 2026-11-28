@@ -29,8 +29,8 @@ from lib.hosting.gh_cli import GithubRepo
 from lib.hosting.gitlab_cli import GitlabProject
 from lib.hosting.platform_cli import CliResult
 from lib.run import signals
-from lib.scoring.level_signals import criterion_grade, signal_path_validator
-from lib.scoring.levels import MaturityModel, load_levels
+from lib.scoring.level_signals import criterion_grade
+from lib.scoring.levels import MaturityModel
 
 FIXTURES = Path(__file__).parent / "fixtures" / "backlog_ready"
 PLATFORM = FIXTURES / "platform"
@@ -55,7 +55,9 @@ def _repo(tmp_path: Path, config: str | None = None) -> Path:
 
 
 def _model() -> MaturityModel:
-    return load_levels(FIXTURES / "levels.toml", signal_path_validator())
+    """The default model's backlog-ready row alone, with no Steps (placed by #1324)."""
+    model = lt.default_model()
+    return MaturityModel(version=model["version"], rows=[r for r in model["rows"] if r["id"] == "backlog-ready"])
 
 
 def _condition(block: Any, cid: str = L2) -> dict[str, Any]:
@@ -397,6 +399,9 @@ def test_headless_reads_not_measured(tmp_path: Path) -> None:
     assert [block[m] for m in (*METRICS, *MET)] == [None] * 6
     cond = _condition(block)
     assert cond["state"] == "not_measured"
+    # #1324: each null bool names its reason, so the condition reads no_network, not "no value read".
+    assert [block[f"{m}_reason"] for m in MET] == ["no_network"] * 3
+    assert cond["reason"] == "no_network"
     assert _condition(block, "backlog-ready.1")["state"] == "met"
 
 
@@ -411,6 +416,7 @@ def test_empty_window_not_measured(tmp_path: Path, gh: FakeGh) -> None:
     assert [block[f"{m}_reason"] for m in METRICS] == ["empty_window"] * 3
     assert [block[m] for m in MET] == [None, None, None]
     assert _condition(block)["state"] == "not_measured"
+    assert [block[f"{m}_reason"] for m in MET] == ["empty_window"] * 3
 
 
 def test_counts_only_output(tmp_path: Path, gh: FakeGh, glab: FakeGlab,
@@ -656,3 +662,15 @@ def test_no_actor_on_an_issue_whose_author_is_gone_leaves_the_response_unread(tm
     node["timelineItems"]["nodes"] = [{"__typename": "IssueComment", "createdAt": "2026-11-01T06:00:00Z", "author": None}]
     block = _block(_repo(tmp_path))
     assert (block["outcomes"]["responded"], block["outcomes"]["response_unread"]) == (2, 1)
+
+
+def test_a_measured_median_not_settled_names_why() -> None:
+    # #1324: a null first_response_met over a measured median takes the code that left it open.
+    from lib.backlog_ready_outcomes import RESPONSE_PENDING, _met_reasons
+    fields: dict[str, Any] = {"first_response_met": None, "first_response_median_days": 1.5,
+                              "untriaged_met": True, "close_open_met": None, "close_open_ratio": None,
+                              "close_open_ratio_reason": "window_truncated"}
+    out = _met_reasons(fields, RESPONSE_PENDING)
+    assert out["first_response_met_reason"] == "response_pending"
+    assert out["close_open_met_reason"] == "window_truncated"
+    assert "untriaged_met_reason" not in out

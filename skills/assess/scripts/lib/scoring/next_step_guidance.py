@@ -46,6 +46,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypedDict
 
 from lib.scoring.levels import Scalar
+from lib.scoring.next_step_guidance_backlog import BACKLOG_FLAGS, BACKLOG_HINT
 
 # The guardrail deny rule the permissions wording names (#1153); ``/assess --fix`` writes it,
 # with the repository's default branch in place of ``main`` (``lib/starter_templates.py``, #1154).
@@ -567,6 +568,7 @@ _WORDING: dict[str, Wording] = {
         "Agentic Workflows source in `.github/workflows/*.md`, or a file under `.claude/routines/`.",
         "A tracked routine file, or a tracked scheduled or issue or pull request workflow that runs "
         "an agent, directly or through a local reusable workflow."),
+    **{signal: _flag(change, done) for signal, (change, done) in BACKLOG_FLAGS.items()},  # #1324
 }
 _WORDING.update({f"{name}.value": _setting(name) for name in SETTING_NAMES})
 
@@ -734,6 +736,7 @@ _MEASURE_HINTS = {
                      "the fleet run's `--scans` and its `logs/` directory.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
+    "backlog_ready": BACKLOG_HINT,
 }
 _SETTING_HINT = ("ghreport could not read this setting (token scope or provider tier); rerun "
                  "ghreport with access to group settings and pass them to the fleet run with "

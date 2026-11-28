@@ -69,6 +69,26 @@ def test_a_central_permission_rule_gets_its_evidence_line() -> None:
     assert "set centrally" not in measured_section([local], ["agent_ops"])
 
 
+def test_a_truncated_issue_tracker_read_is_stated() -> None:
+    # #1323 criterion 5, placed by #1324: a capped read is said to be partial, with its reasons.
+    whole = _doc(backlog_ready={"available": True, "close_open_ratio": 1.0, "outcomes": {"truncated": False}})
+    window = _doc(backlog_ready={"available": True, "close_open_ratio": None,
+                                 "close_open_ratio_reason": "window_truncated", "outcomes": {"truncated": True}})
+    opened = _doc(backlog_ready={"available": True, "untriaged_after_7d_share": None,
+                                 "untriaged_after_7d_share_reason": "open_truncated",
+                                 "outcomes": {"available": True, "truncated": True}})
+    capped = _doc(backlog_ready={"available": True, "outcomes": {"truncated": True}})
+    text = measured_section([whole, window, opened, capped], ["backlog_ready"])
+    assert ("- `backlog_ready`: the issue tracker read stopped at its page cap in 3 of 4 (open_truncated, "
+            "window_truncated: the metric it would bias is not measured), so its counts cover part of "
+            "the tracker") in text
+    assert not banned_hits(text)
+    assert "- `backlog_ready`: the issue tracker read stopped at its page cap in 1 of 1, so its counts" in \
+        measured_section([capped], ["backlog_ready"])
+    assert "page cap" not in measured_section([whole], ["backlog_ready"])
+    assert "page cap" not in measured_section([_doc(ci_checks={"outcomes": {"truncated": True}})], ["ci_checks"])
+
+
 def test_no_repository_scanned() -> None:
     text = measured_section([])
     assert text.startswith(f"{HEADING}\n\nIn place: the catalog of every check. No repository was scanned")
