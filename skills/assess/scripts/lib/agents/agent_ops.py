@@ -63,7 +63,7 @@ Pure stdlib. ``scan_agent_ops`` never raises (callers wrap in ``_safe`` anyway).
 
 Layer 8 workflow-maturity evidence: scans the repo-observable agent-operations
 guardrails - `.claude/settings.json` / `.claude/settings.local.json` permission
-`allow`/`deny`/`ask` counts, hook events, sandbox config; scripts under
+`allow`/`deny`/`ask` counts (a wildcard allow such as `Bash(*)` is not counted, #1618), hook events, sandbox config; scripts under
 `.claude/hooks/`; routine definitions under `.claude/workflows/` /
 `.claude/routines/`. Summary booleans (`permissions_encoded`, `hooks_present`,
 `routines_present`) credit **git-tracked** evidence only (a hook event counts only when
@@ -320,8 +320,9 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
     (``scan_agent_workflows``), and a ``summary`` of four booleans, each True only on
     **tracked** evidence, plus ``scheduled_agent_workflows`` and ``event_agent_workflows``:
 
-    - ``permissions_encoded``: a tracked settings file carries at least one
-      permission ``allow`` / ``deny`` / ``ask`` entry (``permissions_source``
+    - ``permissions_encoded``: a tracked settings file carries at least one scoped
+      permission ``allow``, or any ``deny`` / ``ask`` entry; a wildcard allow is not
+      counted (#1618) (``permissions_source``
       ``repository``), or a managed source does (``managed``); null with
       ``permissions_encoded_reason`` ``managed_settings_unreadable`` when neither does and
       a managed source could not be read, since a central rule may sit there.
