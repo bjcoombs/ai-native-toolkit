@@ -39,13 +39,13 @@ class YamlError(ValueError):
         self.code = code
 
 
-def _quote_opens(line: str, at: int) -> bool:
+def quote_opens(line: str, at: int) -> bool:
     """A quote at ``at`` starts a quoted scalar: first on the line, or after ``:``/``-``/``,``/``[``/``{``."""
     before = line[:at].rstrip(" ")
     return not before or before[-1] in ":-,[{?"
 
 
-def _strip_comment(line: str) -> str:
+def strip_comment(line: str) -> str:
     """``line`` without its ``#`` comment; a ``#`` inside a quoted scalar is kept."""
     quote = ""
     i = 0
@@ -60,7 +60,7 @@ def _strip_comment(line: str) -> str:
                     i += 2
                     continue
                 quote = ""
-        elif ch in "'\"" and _quote_opens(line, i):
+        elif ch in "'\"" and quote_opens(line, i):
             quote = ch
         elif ch == "#" and (i == 0 or line[i - 1] in " \t"):
             return line[:i].rstrip()
@@ -68,7 +68,7 @@ def _strip_comment(line: str) -> str:
     return line.rstrip()
 
 
-def _quoted_end(text: str) -> int:
+def quoted_end(text: str) -> int:
     """The index just past the quoted scalar ``text`` opens with, or -1 when it does not close."""
     quote = text[0]
     i = 1
@@ -85,14 +85,16 @@ def _quoted_end(text: str) -> int:
     return -1
 
 
-def _split_key(text: str) -> tuple[str, str]:
+def split_key(text: str) -> tuple[str, str]:
     """``(key, value text)`` of a mapping line, or ``YamlError``."""
+    if not text:
+        raise YamlError(UNPARSABLE)
     if text[0] in "?":
         raise YamlError(UNSUPPORTED)
     if text[0] in "{[&*!|>%@`":
         raise YamlError(UNSUPPORTED if text[0] in "{[&*!" else UNPARSABLE)
     if text[0] in "'\"":
-        end = _quoted_end(text)
+        end = quoted_end(text)
         if end < 0:
             raise YamlError(UNPARSABLE)
         key, rest = text[1:end - 1], text[end:].lstrip(" ")
@@ -126,7 +128,7 @@ def _value(value: str) -> str | None:
         if value.count(value[0]) != value.count("]" if value[0] == "[" else "}"):
             raise YamlError(UNSUPPORTED)
         return OPAQUE
-    if value[0] in "'\"" and _quoted_end(value) < 0:
+    if value[0] in "'\"" and quoted_end(value) < 0:
         raise YamlError(UNSUPPORTED)
     return LEAF
 
@@ -134,7 +136,7 @@ def _value(value: str) -> str | None:
 def _is_key_line(text: str) -> bool:
     """A line that opens a mapping key (``key:`` or ``key: value``), as opposed to scalar text."""
     try:
-        _split_key(text)
+        split_key(text)
     except YamlError:
         return False
     return True
@@ -151,7 +153,7 @@ class _Reader:
     """One pass over a document's lines, building the key tree."""
 
     def __init__(self, text: str) -> None:
-        self.lines = [_strip_comment(raw) for raw in text.lstrip("\ufeff").splitlines()]
+        self.lines = [strip_comment(raw) for raw in text.lstrip("\ufeff").splitlines()]
         self.root: dict[str, Node] = {}
         self.stack: list[tuple[int, dict[str, Node]]] = []
         self.pending: tuple[int, dict[str, Node], str] | None = None  # a key with an empty value
@@ -216,7 +218,7 @@ class _Reader:
         return True
 
     def key_line(self, indent: int, text: str) -> None:
-        key, value = _split_key(text)
+        key, value = split_key(text)
         node = _value(value)
         mapping = self.stack[-1][1]
         self.scalar_indent = -1
