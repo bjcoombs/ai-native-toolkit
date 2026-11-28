@@ -469,6 +469,8 @@ def test_an_inline_apidiff_test_that_cannot_fail_on_a_break_does_not_count(tmp_p
     "apidiff -incompatible old new > out.txt; if [ $(wc -l < out.txt) -gt 0 ]; then exit 1; fi",
     "apidiff -incompatible old new > out.txt; ! grep -q . out.txt || exit 1",
     "apidiff -incompatible old new > out.txt; if [ $(wc -l < out.txt) -gt 5 ]; then exit 1; fi",   # red on a large break
+    "apidiff -incompatible old new > out.txt; if [ -s out.txt ]; then { exit 1; }; fi",
+    'if [ -n "$(apidiff -incompatible old new)" ]; then { exit 1; }; fi',
 ])
 def test_a_one_line_apidiff_output_check_counts(tmp_path: Path, line: str) -> None:
     root = _repo(tmp_path, {WF: _workflow(line)})

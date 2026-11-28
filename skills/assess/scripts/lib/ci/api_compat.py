@@ -217,8 +217,8 @@ def _rest(text: str, words: list[str]) -> list[str]:
 def _reraises(words: list[str], held: frozenset[str] = frozenset()) -> bool:
     """A command that ends its script red: ``exit`` or ``return`` with a non-zero literal or a
     variable other than ``$?`` or one ``held`` (assigned ``$?``), or ``false``, as the command itself
-    (after a ``then``, ``else`` or ``do``), never an argument (``echo false``, ``echo exit 1``)."""
-    head = list(dropwhile(lambda w: w in ("then", "else", "do"), words))
+    (after a ``then``, ``else``, ``do`` or ``{``), never an argument (``echo false``, ``echo exit 1``)."""
+    head = list(dropwhile(lambda w: w in ("then", "else", "do", "{"), words))
     code = head[1].strip('"') if len(head) > 1 else ""
     zero = code in ("", "0", "$?") or code.strip("${}") in held   # ``$?`` after apidiff is its 0
     return (head[:1] in (["exit"], ["return"]) and not zero) or head[:1] == ["false"]
