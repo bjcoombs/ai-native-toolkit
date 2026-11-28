@@ -110,6 +110,7 @@ from lib.skill_personal_data import scan_skill_personal_data
 from lib.skill_library import scan_skill_library
 from lib.ci.ci_model_jobs import scan_ci_model_jobs
 from lib.ci.ci_hazards import scan_ci_hazards
+from lib.ci.repo_guards import guards_or_unknown
 from lib.ai_governance import scan_ai_governance
 from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
 from lib.pack_checks import collect as collect_packs
@@ -561,6 +562,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # model-ci-gated row.
     _spec("ci_model_jobs", scan_ci_model_jobs),
     _spec("ci_hazards", scan_ci_hazards),
+    # Ratchets and repo-owned guards (issue #854): lint baselines, boundary checkers and file-size
+    # caps CI runs, and whether each guard script has its own tests. Feeds the repo-guards and
+    # repo-guard-tested rows.
+    _spec("repo_guards", guards_or_unknown),
     # AI governance (issue #851): an AI disclosure a pull request workflow enforces, a policy
     # only declared, and Copilot review opt-outs. Feeds the ai-policy-enforced and
     # ai-policy-declared rows.

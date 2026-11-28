@@ -45,6 +45,9 @@ path lies in a subtree a check ``covers`` gets ``kept_true_by`` (the check's ``k
 ``path``) and reads fresh (``lib.docs.doc_complexity_join.is_stale``), and the summary is
 recomputed.
 
+The line splitting, wrapper reading, install test and job bodies live in
+``lib.ci.ci_job_commands``, shared with the repo-guards reader (#854).
+
 Full reference: lib/docs/docs_kept_true.md.
 
 Inward-only imports; never an orchestrator. Tests: ``tests/test_docs_kept_true.py``.
@@ -54,82 +57,30 @@ from __future__ import annotations
 import posixpath
 import re
 from fnmatch import fnmatch
-from collections.abc import Iterator
 from pathlib import Path
-from typing import TypedDict
 
-from lib.ci.check_command import WRAPPER_FLAGS, is_check_command, is_lint_command
+from lib.ci.check_command import is_check_command, is_lint_command
 from lib.ci.ci_action_inputs import ReadLocal
 from lib.ci.ci_kept_types import DocsKeptTrueBlock, KeptCheck, KeptKind, KeptTrueBy
-from lib.ci.ci_masking import IndentTree, mask_lines, parse_lines
+from lib.ci.ci_job_commands import commands as _commands
+from lib.ci.ci_job_commands import installs as _installs
+from lib.ci.ci_job_commands import job_lines as _job_lines
+from lib.ci.ci_job_commands import program as _program
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader, script_path
 from lib.docs.doc_staleness import DocStalenessBlock, staleness_summary
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
-from lib.instructions.command_resolver import command_words
 from lib.unread_ci import unread_ci_paths
 
 REASON_CI_NOT_READ = "ci_not_read"
 REASON_SCAN_FAILED = "scan_failed"
 PYTEST_CONFIGS = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
 _MAX_FOLLOW = 3
-_OPERATOR = re.compile(r"(&&|\|\||;|\|)")
-_RERAISE = re.compile(r"(?:^|[;{(]|&&|\|\|)\s*(?:exit\s+(?:[1-9]\d*|\"?\$)|false\b)")
 _VERIFY = re.compile(r"^(?P<dir>(?:.*/)?)verify-(?P<name>[\w.-]+)$")
 _NOT_REGEN = frozenset({"git", "echo", "printf", "cd", "pushd", "popd", "ls", "cat", "pwd", "mkdir",
                         "set", "export", "true", ":", "test", "[", "exit", "apt-get", "apt", "brew"})
-_GITHUB_BODY = frozenset({"run"})   # a github-script ``with: script:`` is JavaScript, not shell
-_GITLAB_BODY = frozenset({"script", "before_script"})  # GitLab ignores after_script failures
 _INCLUDE = re.compile(r"^include\s*:", re.M)
 _DOCTEST_RUNNERS = frozenset({"mdtest", "phmdoctest", "byexample"})
-_WRAPPERS = frozenset({"uv", "poetry", "pdm", "hatch", "pipenv", "rye", "python", "python3", "run", "exec",
-                       "uvx", "pipx", "npx", "bunx"})
-
-
-class _Cmd(TypedDict):
-    words: list[str]
-    masked: bool  # a ``||`` fallback that does not re-raise follows it
-
-
-def _commands(text: str) -> Iterator[_Cmd]:
-    """Each command of one shell line, with whether a passing ``||`` fallback follows it."""
-    parts = _OPERATOR.split(text)
-    for i in range(0, len(parts), 2):
-        words = command_words(parts[i].strip().strip("(){} "))
-        if not words:
-            continue
-        rest = parts[i + 1:]
-        masked = bool(rest) and rest[0] == "||" and not _RERAISE.search(_fallback(rest[1:]) + " ")
-        yield _Cmd(words=words, masked=masked)
-
-
-def _fallback(rest: list[str]) -> str:
-    """The ``||`` fallback's text: up to the next ``;`` or ``&&``, braces kept together."""
-    out: list[str] = []
-    depth = 0
-    for part in rest:
-        if part in (";", "&&") and depth <= 0:
-            break
-        depth += part.count("{") + part.count("(") - part.count("}") - part.count(")")
-        out.append(part)
-    return " ".join(out)
-
-
-def _program(words: list[str]) -> list[str]:
-    """``words`` from the program a wrapper runs (``uv run pytest`` reads ``pytest``), the
-    wrapper's own options skipped (#1589: ``uv run --locked pytest``, ``npx --yes mdtest``,
-    ``uv run --with x -- pytest``). An option is skipped only after a wrapper word, so a
-    program's own flags are kept; a valued option with no program after it leaves nothing."""
-    i = 0
-    while i < len(words) - 1:
-        word = words[i]
-        if word in _WRAPPERS or word == "-m":
-            i += 1
-        elif i and word.startswith("-"):
-            i += 2 if word in WRAPPER_FLAGS else 1
-        else:
-            break
-    return words[i:]
 
 
 def _named_paths(args: list[str], tracked: frozenset[str]) -> list[str]:
@@ -203,13 +154,6 @@ def _regenerates(words: list[str]) -> bool:
             and not is_check_command(text) and not is_lint_command(text))
 
 
-def _installs(words: list[str]) -> bool:
-    """An install or dependency sync (``pip install``, ``python -m pip install``, ``uv sync``, ``npm ci``)."""
-    prog = _program(words)
-    return ("install" in words[:3] or "install" in prog[:3] or words[:2] == ["npm", "ci"]
-            or (words[0] in ("uv", "poetry", "pdm", "rye") and prog[:1] == ["sync"]))
-
-
 class _Reader:
     def __init__(self, repo: Path, tracked: frozenset[str]) -> None:
         self.tracked = tracked
@@ -265,21 +209,6 @@ class _Reader:
 def _config_doctest(text: str) -> bool:
     """A pytest configuration that adds a ``--doctest-`` flag (comments skipped)."""
     return any("--doctest-" in line.split("#", 1)[0] for line in text.splitlines())
-
-
-def _job_lines(text: str, gitlab: bool) -> list[list[str]]:
-    """Each job's unmasked shell lines in order (GitHub ``jobs.<id>``, GitLab top-level keys):
-    a GitHub ``run:`` body, or a GitLab ``script:`` or ``before_script:`` body. GitLab ignores
-    an ``after_script:`` failure when it sets the job status, so that body is not read."""
-    keys = _GITLAB_BODY if gitlab else _GITHUB_BODY
-    lines = text.splitlines()
-    unmasked, _unsure = mask_lines(text)
-    tree = IndentTree(parse_lines(lines))
-    spans: dict[int, list[str]] = {}
-    for i, line in enumerate(unmasked):
-        if line.strip() and tree.lines[tree.body(i)].key in keys:
-            spans.setdefault(tree.job(i).start, []).append(line)
-    return list(spans.values())
 
 
 def scan_docs_kept_true(repo_root: Path) -> DocsKeptTrueBlock:

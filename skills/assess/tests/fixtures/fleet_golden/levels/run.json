@@ -313,6 +313,10 @@
       "revision": 1
     },
     {
+      "id": "core.repo_guards",
+      "revision": 1
+    },
+    {
       "id": "core.review_automation",
       "revision": 3
     },
