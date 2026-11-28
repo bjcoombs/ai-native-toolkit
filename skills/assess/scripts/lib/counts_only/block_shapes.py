@@ -252,6 +252,15 @@ class ReviewRealityBlock(TypedDict):
     # GitHub only (#856): merges go through a queue, from the rules or the committed queue.
     merge_queue: NotRequired[bool | None]
     merge_queue_source: NotRequired[str | None]
+    # Approval integrity (#1664, lib/hosting/approval_integrity.py): counts of sampled
+    # changes; absent in blocks written before it. Null when an unknown account decides.
+    independent_approval_count: NotRequired[int | None]
+    no_independent_approval_count: NotRequired[int | None]
+    bot_only_approval_count: NotRequired[int | None]
+    stale_approval_count: NotRequired[int | None]  # always null on GitLab
+    approved_after_merge_count: NotRequired[int | None]
+    self_merged_unapproved_count: NotRequired[int | None]
+    bot_authored_count: NotRequired[int | None]
 
 
 # -- structure_drift -------------------------------------------------------------
