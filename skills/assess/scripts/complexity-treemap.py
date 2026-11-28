@@ -60,8 +60,8 @@ Lighthouse, ZAP, *.jsonl under a nested fixtures/) and SVG images, which scc
 scores as XML (#1232), are filtered by default
 so compiled bundles and protoc-emitted bindings don't dominate the "most
 complex" lists with code nobody wrote by hand. If a single remaining file
-still holds >30% of total LOC, a warning prints to stderr suggesting it
-might be a build artifact that needs .gitignore; if the 5 largest files are
+still holds >30% of total LOC, a warning prints to stderr naming it dominant,
+and a likely build artifact only on content evidence; if the 5 largest files are
 all scc-scored data files with complexity 0, a hint names
 .assess/config.toml as the place to exclude them. Pass --include-artifacts
 to disable the filter entirely.
@@ -98,7 +98,7 @@ from lib.assess_config import resolve_excludes
 from lib.class_sizes import loc_by_class
 from lib.plugin_version import read_version
 from lib.complexity.dart_complexity import BACKEND_NAME as DART_BACKEND, dart_function_scores
-from lib.complexity.generated_files import GENERATED_NAME_PATTERNS, generated_reason
+from lib.complexity.generated_files import GENERATED_NAME_PATTERNS, artifact_evidence, generated_reason
 from lib.history.git_churn import churn_is_degenerate, git_churn_scores, pick_churn_window, rename_paths
 from lib.run.run_scope import Scope, resolve_scope
 from lib.run_context_types import (
@@ -505,12 +505,12 @@ DOMINANCE_WARN_THRESHOLD = 0.30  # one file >30% of total LOC = suspicious
 def _warn_if_dominated_by_one_file(
     files: list[tuple[Path, int, float, str]],
 ) -> None:
-    """If a single file is >30% of total LOC, flag it as likely-build-artifact.
+    """If a single file is >30% of total LOC, report it as dominant.
 
-    Compiled bundles (main.dart.js, *.min.js) that slip past the filter
-    skew every percentile and dominate the treemap. The size signal alone
-    is enough to flag suspects - human-written codebases rarely have one
-    file holding a third of the LOC.
+    It is called a likely build artifact only when ``artifact_evidence`` finds
+    a content signal (sourcemap, bundler banner, generator header, long
+    lines). Size alone is not evidence: a hand-written browser content script
+    can hold a third of a small extension (#1491).
     """
     if len(files) < 2:
         return
@@ -526,15 +526,14 @@ def _warn_if_dominated_by_one_file(
     share = biggest[1] / total_loc
     if share < DOMINANCE_WARN_THRESHOLD:
         return
-    print(
-        f"warning: one file holds {share:.0%} of scoreable LOC "
-        f"({biggest[1]:,} of {total_loc:,}).\n"
-        f"         {biggest[0].name} - looks like a build artifact or "
-        f"generated file.\n"
-        f"         If so, add it to .gitignore and re-run. To score it "
-        f"anyway, pass --include-artifacts.",
-        file=sys.stderr,
-    )
+    evidence = artifact_evidence(biggest[0])
+    detail = (f"likely a build artifact ({evidence}).\n         If so, add it to "
+              ".gitignore and re-run." if evidence else
+              "dominant, with no content evidence of build output.\n"
+              "         Report it as a concentration of code in one file.")
+    print(f"warning: one file holds {share:.0%} of scoreable LOC "
+          f"({biggest[1]:,} of {total_loc:,}).\n"
+          f"         {biggest[0].name} is {detail}", file=sys.stderr)
 
 
 SCC_ONLY_HINT_TOP_N = 5  # the largest blocks a reader sees first

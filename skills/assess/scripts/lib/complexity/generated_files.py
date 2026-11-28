@@ -28,7 +28,11 @@ in the stats file's `excluded_generated`, which `assess_core` copies into `run-c
 for the report and gate to disclose. `GENERATED_NAME_PATTERNS` (`*.generated.*`, `*.gen.ts`,
 `database.types.ts`) is the shared list of generated-name globs: the treemap adds it to its filename
 excludes, and `assess_core` calls `matches_generated_name` so a file those globs newly exclude is never
-recorded as a graduated hotspot. Pure stdlib; an unreadable file is never excluded.
+recorded as a graduated hotspot. `artifact_evidence` is the treemap dominance warning's test for
+calling a file a likely build artifact: the two reasons above, `sourcemap` (a `sourceMappingURL`
+comment near the end or a sibling `<name>.map`) or `bundler-banner` (webpack or Parcel bootstrap in
+the first 5 lines); None means the file is only large (#1491). Pure stdlib; an unreadable file is
+never excluded.
 """
 from __future__ import annotations
 
@@ -173,4 +177,61 @@ def generated_reason(path: Path) -> str | None:
         return REASON_HEADER
     if is_long_line_artifact(path):
         return REASON_LONG_LINES
+    return None
+
+
+# Content evidence that a scored file is build output, read by the treemap's
+# dominance warning (#1491). Size alone is not evidence: a hand-written browser
+# content script can hold a third of a small extension's LOC.
+REASON_SOURCEMAP = "sourcemap"
+REASON_BUNDLER_BANNER = "bundler-banner"
+
+# The sourcemap directive sits on a comment line at the end of the file.
+_SOURCEMAP_COMMENT = re.compile(
+    rb"^\s*(//[#@]|/\*[#@])\s*sourceMappingURL=", re.MULTILINE)
+_SOURCEMAP_TAIL_BYTES = 4096
+# Bootstrap code webpack and Parcel emit near the top of a bundle.
+_BUNDLER_MARKERS = re.compile(
+    r"webpackBootstrap|__webpack_require__|__webpack_modules__|parcelRequire")
+
+
+def _has_sourcemap(path: Path) -> bool:
+    if path.with_name(path.name + ".map").is_file():
+        return True
+    try:
+        with path.open("rb") as fh:
+            size = fh.seek(0, 2)
+            fh.seek(max(0, size - _SOURCEMAP_TAIL_BYTES))
+            tail = fh.read()
+    except OSError:
+        return False
+    return _SOURCEMAP_COMMENT.search(tail) is not None
+
+
+def _has_bundler_banner(path: Path, lines: int = HEADER_SNIFF_LINES) -> bool:
+    try:
+        with path.open("rb") as fh:
+            head = [fh.readline(_HEADER_READ_BYTES) for _ in range(lines)]
+    except OSError:
+        return False
+    text = b"".join(head).decode("utf-8", errors="ignore")
+    return _BUNDLER_MARKERS.search(text) is not None
+
+
+def artifact_evidence(path: Path) -> str | None:
+    """The content signal that marks ``path`` as build output, or None.
+
+    ``generated-header`` or ``long-lines`` (the filter's own reasons, seen when
+    ``--include-artifacts`` scores such a file), ``sourcemap`` (a
+    ``sourceMappingURL`` comment in the last 4 KB or a sibling ``<name>.map``),
+    or ``bundler-banner`` (webpack or Parcel bootstrap code in the first 5
+    lines). None means no content evidence, so a large file is only dominant.
+    """
+    reason = generated_reason(path)
+    if reason is not None:
+        return reason
+    if _has_sourcemap(path):
+        return REASON_SOURCEMAP
+    if _has_bundler_banner(path):
+        return REASON_BUNDLER_BANNER
     return None
