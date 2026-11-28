@@ -101,6 +101,15 @@ def test_a_run_that_cannot_stop_the_job_is_declared_not_counted(tmp_path: Path, 
     assert (block["runs"], block["declared"], block["present"]) == ([], [{"path": WF, "tool": tool}], False)
 
 
+@pytest.mark.parametrize("body", [
+    "#!/bin/sh\napidiff -incompatible old new | grep -q . && exit 1\n",          # its pipe decides
+    "#!/bin/sh\napidiff -incompatible old new > out.txt\ntest ! -s out.txt || exit 1\n",
+])
+def test_an_apidiff_output_check_in_a_followed_script_counts(tmp_path: Path, body: str) -> None:
+    root = _repo(tmp_path, {"hack/api.sh": body, WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
 def test_an_apidiff_run_checked_by_its_job_counts(tmp_path: Path) -> None:
     wf = _workflow(extra="      - run: |\n          apidiff -incompatible old new > out.txt\n"
                          "          if [ -s out.txt ]; then exit 1; fi\n")
@@ -330,9 +339,12 @@ def test_a_gradle_japicmp_task_counts_only_when_it_fails_on_modification(tmp_pat
     ("apidiff old new || exit 1",),                             # apidiff exits 0, so its fallback never runs
     ("apidiff old new || { echo broke; exit 1; }",),            # nor does a grouped fallback
     ("apidiff old new; rc=$?; exit $rc",),                      # rc holds apidiff's 0
+    ("apidiff old new > report.txt", "test -f other || exit 1"),  # the exit reads nothing apidiff wrote
 ])
 def test_an_exit_that_cannot_react_to_apidiff_does_not_count(tmp_path: Path, runs: tuple[str, ...]) -> None:
-    assert _block(_repo(tmp_path, {WF: _workflow(*runs)}))["runs"] == []
+    body = "      - run: |\n" + "".join(f"          {r}\n" for r in runs)   # one step, one shell
+    for wf in (_workflow(*runs), _workflow(extra=body)):
+        assert _block(_repo(tmp_path, {WF: wf}))["runs"] == []
 
 
 def test_a_kotlin_dsl_japicmp_fail_setting_counts(tmp_path: Path) -> None:

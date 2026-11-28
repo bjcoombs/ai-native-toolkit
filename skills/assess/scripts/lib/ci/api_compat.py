@@ -79,8 +79,9 @@ _GITHUB_BODY = frozenset({"run"})
 _GITLAB_BODY = frozenset({"script", "before_script"})
 _GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
 _INCLUDE = re.compile(r"^include\s*:", re.M)
+_OUTPUT_FILE = re.compile(r"(?:\d?>>?|\btee(?:\s+-a)?)\s*([\w./-]+)")
 _STATUS_VAR = re.compile(r"(?<![\w$])(\w+)=\$\?")
-_CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?\w+=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
+_CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?(\w+)=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
 # The japicmp settings that make a breaking change stop the build: the Maven plugin's
 # ``breakBuildOn*`` / ``breakBuildBasedOnSemanticVersioning`` and the Gradle task's ``failOn*``.
 _JAPICMP_SETTING = r"(?:breakBuild(?:On|Based)\w*|failOn(?:Modification|SourceIncompatibility|BinaryIncompatibility))"
@@ -165,7 +166,7 @@ def _shell(line: str) -> str:
     the command it runs."""
     text = ci_line_text(line)
     capture = _CAPTURE.match(text)
-    return capture.group(1) if capture else text
+    return capture.group(2) if capture else text
 
 
 def _after(text: str, words: list[str]) -> list[list[str]]:
@@ -198,17 +199,42 @@ def _reraises(words: list[str], held: frozenset[str] = frozenset()) -> bool:
     return False
 
 
+def _output_refs(line: str) -> list[str]:
+    """How later lines can name what apidiff wrote: the variable a whole-line capture assigns
+    (``out=$(apidiff a b)`` gives ``$out``) and the files it is redirected or tee'd to."""
+    text = ci_line_text(line)
+    capture = _CAPTURE.match(text)
+    refs = [f"${capture.group(1)}", f"${{{capture.group(1)}}}"] if capture else []
+    tail = text[text.find("apidiff"):]
+    return refs + [m.group(1) for m in _OUTPUT_FILE.finditer(tail)]
+
+
+def _checks_output(words: list[str], unit: list[str]) -> bool:
+    """Whether apidiff's output decides a re-raise: a later command on its own line that reads its
+    pipe (``apidiff a b | grep -q . && exit 1``), or a later line of the same shell that names its
+    captured variable or output file and re-raises (``if [ -s out.txt ]; then exit 1; fi``). An
+    ``exit 1`` that reads nothing apidiff wrote is not its check."""
+    if not unit:
+        return False
+    held = frozenset(_STATUS_VAR.findall("\n".join(unit)))   # ``rc=$?`` holds apidiff's 0
+    first = _shell(unit[0])
+    piped = re.search(r"apidiff[^|;&]*\|(?!\|)", first) is not None
+    if piped and any(_reraises(w, held) for w in _after(first, words)):
+        return True
+    refs = _output_refs(unit[0])
+    return any(any(r in ci_line_text(line) for r in refs) and any(_reraises(c["words"], held)
+                                                               for c in _commands(_shell(line)))
+               for line in unit[1:])
+
+
 def can_stop(tool: str, words: list[str], unit: list[str]) -> bool:
     """Whether a run of ``tool`` can turn its job red. ``apidiff`` exits 0 on an incompatible
-    change, so it counts only when ``unit`` re-raises (``exit 1``, ``exit $rc``, ``false``):
-    the lines from the apidiff call to the end of its shell (a GitHub step, a GitLab job's
-    script, a followed script or recipe). The japicmp CLI exits 0 unless an ``--error-on-*``
+    change, so it counts only when its output decides a re-raise later in ``unit``, the lines
+    from the call to the end of its shell (a GitHub step, a GitLab job's script, a followed
+    script or recipe): ``_checks_output``. The japicmp CLI exits 0 unless an ``--error-on-*``
     flag is passed. Every other tool exits non-zero on a breaking change by default."""
     if tool == "apidiff":
-        held = frozenset(_STATUS_VAR.findall("\n".join(unit)))   # ``rc=$?`` holds apidiff's 0
-        first = _after(_shell(unit[0]), words) if unit else []
-        return any(_reraises(w, held) for w in first) or any(
-            _reraises(c["words"], held) for line in unit[1:] for c in _commands(_shell(line)))
+        return _checks_output(words, unit)
     if tool == "japicmp":
         return any(w.startswith("--error-on-") for w in words)
     return True
@@ -248,14 +274,18 @@ class _Reader:
         self.unsettled = False
         self.report_only: set[str] = set()   # tools run in a form that cannot stop the job
 
-    def lines(self, lines: list[str], depth: int = 0, path: tuple[str, ...] = ()) -> set[str]:
-        """The tools the shell ``lines`` run, followed into the repository."""
+    def lines(self, lines: list[str], depth: int = 0, path: tuple[str, ...] = (),
+              raw: list[str] | None = None) -> set[str]:
+        """The tools the shell ``lines`` run, followed into the repository. ``raw`` holds the same
+        lines before masking (a CI file's), which apidiff's output check reads: masking drops an
+        ``if`` condition such as ``[ -s out.txt ]`` that names the output."""
         found: set[str] = set()
+        raw = raw if raw is not None else lines
         for index, line in enumerate(lines):
             commands = list(_commands(_shell(line)))
             for cmd in commands:
                 tool = tool_of(cmd["words"]) if not cmd["masked"] else None
-                if tool is not None and can_stop(tool, cmd["words"], lines[index:]):
+                if tool is not None and can_stop(tool, cmd["words"], raw[index:]):
                     found.add(tool)
                 elif tool is not None:
                     self.report_only.add(tool)
@@ -322,9 +352,10 @@ def _gitlab_jobs(tree: IndentTree) -> tuple[set[int], set[int]]:
     return running, untaken
 
 
-def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], list[str], set[str]]:
+def _job_lines(text: str, gitlab: bool) -> tuple[list[tuple[list[str], list[str]]], list[str], list[str], set[str]]:
     """``(shells, untaken, unsure, actions)``: the unmasked lines of each shell that runs (a GitHub
-    ``run:`` step, a running GitLab job's ``before_script:`` and ``script:``), the lines of
+    ``run:`` step, a running GitLab job's ``before_script:`` and ``script:``) beside the same
+    lines as written, the lines of
     GitLab hidden jobs nothing extends, the lines whose exit status the step may hide
     (``ci_unsure``), and the tools of the ``ACTIONS`` an unmasked GitHub step ``uses:``."""
     keys = _GITLAB_BODY if gitlab else _GITHUB_BODY
@@ -333,6 +364,7 @@ def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], lis
     tree = IndentTree(parse_lines(lines))
     running, untaken = _gitlab_jobs(tree) if gitlab else (set(), set())
     spans: dict[int, list[str]] = {}
+    raws: dict[int, list[str]] = {}
     hidden: list[str] = []
     doubt: list[str] = []
     actions: set[str] = set()
@@ -349,9 +381,10 @@ def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], lis
         elif not gitlab or start in running:
             if line.strip():
                 spans.setdefault(shell, []).append(line)
+                raws.setdefault(shell, []).append(lines[i])
             if unsure[i].strip():
                 doubt.append(unsure[i])
-    return list(spans.values()), hidden, doubt, actions
+    return [(spans[k], raws[k]) for k in spans], hidden, doubt, actions
 
 
 def _declared(tracked: frozenset[str], read_local: ReadLocal, ci_files: frozenset[str]) -> dict[str, list[str]]:
@@ -440,8 +473,8 @@ def scan_api_compat(repo_root: Path, ci_checks: Mapping[str, object] | None = No
         jobs, hidden, doubt, actions = _job_lines(text, gitlab)
         reader.report_only = set()
         tools = set(actions)
-        for lines in jobs:
-            tools |= reader.lines(lines)
+        for lines, raw_lines in jobs:
+            tools |= reader.lines(lines, raw=raw_lines)
         for tool in sorted(tools):
             runs[(rel, tool)] = None
         for tool in sorted(reader.report_only - tools):
