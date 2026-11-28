@@ -405,6 +405,7 @@ def test_a_javascript_act_inside_a_callback_belongs_to_the_callback() -> None:
 
 @pytest.mark.parametrize(("runner", "language"), [
     ("/bin/bash -e {0}", SHELL), ("/usr/bin/sh {0}", SHELL), ("/usr/bin/python3 {0}", PYTHON), ("bash", SHELL),
+    ("/usr/bin/env bash {0}", SHELL), ("env python3 {0}", PYTHON),
 ])
 def test_a_shell_given_as_a_path_is_matched_by_its_program(runner: str, language: str) -> None:
     assert step_units(f"shell: {runner}\nrun: exit 1\n") == [Unit(language, "exit 1")]
@@ -419,6 +420,8 @@ def test_a_check_under_a_shell_path_meets_it() -> None:
     ('import os\nif "Assisted-by" not in body: os.system(f"gh pr edit {pr} --add-label needs-ai")\n', {LABEL}),
     ('import subprocess\nif "AI" in body: subprocess.run(f"gh pr edit {n} --add-label ai", shell=True)\n', {LABEL}),
     ('import subprocess\nif "AI" in body: subprocess.run(["gh", "pr", "edit", f"{n}", "--add-label", "ai"])\n', {LABEL}),
+    ('import os\nif "AI" in body: os.system(f"gh pr edit {pr} --add-label={label}")\n', {LABEL}),
+    ('import os\nif "AI" in body: os.system("gh pr edit 1 --add-label=ai")\n', {LABEL}),
     ('import os\nif "AI" in body: os.system(f"echo gh pr edit {pr} --add-label ai")\n', set()),
     ('import os\nif "AI" in body: os.system(f"gh pr edit {flag} ai")\n', set()),
     ('import os\nif "AI" in body: os.system(f"{tool} pr edit --add-label ai")\n', set()),

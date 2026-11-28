@@ -2,7 +2,8 @@
 
 ``step_units(text)`` splits a GitHub Actions step into the code it runs, each a ``Unit`` with
 its language: a ``run:`` value (shell, Python under ``shell: python`` or Ruby under ``shell: ruby``,
-the runner matched by its program name, so ``shell: /bin/bash -e {0}`` is bash; with no ``shell:``
+the runner matched by its program name, so ``shell: /bin/bash -e {0}`` and
+``shell: /usr/bin/env bash {0}`` are bash; with no ``shell:``
 it is read as shell, and as Python only when it does not parse as shell) and a
 ``script:`` value (JavaScript, when the step's ``uses:`` is ``actions/github-script`` or the
 text names no action; another action's ``script:``, such as an SSH action's, is not read). Text
@@ -67,6 +68,14 @@ def _value(lines: list[str], i: int, column: int, value: str) -> tuple[str, int]
     return value, i + 1
 
 
+def _runner(value: str) -> str:
+    """A ``shell:`` value's program by basename, past a leading ``env`` (``/usr/bin/env bash {0}`` is bash)."""
+    words = [posixpath.basename(w) for w in value.split()]
+    if words[:1] == ["env"]:
+        words = words[1:]
+    return words[0] if words else ""
+
+
 def step_units(text: str) -> list[Unit]:
     """The code one step runs, by language (module docstring)."""
     lines = text.splitlines()
@@ -80,7 +89,7 @@ def step_units(text: str) -> list[Unit]:
             continue
         value, i = _value(lines, i, len(m.group(1)), m.group(3).strip())
         if m.group(2) == "shell":
-            runner = posixpath.basename(value.strip().split(" ")[0])
+            runner = _runner(value)
         else:
             found.append((m.group(2), value))
     if not found:

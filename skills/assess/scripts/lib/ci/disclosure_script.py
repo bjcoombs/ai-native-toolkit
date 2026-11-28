@@ -189,15 +189,16 @@ def _command(node: ast.AST) -> str | None:
 
 
 def _labels(call: ast.Call) -> bool:
-    """Whether a process call runs ``gh ... --add-label``: an argument list holding both words, or
-    one command string (``os.system("gh pr edit --add-label x")``), literal or f-string
-    (``_command``). A message naming it is no call."""
+    """Whether a process call runs ``gh ... --add-label`` (or ``--add-label=x``): an argument list
+    holding both words, or one command string (``os.system("gh pr edit --add-label x")``), literal
+    or f-string (``_command``). A message naming it is no call."""
     first = call.args[0] if call.args else None
     if isinstance(first, (ast.List, ast.Tuple)):
         words = [_command(e) or "" for e in first.elts]
-        return bool(words) and words[0] == "gh" and any(w == "--add-label" or w.startswith("--add-label=") for w in words)
-    text = _command(first) if first is not None else None
-    return text is not None and text.split()[:1] == ["gh"] and "--add-label" in text.split()
+    else:
+        text = _command(first) if first is not None else None
+        words = text.split() if text is not None else []
+    return bool(words) and words[0] == "gh" and any(w == "--add-label" or w.startswith("--add-label=") for w in words)
 
 
 def _red(arg: ast.expr) -> bool:
