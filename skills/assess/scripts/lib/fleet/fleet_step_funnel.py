@@ -5,7 +5,12 @@
 model's ``[[steps]]`` (the Step names and order). One bar per Step, with the count of
 repositories at it. Each repository counts once, under the first gate of its next Step that
 does not hold, in model order (the level result lists its blockers in that order), so a
-Step's segments sum to its count. A segment is a gate and how it fails: ``unmet``,
+Step's segments sum to its count. A gate that was not measured holds a repository only when
+every open gate of its next Step was not measured (``lib/scoring/step_reading.py``, #1640):
+the repository reads "Step N, Step N+1 not measured", counts in its bar's
+``next_not_measured`` and in a hatched segment by reason code, whose legend line reads
+``1 with Step 2 not measured: Agent use (needs_platform)``. One with an unmet gate beside
+a gate not measured counts under the first gate that was measured, never as not measured. A segment is a gate and how it fails: ``unmet``,
 ``not_measured`` (hatched, with the reason code) or ``set_aside`` (``not_applicable``: the
 owner excluded the gate's condition or one it requires, or a scan's ``NOT_APPLICABLE_REASONS``
 code says it does not apply, #1407; hatched too). The top Step has one
@@ -21,7 +26,7 @@ The SVG reads in the Step ladder's order (``lib/assess_diagrams_ladder.py``): th
 first and Step 1 last, with no option (#1330). A segment names its gate by the maturity
 model row the gate reads (``row_label`` of its title), never by the gate id.
 
-`funnel_view(model, data)` -> `FunnelView` (`bars`: `step`, `name`, `count`, `held_by_more`,
+`funnel_view(model, data)` -> `FunnelView` (`bars`: `step`, `name`, `count`, `held_by_more`, `next_not_measured`,
 `segments` of `gate`, `kind`, `reason`, `count`; `not_measured`: `(reason, count)` pairs).
 `render(model, data)` -> `step-funnel.svg`, the stable entry point the fleet page (#946)
 calls; `in_place(view)` the report's opening line. Tests: `tests/test_fleet_step_diagrams.py`.
@@ -36,6 +41,7 @@ import lib.fleet.fleet_svg as svg
 from lib.svg_scope import SCOPES
 from lib.assess_diagrams import row_label, wrap
 from lib.scoring.levels import MaturityModel
+from lib.scoring.step_reading import next_unread
 from lib.vocabulary import IN_PLACE
 
 FILE = "step-funnel.svg"
@@ -74,6 +80,7 @@ class FunnelBar(TypedDict):
     name: str
     count: int
     held_by_more: int  # of ``count``, the repositories more than one gate holds back
+    next_not_measured: int  # of ``count``, those whose next Step reads not measured (#1640)
     segments: list[Segment]
 
 
@@ -95,6 +102,7 @@ def funnel_view(model: MaturityModel, data: Mapping[str, Any]) -> FunnelView:
     gate_order = {g["id"]: i for s in steps for i, g in enumerate(s["gates"])}
     at: dict[int, Counter[tuple[str | None, str, str | None]]] = {s["step"]: Counter() for s in steps}
     more: Counter[int] = Counter()
+    nm: Counter[int] = Counter()
     unmeasured: Counter[str] = Counter()
     for repo in data.get("repos") or []:
         step = repo.get("step")
@@ -105,7 +113,10 @@ def funnel_view(model: MaturityModel, data: Mapping[str, Any]) -> FunnelView:
         if not blockers:
             at[step][(None, "top", None)] += 1
             continue
-        first = blockers[0]
+        # #1640: a gate not measured holds the repository only when no open gate is measured
+        unread = next_unread(repo) is not None
+        nm[step] += unread
+        first = blockers[0] if unread else next((b for b in blockers if b.get("state") != "not_measured"), blockers[0])
         kind = _kind(first)
         at[step][(first.get("gate"), kind, first.get("reason") if kind == "not_measured" else None)] += 1
         more[step] += len(blockers) > 1
@@ -116,7 +127,7 @@ def funnel_view(model: MaturityModel, data: Mapping[str, Any]) -> FunnelView:
 
     bars: list[FunnelBar] = [{
         "step": s["step"], "name": s["name"], "count": sum(at[s["step"]].values()),
-        "held_by_more": more[s["step"]],
+        "held_by_more": more[s["step"]], "next_not_measured": nm[s["step"]],
         "segments": [{"gate": g, "kind": k, "reason": r, "count": n}
                      for (g, k, r), n in sorted(at[s["step"]].items(), key=lambda kv: order(kv[0]))],
     } for s in steps]
@@ -146,13 +157,17 @@ def gate_titles(model: MaturityModel) -> dict[str, str]:
     return {g["id"]: titles.get(g["row"], g["id"]) for s in model.get("steps", []) for g in s["gates"]}
 
 
-def segment_text(segment: Segment, titles: Mapping[str, str]) -> str:
+def segment_text(segment: Segment, titles: Mapping[str, str], step: int | None = None) -> str:
+    """A segment's legend line; ``step`` is its bar's Step, which a not-measured segment names (#1640)."""
     n = segment["count"]
     if segment["kind"] == "top":
         return f"{n} at the top Step"
     gate = titles.get(segment["gate"] or "", segment["gate"])
     if segment["kind"] == "not_measured":
-        return f"{n} where {gate} was not measured ({segment['reason'] or 'no_value'})"
+        reason = segment["reason"] or "no_value"
+        if step is not None:  # every not-measured segment reads its next Step not measured (#1640)
+            return f"{n} with Step {step + 1} not measured: {gate} ({reason})"
+        return f"{n} where {gate} was not measured ({reason})"
     if segment["kind"] == "set_aside":
         return f"{n} where the owner set {gate} aside"
     return f"{n} held by {gate}"
@@ -180,7 +195,8 @@ def render(model: MaturityModel, data: Mapping[str, Any]) -> str:
     scale = svg.LinearScale(0, svg.nice_ceiling(top), 0, BAR_W)
     x0 = PAD + LABEL_W
     side_w = max((svg.text_width(_side(b), 11.5) for b in view["bars"]), default=0.0)
-    line_w = max((svg.text_width(segment_text(s, titles), 11.5) for b in view["bars"] for s in b["segments"]),
+    line_w = max((svg.text_width(segment_text(s, titles, b["step"]), 11.5) for b in view["bars"]
+                  for s in b["segments"]),
                  default=0.0)
     width = max(WIDTH, x0 + BAR_W + 8 + side_w + PAD, x0 + 18 + line_w + PAD)
     body = [svg.text(PAD, 28, TITLE, size=15, weight="600", cls="fg"),
@@ -203,7 +219,7 @@ def render(model: MaturityModel, data: Mapping[str, Any]) -> str:
         y += BAR_H + 6
         for segment in bar["segments"]:
             parts.append(_swatch(x0, y + 3, segment, _role(segment, gates), 11.0, 11.0))
-            parts.append(svg.text(x0 + 18, y + 13, segment_text(segment, titles), size=11.5, cls="fg"))
+            parts.append(svg.text(x0 + 18, y + 13, segment_text(segment, titles, bar["step"]), size=11.5, cls="fg"))
             y += LINE_H
         parts.append("</g>")
         body.append("".join(parts))

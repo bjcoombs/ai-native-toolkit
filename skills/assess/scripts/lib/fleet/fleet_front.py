@@ -3,8 +3,10 @@
 ``front_screen`` gathers, from facts other modules already compute, the four numbers a lead
 reads first:
 
-- **Steps**: the repositories at each Step (``fleet_step_funnel.funnel_view``, #941), and the
-  repositories with no measured Step, never counted at Step 1;
+- **Steps**: the repositories at each Step (``fleet_step_funnel.funnel_view``, #941), of them
+  those whose next Step reads not measured (``next_not_measured``, #1640: "Step 2, Step 3 not
+  measured: 2 repositories", never counted as held back), and the repositories with no
+  measured Step, never counted at Step 1;
 - **Moved**: how many moved up a Step and how many moved down since the compared run
   (``fleet_step_movement.step_moves``, #941), with the moves rule changes alone explain counted
   apart; None when no earlier run was compared, and a not-comparable pair says why;
@@ -52,6 +54,7 @@ class StepCount(TypedDict):
     step: int
     name: str
     count: int
+    next_not_measured: int  # of ``count``, those whose next Step reads not measured (#1640)
 
 
 class Movement(TypedDict):
@@ -132,8 +135,8 @@ def front_screen(model: MaturityModel | None, data: Mapping[str, Any] | None,
     if front["skipped"] is not None or model is None or data is None:
         return front
     view = funnel_view(model, data)
-    front["steps"] = [{"step": b["step"], "name": step_name(model, b["step"]), "count": b["count"]}
-                      for b in view["bars"]]
+    front["steps"] = [{"step": b["step"], "name": step_name(model, b["step"]), "count": b["count"],
+                       "next_not_measured": b["next_not_measured"]} for b in view["bars"]]
     front["not_measured"] = sum(n for _, n in view["not_measured"])
     front["gates"] = gate_lifts(data)
     front["one_change"] = sum(g["repos"] for g in front["gates"])
@@ -199,6 +202,11 @@ def front_section(front: FrontScreen, repos: int) -> str:
         lines += ["| Step | Repositories |", "|------|--------------|"]
         lines += [f"| Step {s['step']}{' · ' + s['name'] if s['name'] else ''} | {s['count']} |" for s in front["steps"]]
         lines.append("")
+        unread = [s for s in front["steps"] if s.get("next_not_measured")]
+        if unread:
+            lines += ["; ".join(f"Step {s['step']}, Step {s['step'] + 1} not measured: {_plural(s['next_not_measured'])}"
+                                for s in unread)
+                      + ". The next Step's open gates were not read, so these are never counted as held back.", ""]
         if front["not_measured"]:
             lines += [f"{_plural(front['not_measured'])} had no measured Step in this run, so "
                       f"{'it is' if front['not_measured'] == 1 else 'they are'} not counted at any Step.", ""]

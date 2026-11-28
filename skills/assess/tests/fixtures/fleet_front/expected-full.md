@@ -12,6 +12,8 @@ How many repositories sit at each Step, what moved since the last run, and which
 | Step 2 · Docs | 2 |
 | Step 3 · Docs and CI | 0 |
 
+Step 1, Step 2 not measured: 1 repository. The next Step's open gates were not read, so these are never counted as held back.
+
 1 repository had no measured Step in this run, so it is not counted at any Step.
 
 **Since the last run.** 1 repository moved up a Step and 1 repository moved down; 1 stayed at the same Step. 1 move came from rule changes alone.

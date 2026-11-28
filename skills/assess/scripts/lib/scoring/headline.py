@@ -46,7 +46,9 @@ the gates above it already hold (``one_change_ceiling``, reading the level resul
 ``ceiling_step``, #1333). ``lone_condition`` is the one test of "one change": exactly one
 condition of the next Step's gates open and unmet on its own criteria. The top card, the Step
 ladder and the fleet's one-change-away count (``lib/fleet/fleet_step_lifts.py``) read it too.
-The summary reads ``Step 4 · all gates held`` at the top Step, ``no Step yet · next: <gate>`` below the first
+When every open gate of the next Step was not measured (``lib/scoring/step_reading.py``,
+#1640) it reads ``Step 2, Step 3 not measured (needs a full run) · next: CI runs tests``, never
+the next Step and never a gate not held. The summary reads ``Step 4 · all gates held`` at the top Step, ``no Step yet · next: <gate>`` below the first
 Step of a model whose Step 1 has a gate (#889), and ``no Steps defined`` for a model without
 ``[[steps]]``. ``markdown`` is the lines, pasted verbatim by the report and
 ``assess_report.py``. ``verified`` and ``tags`` (``TagCell`` per cell, from ``tag_cells``, which lives in
@@ -78,6 +80,7 @@ from lib.scoring.level_result_types import Blocker, ConditionResult, DeclineReco
 from lib.scoring.level_tags import tag_cells
 from lib.scoring.level_tally import NOT_APPLICABLE_REASONS, default_model, scan_not_applicable
 from lib.scoring.levels import MaturityModel, StepDef, condition_id
+from lib.scoring.step_reading import next_unread, step_reading
 
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
 # release PR moves it by hand during a version freeze.
@@ -192,6 +195,10 @@ def _summary(level: LevelResult, model: MaturityModel) -> str:
         return f"no Step yet{held} · next: {GATE_NOUN.get(gate, gate)}" if gate else f"no Step yet{held}"
     if gate is None:
         return f"Step {step}{held} · all gates held"
+    unread = next_unread(level)
+    if unread is not None:  # #1640: every open gate of the next Step was not measured
+        words = ", ".join(reason_word(code) for code in unread[2])
+        return f"{step_reading(level)}{f' ({words})' if words else ''}{held} · next: {GATE_NOUN.get(gate, gate)}"
     ceiling = one_change_ceiling(level, model.get("steps", []))
     if ceiling is not None:
         return f"Step {step}{held} · one change from Step {ceiling}: {GATE_NOUN.get(gate, gate)}"

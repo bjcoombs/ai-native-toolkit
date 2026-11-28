@@ -17,7 +17,8 @@ words what it finds. Its parts:
   (set on the page, not yet read by a run) is shown as set, with its progress to come; a
   ``target_note`` in the bundle says why a page offers no entry.
 - **Sections.** ``SECTIONS`` lists the section renderers in page order: Fleet at a glance (the
-  front screen, #1255, from the bundle's ``front``: Step counts, moves, one change away, gates
+  front screen, #1255, from the bundle's ``front``: Step counts, each with those whose next Step
+  reads not measured (#1640), moves, one change away, gates
   ranked by the repositories each would move, team units by name, each a button that opens it in
   the ownership view), then Practice packs (a ``--pack`` run's per-pack counts, #1276), then
   Since last run, Where this unit stands, Your target, Drill-down, Practice shape (#1368: one
@@ -484,7 +485,8 @@ SCRIPT = r"""
       out += "<p>Not drawn: skipped: " + esc(f.skipped) + "</p>";
     } else {
       out += "<ul>" + f.steps.map(function (s) {
-        return "<li>" + esc(stepName(bundle, s.step)) + ": " + esc(repos(s.count)) + "</li>";
+        var unread = s.next_not_measured ? " (" + s.next_not_measured + " with Step " + (s.step + 1) + " not measured)" : "";
+        return "<li>" + esc(stepName(bundle, s.step)) + ": " + esc(repos(s.count) + unread) + "</li>";
       }).join("") + "</ul>";
       if (f.not_measured) { out += "<p class=\"muted\">" + esc(repos(f.not_measured)) + " with no measured Step.</p>"; }
     }
