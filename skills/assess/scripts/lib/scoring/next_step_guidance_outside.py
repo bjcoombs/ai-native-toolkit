@@ -15,7 +15,11 @@ shows only that the scan found no trace in the repository, so the views that wor
 An unmet reading of these conditions always means no repository evidence: ``permissions_encoded``
 is false only when no tracked settings file lists a scoped permission entry, ``configured`` only
 when neither a pre-commit hook nor a CI scan is found, and ``enforcement.present`` only when no CI
-scan is found. A not-measured reading (``managed_settings_unreadable``, ``ci_includes_unresolved``,
+scan is found. A host or machine source may also have been read and found off: on a github.com
+remote an unmet secrets guard means ``--platform`` read push protection off (unread, it is not
+measured), and ``--managed-settings`` may have read a managed source with no permission entry. The
+wording holds either way: it names where else the practice can be set, as a fact, and never tells
+the reader to run a read that already ran (#1688 review). A not-measured reading (``managed_settings_unreadable``, ``ci_includes_unresolved``,
 ``secret_scanning_not_read``, #1350) keeps its own wording. Sits apart from
 ``next_step_guidance.py`` to keep that file under its size ceiling, and imports nothing.
 Tests: ``tests/test_not_found_outside.py``.
@@ -31,8 +35,8 @@ AGENT_PERMISSIONS_ELSEWHERE = (
     "whole organisation, which a run with `--managed-settings` reads on the machine running the check")
 SECRETS_GUARD_ELSEWHERE = (
     "a secrets scan can also be set on the host: GitHub secret scanning with push protection in the "
-    "repository or organisation settings (a run with `--platform` reads the repository's), GitLab "
-    "secret push protection in the project settings, or a pre-receive hook on the server")
+    "repository or organisation settings, GitLab secret push protection in the project settings, "
+    "or a pre-receive hook on the server")
 
 ELSEWHERE_SIGNALS: Mapping[str, str] = {
     "agent_ops.summary.permissions_encoded": AGENT_PERMISSIONS_ELSEWHERE,

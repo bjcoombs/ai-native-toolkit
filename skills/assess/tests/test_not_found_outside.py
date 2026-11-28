@@ -64,7 +64,13 @@ def test_each_practice_names_where_else_it_can_be_set():
     assert ELSEWHERE_SIGNALS == {PERMISSIONS: AGENT_PERMISSIONS_ELSEWHERE, CONFIGURED: SECRETS_GUARD_ELSEWHERE,
                                  ENFORCED: SECRETS_GUARD_ELSEWHERE}
     assert "managed settings" in AGENT_PERMISSIONS_ELSEWHERE and "--managed-settings" in AGENT_PERMISSIONS_ELSEWHERE
-    assert "push protection" in SECRETS_GUARD_ELSEWHERE and "--platform" in SECRETS_GUARD_ELSEWHERE
+    assert "push protection" in SECRETS_GUARD_ELSEWHERE
+
+
+def test_the_secrets_wording_never_asks_for_a_platform_read():
+    """An unmet secrets guard on GitHub means --platform already read push protection off; elsewhere
+    there is no such read. Either way, advice to run it would mislead (#1688 review)."""
+    assert "--platform" not in SECRETS_GUARD_ELSEWHERE
     assert not_found_note(AGENT_PERMISSIONS_ELSEWHERE) == f"{NOT_FOUND}; {AGENT_PERMISSIONS_ELSEWHERE}"
 
 
