@@ -1942,7 +1942,7 @@
               "eq_signal": null,
               "text": "A repo-owned guard script has its own tests: is true",
               "title": "Repo-owned guard is itself tested",
-              "fix": "Add a test file for the guard script, named for it (test_check_layers.py beside check_layers.py), that feeds it one case it must reject and one it must pass.",
+              "fix": "Add a test file for the guard script, named for it, such as test_check_layers.py beside check_layers.py. Give it one case the guard must reject and one it must pass.",
               "why": "A guard script with no tests can stop catching anything and still pass, so a green check means less than it says. With its own tests, a change that breaks the guard turns red.",
               "why_source": "",
               "input_class": "head_structure",
@@ -5126,7 +5126,7 @@
     {
       "name": "repo_guards",
       "title": "Ratchets and repo-owned guards",
-      "summary": "Each ratchet or repo-owned guard a CI job runs on ordinary changes, read through the scripts, make recipes and local actions a step leads to. That is a lint baseline a lint command or check script reads and a tracked command updates, a boundary checker (import-boss, lint-imports, a check-layers script, an architecture test CI runs) or a file-size cap. Also whether each guard that is a committed script has a test file of its own.",
+      "summary": "Each ratchet or repo-owned guard a CI job runs on ordinary changes. It follows the scripts, make recipes and local actions a step leads to. A guard is a lint baseline CI reads and a tracked command updates, a boundary checker, or a file-size cap. A boundary checker is import-boss, lint-imports, a check-layers script or an architecture test CI runs. It also reads whether each guard script has a test file of its own.",
       "collector": "core.repo_guards",
       "reads": [
         "repo_root"
@@ -5163,17 +5163,17 @@
       "unknown_reasons": [
         {
           "code": "ci_not_read",
-          "means": "No guard was found, and the tree tracks a CI file of a system this reader does not parse, a .gitlab-ci.yml include: it does not follow, or a step it could not settle, such as a remote reusable workflow. Any of them may run one.",
+          "means": "No guard was found, and something here may run one that this reader cannot see. That is a CI file of a system it does not parse, or a .gitlab-ci.yml include: it does not follow. It can also be a step it could not settle, such as a remote reusable workflow.",
           "next_step": "Nothing to change: this reads as not measured until that configuration can be read."
         },
         {
           "code": "trigger_unknown",
-          "means": "A guard was found only in a workflow or GitLab job whose trigger this reader could not settle, so it cannot say the guard runs on ordinary changes.",
+          "means": "A guard was found only in a workflow or GitLab job whose trigger this reader could not settle. So it cannot say the guard runs on ordinary changes.",
           "next_step": "Nothing to change: give the workflow a literal on: list of push or pull_request, or the GitLab job literal rules, for it to be read."
         },
         {
           "code": "no_guard_script",
-          "means": "Every guard found is a third-party tool or an architecture test with no committed script of its own, so there is no guard script whose tests to look for.",
+          "means": "Every guard found is a third-party tool or an architecture test with no committed script of its own. So there is no guard script whose tests to look for.",
           "next_step": "Nothing to change: a third-party tool is tested where it is built."
         },
         {
