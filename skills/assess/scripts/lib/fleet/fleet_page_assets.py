@@ -28,6 +28,15 @@ words what it finds. Its parts:
   each picture inlined from its sanitised, scoped ``svg`` when it has per-part details, an ``<img>`` otherwise, with a
   link that saves the full-size SVG, #1362; ``contain: paint`` on its box clips whatever an inlined SVG
   draws to its own figure).
+- **Drill-down tiers** (#1625): unit breadcrumbs, then a unit's repository-by-condition grid,
+  then a repository's detail with its truth tags (met and unmet counts, from the bundle), then a
+  tag's conditions (from the bundle's ``tags[].conditions``) each with its state as the grid shows
+  it (the practice's reading: held when it reads at or above the condition's level, not measured
+  with its reason) and the next Step's needs, then one condition's hover lines (``cellTitle``).
+  The tag counts are the level result's counted conditions and the states are the grid's
+  readings, so a listed but uncounted condition can read held with 0 met; the page says so.
+  ``state`` carries ``repo``, ``tag`` and ``cond`` (``{row, level}``); a click on a tier above
+  clears the tiers below it.
 - **Shard navigation** (#950): a page carrying ``shard`` (``fleet_page_live``) opens on its top-level
   unit, names itself as one page of a sharded fleet with a link to the index, starts the
   breadcrumb at the index, and in the system view says how many of the system's repositories each
@@ -242,6 +251,57 @@ SCRIPT = r"""
     var top = bundle.rows[cell.row].top_level || 1;
     return "l" + Math.min(3, Math.round(3 * cell.level / top));
   }
+  function tagOf(bundle, key) { return bundle.tags.filter(function (t) { return t.tag === key; })[0]; }
+  function cellOf(r, row) { return r.cells.filter(function (c) { return c.row === row; })[0]; }
+  function condName(bundle, c) { return bundle.rows[c.row].title + ", level " + c.level; }
+  function condState(bundle, cell, level) {
+    // the state as the condition grid shows it: the practice's reading, never a level worked out here
+    if (!cell) { return "not on this repository's grid"; }
+    if (cell.status !== "level") { return "not measured (" + (cell.reason || "no_value") + ")"; }
+    var reads = "the practice reads level " + cell.level + " of " + bundle.rows[cell.row].top_level;
+    return (cell.level >= level ? "held, " : "not held yet, ") + reads;
+  }
+  function needsLine(bundle, r) {
+    if (r.next) {
+      return esc(stepName(bundle, r.next.step)) + " needs: " + r.next.blockers.map(function (b) {
+        return "<code>" + esc(b.gate) + "</code>" + esc(b.state === "not_measured" ? " (not measured: "
+          + (b.reason || "no_value") + ")" : b.excluded ? " (set aside by the owner)" : "");
+      }).join(", ");
+    }
+    return r.step === null || r.step === undefined ? "No measured Step for this repository." : "At the top Step.";
+  }
+  function tagList(bundle, r) {
+    if (!r.tags) { return "<p>Truth tags: not measured for this repository, never read as zero.</p>"; }
+    return "<p>Truth tags, each a link to its conditions. The counts are the level result's counted conditions; "
+      + "a condition the result lists but does not count is in neither.</p><ul>" + r.tags.map(function (c) {
+      var t = tagOf(bundle, c.tag);
+      return "<li><button class=\"link\" data-tag=\"" + esc(c.tag) + "\">" + esc(t ? t.title : c.tag) + "</button> "
+        // measured 0 is not measured, never a share of 0, as the unit tier reads it
+        + esc((c.measured ? c.met + " met, " + c.unmet + " unmet" : "not measured")
+          + (c.not_measured ? ", " + plural(c.not_measured, "condition", "conditions") + " not measured" : "")) + "</li>";
+    }).join("") + "</ul>";
+  }
+  function tagDetail(bundle, r, key) {
+    var t = tagOf(bundle, key);
+    if (!t || !r.tags) { return ""; }
+    var out = "<div class=\"panel\"><p><strong>" + esc(t.title) + "</strong> on " + esc(r.key) + "</p>";
+    out += t.conditions.length ? "<ul>" + t.conditions.map(function (c) {
+      var cell = cellOf(r, c.row), name = esc(condName(bundle, c));  // no cell, no tier below: plain text
+      return "<li>" + (cell ? "<button class=\"link\" data-row=\"" + c.row + "\" data-level=\"" + c.level + "\">"
+        + name + "</button>" : name) + ": " + esc(condState(bundle, cell, c.level)) + "</li>";
+    }).join("") + "</ul>" : "<p>No condition on the team grid carries this tag.</p>";
+    out += "<p class=\"muted\">Each state is its practice's reading on the grid, so it can show a condition held "
+      + "that the counted met and unmet above leave out.</p>";
+    return out + "<p>" + needsLine(bundle, r) + "</p></div>";
+  }
+  function condDetail(bundle, r, cond) {
+    var cell = cellOf(r, cond.row);
+    if (!cell || !bundle.rows[cond.row]) { return ""; }
+    return "<div class=\"panel\"><p><strong>" + esc(condName(bundle, cond)) + "</strong>: "
+      + esc(condState(bundle, cell, cond.level)) + "</p><ul>" + cellTitle(bundle, r, cell).split("\n").map(function (l) {
+        return "<li>" + esc(l) + "</li>";
+      }).join("") + "</ul></div>";
+  }
   function repoDetail(bundle, r) {
     var out = "<div class=\"panel\"><p><strong>" + esc(r.key) + "</strong> · "
       + (r.step === null || r.step === undefined ? "no measured Step (" + esc(r.reason || r.status) + ")"
@@ -259,7 +319,18 @@ SCRIPT = r"""
           return "<li>" + esc(e.condition + " (" + e.kind + ")" + (e.reason ? ": " + e.reason : "")) + "</li>";
         }).join("") + "</ul>";
     }
-    return out + "</div>";
+    return out + tagList(bundle, r) + "</div>";
+  }
+  function crumbTail(bundle, state) {
+    // repository, then tag, then condition: each a link back up while a tier below it is open
+    var sep = "<span class=\"sep\">›</span>", t = state.tag ? tagOf(bundle, state.tag) : null;
+    if (!state.repo) { return ""; }
+    var out = sep + (t ? "<button class=\"link\" data-repo=\"" + esc(state.repo) + "\">" + esc(state.repo) + "</button>"
+      : esc(state.repo));
+    if (!t) { return out; }
+    out += sep + (state.cond ? "<button class=\"link\" data-tag=\"" + esc(t.tag) + "\">" + esc(t.title) + "</button>"
+      : esc(t.title));
+    return out + (state.cond && bundle.rows[state.cond.row] ? sep + esc(condName(bundle, state.cond)) : "");
   }
   function drill(bundle, state) {
     var trail = [], key = state.unit;
@@ -267,7 +338,7 @@ SCRIPT = r"""
     var first = bundle.shard ? outLink(bundle.shard.index_url, "Fleet index") + "<span class=\"sep\">›</span>" : "";
     var out = "<h2>Drill-down</h2><nav class=\"crumbs\">" + first + trail.map(function (k) {
       return "<button class=\"link\" data-unit=\"" + esc(k) + "\">" + esc(k) + "</button>";
-    }).join("<span class=\"sep\">›</span>") + (state.repo ? "<span class=\"sep\">›</span>" + esc(state.repo) : "") + "</nav>";
+    }).join("<span class=\"sep\">›</span>") + crumbTail(bundle, state) + "</nav>";
     out += elsewhere(bundle, state);
     var kids = children(bundle, state.view, state.unit);
     if (kids.length) {
@@ -289,7 +360,10 @@ SCRIPT = r"""
       }).join("") + "</tbody></table></div>";
     }
     var picked = bundle.repos.filter(function (r) { return r.key === state.repo; })[0];
-    return out + (picked ? repoDetail(bundle, picked) : "");
+    if (!picked) { return out; }
+    out += repoDetail(bundle, picked);
+    if (state.tag) { out += tagDetail(bundle, picked, state.tag); }
+    return out + (state.tag && state.cond ? condDetail(bundle, picked, state.cond) : "");
   }
   function pt(cx, cy, r, i, n) {
     var a = -Math.PI / 2 + 2 * Math.PI * i / n;
@@ -504,6 +578,11 @@ SCRIPT = r"""
         if (!el) { return; }
         if (el.dataset.unit) { state = {view: el.dataset.view || state.view, unit: el.dataset.unit, repo: null}; }
         else if (el.dataset.repo) { state = {view: state.view, unit: state.unit, repo: el.dataset.repo}; }
+        else if (el.dataset.tag) { state = {view: state.view, unit: state.unit, repo: state.repo, tag: el.dataset.tag}; }
+        else if (el.dataset.row) {
+          state = {view: state.view, unit: state.unit, repo: state.repo, tag: state.tag,
+            cond: {row: Number(el.dataset.row), level: Number(el.dataset.level)}};
+        }
         else if (el.dataset.act === "pin") { writePin(state); return; }
         else if (el.dataset.act === "set-target" && canSet) {
           source.setTarget(state.view, state.unit, Number(app.querySelector("#target-step").value)); return;

@@ -125,7 +125,11 @@ sections, in order:
 5. **Drill-down**: the units below (by name, never by rank), a table of the unit's own
    repositories with a cell per maturity-model row, and a repository's detail. Hovering a cell
    names its state, the next condition and what the next Step needs. A not-measured cell is
-   hatched with its reason, never 0.
+   hatched with its reason, never 0. A repository's detail lists its truth tags with met and
+   unmet counts; a tag lists its conditions, each with its state as the grid reads it (held,
+   not held yet, or not measured with its reason), and what the next Step needs; a condition
+   shows its state, its reading and the next Step's needs. The trail reads org, unit,
+   repository, tag, condition, and each step back up is a link.
 6. **Practice shape**: one radar chart for each unit in the shown unit's subtree, by name,
    never overlaid. A spoke is a maturity-model practice measured in at least 20% of the
    fleet's repositories; its point is the unit's repositories at the top level out of those

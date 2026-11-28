@@ -139,3 +139,32 @@ def test_the_index_holds_no_repository_document_or_name(name: str) -> None:
         assert leak not in html, leak
         for page in pages.values() if name == "hashed" else ():  # a plain page's doc ids carry names (#949)
             assert leak not in page, leak
+
+
+def test_a_shard_page_drills_from_the_index_to_unit_repository_tag_and_condition() -> None:
+    """#1625 on a shard (#950): the index links to the shard, whose trail reads index, then its
+    units, a repository, a tag and a condition, each tier drawn below the one above it."""
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    plan, pages = _sharded()
+    shard = next(s for s in plan["shards"] if s["key"] == "ownership/grp/sub")
+    assert plan["index"] is not None and f'<a href="{shard["url"]}"' in index_page(plan["index"])
+    html = pages[shard["key"]]
+    bundle = _bundle(html)
+    repo = next(r for r in bundle["repos"] if r["tags"])
+    unit = repo["units"]["ownership"]
+    base = {"view": "ownership", "unit": unit, "repo": repo["key"]}
+    states = [base, {**base, "tag": "docs"}, {**base, "tag": "docs", "cond": {"row": 0, "level": 1}}]
+    script = next(s for s in re.findall(r"<script>(.*?)</script\s*>", html, re.S | re.I) if "globalThis.FleetView" in s)
+    runner = RUNNER.split("const out")[0] + ("process.stdout.write(JSON.stringify(input.states.map(function (s) {"
+                                             " return ctx.FleetView.renderPage(b, s, b.targets, false); })));")
+    done = subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle, "states": states}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+    navs = [re.search(r'<nav class="crumbs">(.*?)</nav>', p, re.S) for p in json.loads(done.stdout)]
+    assert all(n is not None and n.group(1).startswith(f'<a href="{INDEX}"') for n in navs)  # the index first
+    trail = [[t for t in re.split(r"<[^>]+>", n.group(1)) if t.strip() and t != "›"] for n in navs if n]
+    units = trail[0][1:-1]
+    assert units and units[-1] == unit
+    assert trail[0] == ["Fleet index", *units, repo["key"]]
+    assert trail[1] == ["Fleet index", *units, repo["key"], "Docs"]
+    assert trail[2] == ["Fleet index", *units, repo["key"], "Docs", "Instruction docs, level 1"]
