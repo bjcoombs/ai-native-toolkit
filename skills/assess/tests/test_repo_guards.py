@@ -180,6 +180,20 @@ def test_an_unsettled_run_expression_with_nothing_found_reads_not_measured(tmp_p
     assert _block(root)["present_reason"] == "ci_not_read"
 
 
+@pytest.mark.parametrize("flag", ["--no-sync", "--no-update", "--no-write"])
+def test_a_negated_flag_on_the_reading_line_is_not_an_update_command(tmp_path: Path, flag: str) -> None:
+    root = _repo(tmp_path, {".basedpyright/baseline.json": "{}\n", ".github/workflows/ci.yml": _workflow(
+        f"uv run {flag} basedpyright --baselinefile .basedpyright/baseline.json")})
+    block = _block(root)
+    assert (block["present"], block["baselines_without_update"]) == (False, 1)
+
+
+@pytest.mark.parametrize("script", ["scripts/check_lifecycle.sh", "scripts/verify_player.sh"])
+def test_a_word_that_only_holds_layer_or_cycle_is_not_a_boundary(tmp_path: Path, script: str) -> None:
+    root = _repo(tmp_path, {script: "#!/bin/sh\necho ok\n", ".github/workflows/ci.yml": _workflow(f"bash {script}")})
+    assert _block(root)["present"] is False
+
+
 @pytest.mark.parametrize("step", ["python scripts/check_layers.py || true",
                                   "python scripts/check_layers.py || echo skipped"])
 def test_a_masked_guard_does_not_count(tmp_path: Path, step: str) -> None:

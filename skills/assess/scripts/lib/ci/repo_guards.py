@@ -100,11 +100,13 @@ _INTERPRETERS = frozenset({"node", "ruby", "bash", "sh", "zsh", "dash", "perl", 
                            "ts-node", "python", "python3"})
 # Matched inside a name token too (``importcheck``); ``arch`` only as a whole token (not ``search``).
 _CHECK_PARTS = ("check", "verify", "lint", "guard", "enforce", "validate", "ratchet")
-_BOUNDARY_PARTS = ("import", "layer", "boundar", "architecture", "cycle", "circular")
+_BOUNDARY_PARTS = ("import", "boundar", "architecture", "circular")
+_BOUNDARY_STARTS = ("layer", "cycle")   # at a token's start only: not ``player``, ``lifecycle``
 _SIZE = re.compile(r"(?:^|_)(?:file_?sizes?|file_?lengths?|line_?counts?|max_?lines|long_?files|"
                    r"sizes?_(?:cap|limit|ratchet)s?|loc_(?:cap|limit)s?)(?:_|$)")
 _BENCH = re.compile(r"(?:^|[/_.-])(?:bench|benchmarks?|perf|performance)(?:[/_.-]|$)", re.I)
-_UPDATE = re.compile(r"(?:^|[\s\"'=:/-])-{0,2}(?:update|prune|regen|regenerate|refresh|writebaseline|write|"
+# ``(?<!no-)``: a negated flag (``--no-sync``, ``--no-update``) is not an update command
+_UPDATE = re.compile(r"(?:^|[\s\"'=:/-])-{0,2}(?<!no-)(?<!no_)(?:update|prune|regen|regenerate|refresh|writebaseline|write|"
                      r"generate|sync|set-baseline|create-baseline)(?![\w])", re.I)
 _HOLDERS = frozenset({"Makefile", "GNUmakefile", "makefile", "justfile", "Justfile", "package.json",
                       "pyproject.toml", "tox.ini", "noxfile.py", "Taskfile.yml", "Taskfile.yaml"})
@@ -170,7 +172,8 @@ def _check_name_kind(rel: str) -> GuardKind | None:
     checks = _checks(tokens)
     if checks and _SIZE.search(joined):
         return "size_cap"
-    if checks and ("arch" in tokens or any(p in t for t in tokens for p in _BOUNDARY_PARTS)):
+    if checks and ("arch" in tokens or any(p in t for t in tokens for p in _BOUNDARY_PARTS)
+                   or any(t.startswith(_BOUNDARY_STARTS) for t in tokens)):
         return "boundary_checker"
     return None
 

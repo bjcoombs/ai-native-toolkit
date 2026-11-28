@@ -23,7 +23,8 @@ The module docstring has the rules and the block shape. Known limits:
   `.test.ts` file there is not. Whether CI runs those tests is not read here; `layer-5-ci` reads whether CI runs
   tests at all.
 - Check and boundary words match inside a name token (`importcheck`), so a script named for
-  another purpose (`validate_import_data.py`) is credited as a boundary checker.
+  another purpose (`validate_import_data.py`) is credited as a boundary checker. `layer` and
+  `cycle` match only at a token's start, so `check_lifecycle.sh` and `verify_player.py` are not.
 - With no guard found, any step the follower leaves unsettled in any job read makes `present`
   null (`ci_not_read`), not false. That keeps an unread step from reading as no guard, at the
   cost of fewer measured falses; the corpus discrimination run (#842) shows how many.
