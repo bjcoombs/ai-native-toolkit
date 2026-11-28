@@ -82,10 +82,11 @@ tracked file is read as it stands.
 
 - ``configured`` (level 1): a guard is configured from any source. A pre-commit hook is enough,
   so the condition is graded ``config_only``: listed, not counted. A GitLab scan held as
-  unevaluated (``rules_unevaluated``) is configured too (#1204). It reads the files this run
-  read: an unread GitLab include leaves level 2 not measured (``ci_includes_unresolved``) but
-  level 1 unmet. The asymmetry is deliberate: level 1 is listed and moves no count, so an unmet
-  there costs nothing, while level 2 is counted and must not read unmet on evidence it lacks.
+  unevaluated (``rules_unevaluated``) is configured too (#1204). With no source configuring a
+  guard and a GitLab include that could hold a scan not read, level 1 reads not measured:
+  ``configured`` is null with ``configured_reason`` ``ci_includes_unresolved`` (#1350), as level 2
+  does. This reverses #1173, which left level 1 unmet there because a listed condition moved no
+  count; level 1 now gates Step 3 (#1351), and a gate must not read unmet on evidence the scan lacks.
 - ``enforcement`` (level 2): a guard that can stop the change, where an agent cannot skip it. A
   CI scan fails a check that can gate the merge; GitHub push protection (source ``platform``)
   rejects the push. Secret scanning alone raises an alert that gates nothing, so it meets level
@@ -113,7 +114,7 @@ Block (``secrets_guard`` in run-context.json)::
      "pre_commit": {"present": bool, "file": str | None, "tools": [str, ...]},
      "ci": {"present": bool, "files": [str, ...], "tools": [str, ...], "includes_unresolved": int,
             "rules_unevaluated": [str, ...]},
-     "configured": bool,
+     "configured": bool | None, "configured_reason": "ci_includes_unresolved" | None,
      "enforcement": {"available": True, "present": bool, "source": "ci" | None}
                     | {"available": False, "reason": "<code>: ..."},  # secret_scanning_not_read,
                     # ci_includes_unresolved or gitlab_rules_unevaluated
@@ -268,7 +269,8 @@ class SecretsGuardBlock(TypedDict):
     available: bool
     pre_commit: PreCommitGuard
     ci: CiGuard
-    configured: bool  # level 1: a guard is configured, from any source
+    configured: bool | None  # level 1: a guard is configured, from any source; None: an unread include could hold one
+    configured_reason: str | None  # the code ``ci_includes_unresolved`` when ``configured`` is None (#1350)
     enforcement: Enforcement  # level 2: a guard runs where an agent cannot skip it
     sources: list[SourceGrade]  # each source that shows a guard, with its own grade
 
@@ -623,6 +625,12 @@ def scan_secrets_guard(repo_root: Path, scope: Scope | None = None, ghsync_root:
     sources = [SourceGrade(source=name, grade=_GRADES[name])
                for name, found in (("pre_commit", hook["present"]), ("ci", ci["present"]),
                                    ("platform", platform is not None and any(platform))) if found]
-    # A GitLab scan held as unevaluated is still a configured guard: level 1 lists it (#1204).
-    return {"available": True, "pre_commit": hook, "ci": ci, "configured": bool(sources or ci["rules_unevaluated"]),
-            "enforcement": _enforcement(root, ci, platform), "sources": sources}
+    configured, reason = _configured(bool(sources or ci["rules_unevaluated"]), ci["includes_unresolved"])
+    return {"available": True, "pre_commit": hook, "ci": ci, "configured": configured,
+            "configured_reason": reason, "enforcement": _enforcement(root, ci, platform), "sources": sources}
+
+
+def _configured(found: bool, unread: int) -> tuple[bool | None, str | None]:
+    """Level 1 and its null reason. A GitLab scan held as unevaluated is still a configured guard
+    (#1204); with none found, an unread include that could hold one leaves it not measured (#1350)."""
+    return (found, None) if found or not unread else (None, REASON_INCLUDES)

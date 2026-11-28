@@ -78,7 +78,9 @@ gate itself is written in such a file or in a composite action.
 reasons above; ``status_check_unconfirmed`` (null: a Codecov status target, #882,
 which no CI line runs and which gates a merge only when branch protection requires it);
 ``not_run_in_ci`` (false: CI is read and runs none of the
-gates); ``no_ci`` (false: no CI file at all).
+gates); ``no_ci`` (false: no CI file at all); ``ci_includes_unresolved`` (null: no gate in
+the checkout, and a GitLab include the coverage scan does not read could hold one; set by
+``lib.testing.coverage_includes``, #1350).
 
 Inward-only imports: stdlib and ``lib`` CI readers; never an orchestrator.
 
@@ -174,7 +176,7 @@ from lib.ci.shared_tooling import pulls_jobs_from_elsewhere
 EnforcedBasis = Literal[
     "ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read", "unknown_trigger",
     "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system", "status_check_unconfirmed",
-    "not_run_in_ci", "no_ci"]
+    "not_run_in_ci", "no_ci", "ci_includes_unresolved"]
 
 # A gate as ``coverage_gate`` reports it; read by key so this module does not import it.
 Gate = Mapping[str, object]

@@ -226,6 +226,8 @@ def test_an_unread_include_leaves_level_2_not_measured(tmp_path: Path) -> None:
     assert block["ci"]["includes_unresolved"] == 1
     assert block["enforcement"]["available"] is False
     assert block["enforcement"]["reason"].startswith("ci_includes_unresolved")
+    # #1350 reverses #1173: level 1 is not measured too, never unmet, when nothing else configures a guard.
+    assert block["configured"] is None and _states(block)[0] == ("not_measured", "ci_includes_unresolved")
 
 
 def test_a_project_include_resolves_from_a_ghsync_root(tmp_path: Path) -> None:
@@ -532,6 +534,7 @@ def test_a_root_template_with_an_unread_include_is_not_measured(tmp_path: Path) 
     assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == []
     assert block["enforcement"]["available"] is False
     assert block["enforcement"]["reason"].startswith("ci_includes_unresolved:")
+    assert _states(block) == (("not_measured", "ci_includes_unresolved"), ("not_measured", "ci_includes_unresolved"))
 
 
 @pytest.mark.parametrize("command", ["gitleaks protect", "gitleaks detect --pre-commit", "ggshield secret scan pre-commit",
