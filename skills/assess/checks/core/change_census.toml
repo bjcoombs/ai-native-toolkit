@@ -5,7 +5,7 @@
 id = "core.change_census"
 kind = "collector"
 title = "Merged changes in a period"
-summary = "Every change merged in an absolute --period, whether the read was complete, how many closed no issue, and the approval-integrity counts over that population, read through gh or glab."
+summary = "Every change merged in an absolute --period: whether the read was complete, how many closed no issue, and who approved them."
 issues = [1668]
 callable = "lib.hosting.merged_census:change_census"
 offline_callable = "lib.hosting.merged_census:change_census"

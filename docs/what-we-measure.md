@@ -538,7 +538,7 @@ Test practices that pin behaviour beyond line coverage, each read from a depende
 
 An auditor samples from the whole population of changes in a period; a census with a gap reads as complete, so any cap or refused read marks it incomplete and leaves every count unmeasured.
 
-Every change merged in an absolute --period, whether the read was complete, how many closed no issue, and the approval-integrity counts over that population, read through gh or glab.
+Every change merged in an absolute --period: whether the read was complete, how many closed no issue, and who approved them.
 
 - Collector: `core.change_census`, reading `merged_census`, `fleet_config`.
 - Network: yes, GitHub or GitLab (with --platform).

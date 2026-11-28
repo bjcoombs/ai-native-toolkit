@@ -73,6 +73,7 @@ def test_counts_only_document_is_content_free_and_validates(target: Path, tmp_pa
     jsonschema.validate(doc, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
     assert doc["stamp"]["target_head"] is None
     assert set(doc["scans"]) == (set(signals.known_scans()) - set(signals.PLATFORM_ONLY_SCANS)
+                                 - set(signals.PERIOD_ONLY_SCANS)
                                  - set(signals.UNIT_SCANS))
 
     text = json.dumps(doc)

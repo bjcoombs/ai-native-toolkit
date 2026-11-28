@@ -3687,7 +3687,7 @@
     {
       "name": "change_census",
       "title": "Merged changes in a period",
-      "summary": "Every change merged in an absolute --period, whether the read was complete, how many closed no issue, and the approval-integrity counts over that population, read through gh or glab.",
+      "summary": "Every change merged in an absolute --period: whether the read was complete, how many closed no issue, and who approved them.",
       "collector": "core.change_census",
       "reads": [
         "merged_census",

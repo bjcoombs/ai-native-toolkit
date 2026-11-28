@@ -400,7 +400,8 @@ def test_a_run_without_pack_writes_the_same_run_context_as_the_table_without_pac
     for table in (reg.SCANS, before):
         ctx: dict[str, Any] = {}
         inputs = {"repo_root": repo, "requested_scope": None, "run_date": "2026-11-24",
-                  "non_interactive": True, "maturity_model": None, "managed_settings": False, "packs": ()}
+                  "non_interactive": True, "maturity_model": None, "managed_settings": False, "packs": (),
+                  "census_period": None}
         reg.run_scans(ctx, inputs, specs=table)
         ctx.pop("run_id")
         outputs.append(json.dumps(ctx, sort_keys=False, default=str))
