@@ -35,8 +35,9 @@ docstring defines them: an approval by a person other than the author (bots and
 ``[identities]`` bots and agents excluded), a bot-only approval, an approval on an older
 commit than the head, one after the merge, a self-merge without a person's approval, and a
 bot author. ``approved_share`` is unchanged by them and still counts a bot's approval (#1660
-question 4). They read the same sample fields, so they add no API call; an account whose bot
-status cannot be learned makes the count it decides null.
+question 4). They read the same sample fields, so they add no listing; an approver the comment pass
+has not classified costs one bot probe from the shared ``MAX_LOGIN_PROBES`` budget, and an
+account whose bot status cannot be learned (past that cap too) makes the count it decides null.
 
 ``sequence`` reads each change with the predicates behind the shares: ``approved``
 (counted by ``approved_share``), ``reviewed`` (counted by ``reviewed_share`` but not

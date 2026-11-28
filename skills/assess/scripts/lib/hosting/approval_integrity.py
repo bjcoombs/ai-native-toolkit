@@ -5,8 +5,11 @@
 author, bots included (#1660 question 4). The counts below separate a person's approval
 from a bot's, and read when it happened, from the fields the shared ``merged_sample``
 already holds (``lib/hosting/merged_sample.py``: ``reviews[].state``, ``.submittedAt``,
-``.commit.oid``, ``headRefOid``, ``mergedAt``, ``mergedBy``), so no API call is added
-beyond the sample's own ``BotClassifier`` probes.
+``.commit.oid``, ``headRefOid``, ``mergedAt``, ``mergedBy``), so no listing is added. The
+one extra cost is the sample's shared ``BotClassifier``: an approver the comment pass has not
+already classified costs one ``users/<login>[bot]`` probe, from the same
+``MAX_LOGIN_PROBES`` (20) budget the comments spend first. Past that cap an approver is
+unknown, and the counts it decides read null.
 
 A **qualifying approval** is an ``APPROVED`` review (GitHub) or an ``approved_by`` entry
 (GitLab) by an account that is neither the change's author nor a bot. Each count is a
@@ -166,12 +169,14 @@ def _after_merge(c: Change) -> bool | None:
     maybe = [a for a in c.approvals if a.party is None]
     if not people and not maybe:
         return False
-    if not people or c.merged_at is None or any(a.at is None for a in people):
+    if not people or c.merged_at is None:
         return None
-    earliest = min(a.at for a in people if a.at is not None)
-    if earliest <= c.merged_at:
-        return False  # an unknown account's approval can only be earlier still
-    return None if maybe else True
+    known = [a.at for a in people if a.at is not None]
+    if known and min(known) <= c.merged_at:
+        return False  # any other approval, unknown time or account, can only be earlier still
+    if maybe or len(known) < len(people):
+        return None
+    return True
 
 
 def _self_merged_unapproved(c: Change) -> bool | None:

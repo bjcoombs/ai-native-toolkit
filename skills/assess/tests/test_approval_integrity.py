@@ -130,6 +130,37 @@ def test_approval_after_merge_reads_null_on_an_unreadable_time() -> None:
     assert _counts([_pr(_review("ben", at="not a time"))])["approved_after_merge_count"] is None
 
 
+def test_a_known_early_approval_settles_after_merge_beside_an_unreadable_time() -> None:
+    pr = _pr(_review("ben", at="not a time"), _review("cat", at=BEFORE))
+    assert _counts([pr])["approved_after_merge_count"] == 0
+
+
+def test_approvers_past_the_shared_probe_cap_read_null() -> None:
+    """The comment pass and the approvers share ``MAX_LOGIN_PROBES``: once it is spent, an
+    approver never classified before is unknown, and the counts it decides read null."""
+    import lib.hosting.merged_sample as ms
+
+    probed: list[str] = []
+
+    class CountingBots(BotClassifier):
+        def _probe(self, name: str) -> bool | None:
+            if self._probes >= ms.MAX_LOGIN_PROBES:
+                return None
+            self._probes += 1
+            probed.append(name)
+            return False
+
+    bots = CountingBots()
+    for i in range(ms.MAX_LOGIN_PROBES):  # the comment pass spends the budget first
+        assert bots.is_bot({"login": f"commenter{i}"}) is False
+    out = _counts([_pr(_review("ben"))], bots=bots)
+    assert len(probed) == ms.MAX_LOGIN_PROBES
+    assert out["independent_approval_count"] is None
+    assert out["bot_only_approval_count"] is None
+    # An approver the comment pass already classified costs no probe and stays known.
+    assert _counts([_pr(_review("commenter0"))], bots=bots)["independent_approval_count"] == 1
+
+
 def test_self_merged_unapproved() -> None:
     prs = [_pr(merger="ann"), _pr(_review("lintbot"), merger="ann"),
            _pr(_review("ben"), merger="ann"), _pr(merger="ben")]
