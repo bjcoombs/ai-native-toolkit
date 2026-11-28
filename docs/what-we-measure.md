@@ -116,6 +116,7 @@ That an agent starts each task knowing how this repository works and how to chec
 | `backlog-ready.2` New issues get a first response in time (shared with Governance) | `backlog_ready` | The median wait for a first response, unanswered issues included, is within first_response_max_days: is true (`backlog_ready.first_response_met eq true`) | `verified` | yes | - | positive | - | - | A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current. | Answer, label or close new issues within first_response_max_days (default 2); set the threshold in [backlog_ready] in .assess/config.toml. |
 | `backlog-ready.2` Open issues do not sit untriaged (shared with Governance) | `backlog_ready` | At most untriaged_max_share of open issues older than 7 days are untriaged: is true (`backlog_ready.untriaged_met eq true`) | `verified` | yes | - | positive | - | - | A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current. | Triage open issues older than 7 days, so at most untriaged_max_share (default 0.10) carry no label or an untriaged label. |
 | `backlog-ready.2` Issues close as fast as they open (shared with Governance) | `backlog_ready` | Issues close at least close_open_min_ratio as fast as they open: is true (`backlog_ready.close_open_met eq true`) | `verified` | yes | - | positive | - | - | A ready label and an issue form nobody acts on are intent, not practice: issues answered, triaged and closed at the pace they open are what keep the backlog an agent draws from current. | Close or decline issues at least close_open_min_ratio (default 0.9) as fast as they open over window_days. |
+| `ci-instructions-unchecked.1` Pull request checks skip the instruction files (shared with Governance) | `ci_hazards` | Instruction files that no pull request check runs on: is above 0 (`ci_hazards.instructions_unchecked gt 0`) | `measured` | no, listed | held while met: `instructions` | hazard | - | - | When every pull request check filters the instruction file out, a change to it merges with no check run. Agents follow that file, so an edit that breaks it reaches every agent unseen. | Remove the instruction files listed from paths-ignore, or add them to the paths filter, in at least one workflow that runs checks on pull requests. |
 | `guardrails-stated.1` Half the configured gates are stated | `guardrails` | Share of configured gates an instruction file states: is at least 50 (`guardrails.stated_pct gte 50`) | `measured` | yes | - | positive | - | - | A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for. | Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md. Then the next session knows the rule before it meets the gate. |
 | `guardrails-stated.2` Every configured gate is stated | `guardrails` | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | - | positive | requires `guardrails-stated.1` | - | With every configured gate written down, rule and threshold, an agent can check each one before it pushes. | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
 | `layer-0-instructions.1` An instruction file is committed | `layer_grades` | A committed instruction file exists: is true (`layer_grades.instruction_file_present eq true`) | `declared` | no, listed | `instructions` | positive | - | - | Without one, an agent starts every task by guessing how the repository builds, tests and is laid out, and those guesses drive its first changes. | Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works. |
@@ -167,6 +168,7 @@ Also carries this tag, listed under its first tag:
 - `agent-least-privilege.1` (Agent runtime)
 - `backlog-ready.1` (Agent context)
 - `backlog-ready.2` (Agent context)
+- `ci-instructions-unchecked.1` (Agent context)
 
 ### Supply chain
 
@@ -188,6 +190,7 @@ Each pair of tags that share a condition, one line per condition both carry.
 - `agent_context` and `agent_runtime`: `agent-rewrites-instructions.1`
 - `agent_context` and `governance`: `backlog-ready.1`
 - `agent_context` and `governance`: `backlog-ready.2`
+- `agent_context` and `governance`: `ci-instructions-unchecked.1`
 - `agent_runtime` and `governance`: `agent-job-write-access.1`
 - `agent_runtime` and `governance`: `agent-least-privilege.1`
 - `agent_runtime` and `supply_chain`: `layer-5-ci.2`
@@ -229,6 +232,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `ai-policy-declared` | AI policy declared | team | `min` | `ai-policy-declared.1` |
 | `ai-policy-enforced` | AI policy enforced on pull requests | team | `min` | `ai-policy-enforced.1` |
 | `backlog-ready` | Backlog kept agent-ready | team | `min` | `backlog-ready.1`, `backlog-ready.2` |
+| `ci-instructions-unchecked` | Pull request checks skip the instruction files | team | `min` | `ci-instructions-unchecked.1` |
 | `ci-skip-label` | A label skips every CI check | team | `min` | `ci-skip-label.1` |
 | `ci-test-failures-ignored` | CI ignores test failures | team | `min` | `ci-test-failures-ignored.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
@@ -511,22 +515,23 @@ Why the signals named here matter:
 
 ### `ci_hazards`: CI that can be told not to fail
 
-A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it.
+A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it. An instruction file that no pull request check runs on can change with nothing checking it.
 
-Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to.
+Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to. Instruction files that every pull request check workflow filters out with paths or paths-ignore.
 
 - Collector: `core.ci_hazards`, reading `repo_root`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_hazards.ci_hazard_files` path, `ci_hazards.skip_labels_reason` token, `ci_hazards.test_failures_ignored_reason` token.
-- Used by: row `ci-skip-label`, row `ci-test-failures-ignored`.
-- Evidence: `ci_hazards.skip_labels` head_structure (measured), `ci_hazards.test_failures_ignored` head_structure (measured).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_hazards.ci_hazard_files` path, `ci_hazards.instructions_unchecked_reason` token, `ci_hazards.skip_labels_reason` token, `ci_hazards.test_failures_ignored_reason` token, `ci_hazards.unchecked_instruction_files` path.
+- Used by: row `ci-instructions-unchecked`, row `ci-skip-label`, row `ci-test-failures-ignored`.
+- Evidence: `ci_hazards.instructions_unchecked` head_structure (measured), `ci_hazards.skip_labels` head_structure (measured), `ci_hazards.test_failures_ignored` head_structure (measured).
 - Not measured when:
   - `no_pr_checks`: No GitHub Actions workflow runs a test or lint command on pull requests. So this reader sees no check a label could skip. Nothing to change: this reads as not measured until a workflow runs a check on pull requests.
   - `no_ci_files`: The tree tracks no GitHub Actions workflow, .gitlab-ci.yml, Jenkinsfile or root pom.xml, so there is no build setting to read. Nothing to change: this reads as not measured until a CI file or a root pom is committed.
 
 Why the signals named here matter:
 
+- `ci_hazards.instructions_unchecked` feeds `ci-instructions-unchecked.1:ci_hazards.instructions_unchecked`: When every pull request check filters the instruction file out, a change to it merges with no check run. Agents follow that file, so an edit that breaks it reaches every agent unseen.
 - `ci_hazards.skip_labels` feeds `ci-skip-label.1:ci_hazards.skip_labels`: A label that skips every check lets any pull request merge on a green that no test produced. An agent, or a person in a hurry, needs only to add the label.
 - `ci_hazards.test_failures_ignored` feeds `ci-test-failures-ignored.1:ci_hazards.test_failures_ignored`: With broken tests ignored, the build passes whatever the tests report, so a green run says nothing about the change. A test an agent broke reaches the main branch unseen.
 

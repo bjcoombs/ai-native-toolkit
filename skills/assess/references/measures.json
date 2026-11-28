@@ -580,6 +580,52 @@
       ]
     },
     {
+      "id": "ci-instructions-unchecked",
+      "title": "Pull request checks skip the instruction files",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "ci-instructions-unchecked.1",
+          "truth": [
+            "agent_context",
+            "governance"
+          ],
+          "polarity": "hazard",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": "instructions",
+          "grade": "measured",
+          "counts": false,
+          "criteria": [
+            {
+              "key": "ci-instructions-unchecked.1:ci_hazards.instructions_unchecked",
+              "signal": "ci_hazards.instructions_unchecked",
+              "producer": {
+                "scan": "ci_hazards",
+                "collector": "core.ci_hazards"
+              },
+              "op": "gt",
+              "value": 0,
+              "eq_signal": null,
+              "text": "Instruction files that no pull request check runs on: is above 0",
+              "title": "Pull request checks skip the instruction files",
+              "fix": "Remove the instruction files listed from paths-ignore, or add them to the paths filter, in at least one workflow that runs checks on pull requests.",
+              "why": "When every pull request check filters the instruction file out, a change to it merges with no check run. Agents follow that file, so an edit that breaks it reaches every agent unseen.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": false
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "ci-skip-label",
       "title": "A label skips every CI check",
       "scope": "team",
@@ -2218,6 +2264,7 @@
         "agent-rewrites-instructions.1",
         "backlog-ready.1",
         "backlog-ready.2",
+        "ci-instructions-unchecked.1",
         "guardrails-stated.1",
         "guardrails-stated.2",
         "layer-0-instructions.1",
@@ -2231,6 +2278,7 @@
         "agent-rewrites-instructions.1",
         "backlog-ready.1",
         "backlog-ready.2",
+        "ci-instructions-unchecked.1",
         "guardrails-stated.1",
         "guardrails-stated.2",
         "layer-0-instructions.1",
@@ -2242,6 +2290,7 @@
         "agent-rewrites-instructions.1",
         "backlog-ready.1",
         "backlog-ready.2",
+        "ci-instructions-unchecked.1",
         "layer-0-instructions.2"
       ],
       "why": "That an agent starts each task knowing how this repository works and how to check its own change.",
@@ -2289,6 +2338,7 @@
         "ai-policy-enforced.1",
         "backlog-ready.1",
         "backlog-ready.2",
+        "ci-instructions-unchecked.1",
         "layer-7-review.1",
         "layer-7-review.2",
         "layer-8-agent-ops.1",
@@ -2312,7 +2362,8 @@
         "agent-job-write-access.1",
         "agent-least-privilege.1",
         "backlog-ready.1",
-        "backlog-ready.2"
+        "backlog-ready.2",
+        "ci-instructions-unchecked.1"
       ],
       "why": "That people stay in the loop on what agents change, and that what agents may do is agreed and visible.",
       "why_source": ""
@@ -2375,7 +2426,8 @@
       ],
       "conditions": [
         "backlog-ready.1",
-        "backlog-ready.2"
+        "backlog-ready.2",
+        "ci-instructions-unchecked.1"
       ]
     },
     {
@@ -3496,7 +3548,7 @@
     {
       "name": "ci_hazards",
       "title": "CI that can be told not to fail",
-      "summary": "Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to.",
+      "summary": "Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to. Instruction files that every pull request check workflow filters out with paths or paths-ignore.",
       "collector": "core.ci_hazards",
       "reads": [
         "repo_root"
@@ -3509,16 +3561,20 @@
         "written": true,
         "strings_kept": {
           "ci_hazards.ci_hazard_files": "path",
+          "ci_hazards.instructions_unchecked_reason": "token",
           "ci_hazards.skip_labels_reason": "token",
-          "ci_hazards.test_failures_ignored_reason": "token"
+          "ci_hazards.test_failures_ignored_reason": "token",
+          "ci_hazards.unchecked_instruction_files": "path"
         }
       },
       "used_by": {
         "rows": [
+          "ci-instructions-unchecked",
           "ci-skip-label",
           "ci-test-failures-ignored"
         ],
         "conditions": [
+          "ci-instructions-unchecked.1:ci_hazards.instructions_unchecked",
           "ci-skip-label.1:ci_hazards.skip_labels",
           "ci-test-failures-ignored.1:ci_hazards.test_failures_ignored"
         ],
@@ -3538,6 +3594,11 @@
       ],
       "evidence": [
         {
+          "signal": "ci_hazards.instructions_unchecked",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
+        {
           "signal": "ci_hazards.skip_labels",
           "input_class": "head_structure",
           "grade": "measured"
@@ -3551,7 +3612,7 @@
       "grades": [
         "measured"
       ],
-      "why": "A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it.",
+      "why": "A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it. An instruction file that no pull request check runs on can change with nothing checking it.",
       "why_source": ""
     },
     {
@@ -7659,6 +7720,15 @@
       "input_class": "ci_executed",
       "grade": "verified",
       "null_means": "included_jobs, merged_config_partial: an include may; unknown_trigger: unsettled; check_may_pass: may pass; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI; external_ci(_marker): CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
+    },
+    {
+      "path": "ci_hazards.instructions_unchecked",
+      "title": "Instruction files that no pull request check runs on",
+      "type": "number",
+      "collector": "core.ci_hazards",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_pr_checks: no GitHub Actions workflow runs a check on pull requests"
     },
     {
       "path": "ci_hazards.skip_labels",
