@@ -146,6 +146,9 @@ def test_an_unread_owners_file_never_reads_catch_all(tmp_path: Path) -> None:
     # an unreferenced rule that needs approval, beside an auto-approve that is in force
     "policy:\n  approval: [auto]\napproval_rules:\n  - name: auto\n  - name: unused\n    requires:\n"
     "      count: 2\n",
+    # a lone conditional rule: changes it does not match need no approval
+    "policy:\n  approval: [docs-review]\napproval_rules:\n  - name: docs-review\n    if:\n"
+    "      changed_files:\n        paths: [\"^docs/\"]\n    requires: {count: 1}\n",
     # an or with an unconditional auto-approve branch
     "policy:\n  approval:\n    - or: [auto, manual]\napproval_rules:\n  - name: auto\n  - name: manual\n"
     "    requires: {count: 1}\n",

@@ -9,8 +9,9 @@ git-tracked files, each parsed, never matched as text:
   (``.mergify.yml``, ``.mergify/config.yml``, ``.github/mergify.yml``) with a non-empty
   ``queue_rules`` list;
 - ``policy_bot``: a root ``.policy.yml`` whose ``policy.approval`` expression always needs an
-  approval: each rule it names resolves in ``approval_rules``, an ``and`` needs one when any
-  member does, an ``or`` only when every branch does (an unconditional auto-approve, ``count`` 0
+  approval: each rule it names resolves in ``approval_rules``, a rule needs one only with a
+  ``requires.count`` of 1 or more and no ``if`` (a conditional rule skips the changes it does not
+  match), an ``and`` needs one when any member does, an ``or`` only when every branch does (an unconditional auto-approve, ``count`` 0
   and no ``if``, clears it; a conditional one is left out). An unknown rule name is unsettled;
 - ``prow_owners``: Prow ``OWNERS`` files naming ``approvers``, at the top level or under
   ``filters``. Mirroring the #785 catch-all rule, OWNERS files that between them name one owner
@@ -44,7 +45,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -173,7 +174,7 @@ class _Scan:
         if isinstance(rules, list) and rules:
             self.credit("merge_queue", rel)
 
-    def guard(self, rel: str, read: Any) -> None:
+    def guard(self, rel: str, read: Callable[[str], object]) -> None:
         try:
             read(rel)
         except (_Unsettled, ValueError):  # YamlError and JSONDecodeError are ValueErrors
@@ -270,14 +271,16 @@ def _needs_approval(expr: Any, rules: Mapping[str, Mapping[str, Any]], conjuncti
     """Whether a policy-bot ``approval`` expression always needs an approval.
 
     A list is an ``and`` (``conjunction``) or the members of an ``or``. A rule name needs one when
-    its ``requires.count`` is 1 or more. An ``or`` needs one only when every branch does, so an
+    its ``requires.count`` is 1 or more and it has no ``if``: policy-bot skips a conditional rule
+    for the changes it does not match. An ``or`` needs one only when every branch does, so an
     unconditional auto-approve (``count`` 0, no ``if``) clears it; a conditional auto-approve
     (with ``if``) clears only the changes it matches and is left out. A name the file does not
     define, or any other shape, is unsettled."""
     if isinstance(expr, str):
         if expr not in rules:
             raise _Unsettled(expr)
-        return _required_count(rules[expr]) >= 1
+        rule = rules[expr]
+        return "if" not in rule and _required_count(rule) >= 1  # a conditional rule skips other changes
     if isinstance(expr, dict) and len(expr) == 1 and next(iter(expr)) in ("and", "or"):
         key, members = next(iter(expr.items()))
         return _needs_approval(members, rules, conjunction=key == "and")
