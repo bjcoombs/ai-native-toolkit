@@ -60,7 +60,7 @@ QUESTION = "How many repositories changed Step since the earlier run, and how ma
 CAPTION = ("Each cell counts repositories by their Step in the earlier run and in this one. "
            "A dashed cell with a hatched mark holds moves that rule changes alone explain.")
 UNREADABLE = ("the earlier run's files are in an older format than this run reads; "
-              "running both at the same version compares them")
+              "scan the earlier commits again with this version to compare them")
 NO_JOIN = ("the two runs hashed repository ids under different salts, so no repository is in both "
            "(compare runs that used one --hash-salt)")
 

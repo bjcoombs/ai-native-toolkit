@@ -97,6 +97,8 @@ def test_every_not_measured_reading_names_how_to_confirm_it(name: str) -> None:
     assert sections and titles  # the fixture fleet has a not-measured cell and a failed scan
     for title in titles:
         assert CONFIRM in title, title
+        # a full run alone never settles a reason that needs the platform: the line says what it needs
+        assert "hosting settings" in title and "confirms it" not in title, title
 
 
 @pytest.mark.parametrize("unread", [0, 1])

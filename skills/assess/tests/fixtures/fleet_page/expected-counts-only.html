@@ -43,7 +43,9 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
   var PIN_KEY = "fleet-view:pinned";
   // How a not-measured reading is settled, in plain words: every section and hover showing one says it.
   var CONFIRM = "Not measured means this run could not read it, never that it is unmet. "
-    + "A full assessment run on the repository confirms it.";
+    + "A full assessment run on the repository settles most readings; one whose reason names the "
+    + "platform or its settings (such as needs_platform) also needs that run to have access to the "
+    + "repository's hosting settings.";
   function measuredNote(html) {
     // once per section, in its visible text: a condition's hover lines, listed in the drill-down,
     // may carry it already; a cell's title attribute does not count, since it shows only on hover

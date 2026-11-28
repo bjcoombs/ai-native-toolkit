@@ -50,8 +50,9 @@ words what it finds. Its parts:
 - **Page text talks about the repositories, not the tool.** No toolkit issue number, bug,
   limitation or roadmap item reaches the page, comments in the script included. Each rendered
   section that shows a not-measured reading carries ``CONFIRM`` once (``measuredNote``), and a hover
-  that reads one carries it on the line before the needs: what not measured means and that a full assessment run on the
-  repository confirms it. Tests: ``tests/test_fleet_page_text.py``.
+  that reads one carries it on the line before the needs: what not measured means, that a full assessment run on the
+  repository settles most readings, and that a reason naming the platform or its settings also
+  needs access to the hosting settings. Tests: ``tests/test_fleet_page_text.py``.
 
 ``renderPage(bundle, state, targets, canSet, extra)`` returns the HTML of the whole app and
 ``cellTitle(bundle, repo, cell, level)`` a heatmap cell's hover text (``level`` the selected
@@ -96,7 +97,9 @@ SCRIPT = r"""
   var PIN_KEY = "fleet-view:pinned";
   // How a not-measured reading is settled, in plain words: every section and hover showing one says it.
   var CONFIRM = "Not measured means this run could not read it, never that it is unmet. "
-    + "A full assessment run on the repository confirms it.";
+    + "A full assessment run on the repository settles most readings; one whose reason names the "
+    + "platform or its settings (such as needs_platform) also needs that run to have access to the "
+    + "repository's hosting settings.";
   function measuredNote(html) {
     // once per section, in its visible text: a condition's hover lines, listed in the drill-down,
     // may carry it already; a cell's title attribute does not count, since it shows only on hover
