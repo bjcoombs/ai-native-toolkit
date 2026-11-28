@@ -26,7 +26,7 @@
 #   guard must run where nobody can skip it: CI or push protection.
 #
 # Changing a criterion changes results: bump "version" with every edit.
-
+# History: skills/assess/changes/history/profile_citizen.md, newest entry first.
 version = "profile-citizen-2026.11.24"
 
 [[rows]]

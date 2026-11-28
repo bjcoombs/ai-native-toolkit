@@ -287,10 +287,12 @@ def test_no_changes_directory_reads_no_notes(tmp_path: Path) -> None:
 # CLI ---------------------------------------------------------------------------
 
 def test_main_check_validates_without_writing(before: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    # The fixture holds five of the eight counters; give the other three a valid layout.
+    # The fixture holds five of the ten counters; give the other five a valid layout.
     for name in ("fleet_data", "achievements", "fleet_row"):
         constant = fc.COUNTERS[name].assignment.pattern.lstrip("^").split(" ")[0]
         _counter(before, name, f"{fc.pointer(name)}\n{constant} = 1\n")
+    for name in ("citizen", "handover"):
+        _counter(before, f"profile_{name}", f"{fc.pointer(f'profile_{name}')}\nversion = \"profile-{name}-1\"\n")
     snapshot = _tree(before)
     assert fc.main(["--check", "--root", str(before)]) == 0
     assert "10 notes valid; history layout valid" in capsys.readouterr().out
@@ -326,3 +328,30 @@ def test_main_rejects_a_malformed_set(before: Path, capsys: pytest.CaptureFixtur
 def test_main_needs_a_release_to_fold(before: Path) -> None:
     with pytest.raises(SystemExit):
         fc.main(["--root", str(before)])
+
+
+# Profile version counters (#1667) ---------------------------------------------
+
+def test_every_shipped_profile_has_its_own_version_counter() -> None:
+    profiles = sorted(p.stem for p in (fc.REPO_ROOT / fc.PROFILES_DIR).glob("*.toml"))
+    assert profiles, "no shipped profile found"
+    assert sorted(n.removeprefix("profile_") for n in fc.COUNTERS if n.startswith("profile_")) == profiles
+    for name in profiles:
+        counter = fc.COUNTERS[f"profile_{name}"]
+        assert counter.path == fc.PROFILES_DIR / f"{name}.toml" and counter.kind == "dated"
+
+
+def test_a_profile_note_folds_to_a_dated_profile_version(tmp_path: Path) -> None:
+    source = f"# A profile.\n{fc.pointer('profile_handover')}\nversion = \"profile-handover-2026.11.23\"\n"
+    path, hist = _counter(tmp_path, "profile_handover", source)
+    _write(tmp_path, "1667.profile_handover.md", "- a row the default model lacks.\n")
+    assert fc.fold(tmp_path, "5.0.0", RELEASE_DATE, {}) == ["profile_handover"]
+    assert path.read_text(encoding="utf-8").endswith('version = "profile-handover-2026.12.01"\n')
+    assert ("profile-handover-2026.12.01 (5.0.0 release): one change since profile-handover-2026.11.23.\n"
+            "- a row the default model lacks.") in hist.read_text(encoding="utf-8")
+
+
+def test_a_profile_history_comment_is_caught(tmp_path: Path) -> None:
+    line = "# profile-citizen-2026.11.24 (5.0.0 release): one change since profile-citizen-2026.11.23."
+    _counter(tmp_path, "profile_citizen", f"{line}\n{fc.pointer('profile_citizen')}\nversion = \"profile-citizen-1\"\n")
+    assert any("history comment above profile_citizen" in e for e in fc.layout_errors(tmp_path, "profile_citizen"))

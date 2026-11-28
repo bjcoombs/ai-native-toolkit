@@ -208,7 +208,8 @@ known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
 counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
 the `level` block, a `scan_registry` entry (`core_scans.level`, which reads `level_tally.LEVEL_READS`:
-the blocks the default model names, `DEFAULT_BLOCKS`, then `owner_exclusions`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+the blocks the default model names, `DEFAULT_BLOCKS`, the blocks the shipped profiles read beyond them,
+`PROFILE_BLOCKS` (`profile_blocks`, #1667), the evidence-only blocks, then `owner_exclusions`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
 byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
 `$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
 fixtures through `/fleet` and `/assess` on the same commit.
@@ -216,6 +217,7 @@ fixtures through `/fleet` and `/assess` on the same commit.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
@@ -688,19 +690,37 @@ def default_model() -> MaturityModel:
     return load_levels(DEFAULT_LEVELS)
 
 
+def row_blocks(row: Row) -> tuple[str, ...]:
+    """The blocks a row's criteria read (each signal's first segment, an ``eq_signal``
+    criterion's second path too), sorted."""
+    return tuple(sorted({path.split(".")[0] for level in row["levels"] for c in level["criteria"]
+                         for path in (c["signal"], *([c["eq_signal"]] if "eq_signal" in c else []))}))
+
+
 def model_blocks(model: MaturityModel) -> tuple[str, ...]:
-    """The blocks a model's criteria read (each signal's first segment), sorted."""
-    return tuple(sorted({c["signal"].split(".")[0] for row in model["rows"]
-                         for level in row["levels"] for c in level["criteria"]}))
+    """The blocks a model's criteria read (``row_blocks`` over every row), sorted."""
+    return tuple(sorted({block for row in model["rows"] for block in row_blocks(row)}))
 
 
 # The run-context blocks the default model's criteria read.
 DEFAULT_BLOCKS = model_blocks(default_model())
+
+
+def profile_blocks(directory: Path) -> tuple[str, ...]:
+    """The blocks the profiles in ``directory`` read that the default model does not, sorted
+    (#1667); ``()`` for a directory with no profile."""
+    read = {block for path in sorted(directory.glob("*.toml")) for block in model_blocks(load_levels(path))}
+    return tuple(sorted(read - set(DEFAULT_BLOCKS)))
+
+
+# The blocks the shipped profiles (levels/profiles/, lib/profiles.py) read beyond the default model's.
+PROFILE_BLOCKS = profile_blocks(DEFAULT_LEVELS.parent / "profiles")
 # The run-context block holding the owner's exclusions (lib/owner_exclusions.py).
 EXCLUSIONS_BLOCK = "owner_exclusions"
 # The run-context blocks the ``level`` entry reads, in order (lib/run/scan_registry.py): the
-# model's, the evidence-only blocks (lib/scoring/condition_evidence.py, #855), then the exclusions.
-LEVEL_READS = (*DEFAULT_BLOCKS, *EVIDENCE_BLOCKS, EXCLUSIONS_BLOCK)
+# default model's, the shipped profiles' others, the evidence-only blocks
+# (lib/scoring/condition_evidence.py, #855), then the exclusions.
+LEVEL_READS = (*DEFAULT_BLOCKS, *PROFILE_BLOCKS, *EVIDENCE_BLOCKS, EXCLUSIONS_BLOCK)
 
 
 def run_exclusions(ctx: Mapping[str, Any]) -> list[Mapping[str, Any]]:
