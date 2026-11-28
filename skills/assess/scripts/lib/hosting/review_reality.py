@@ -16,7 +16,8 @@ Block (``review_reality`` in run-context.json)::
      "reviewed_share": float | None,      # a review by an account other than the author
      "approved_share": float | None,      # an APPROVED review by an account other than the author
      "bot_review_share": float | None,    # a comment by a bot other than github-actions
-     "self_merged_share": float | None,   # author and merger the same account
+     "self_merged_share": float | None,   # author and merger the same account; None
+                                          # when a change has no author or merger login
      "review_required": bool | None,      # ruleset pull_request rule or classic protection,
                                           # each with required_approving_review_count >= 1
      "hollow_required_review": bool | None,  # review_required and reviewed_share < 0.2
@@ -117,6 +118,8 @@ in `reviews`), classified by the sample's shared `BotClassifier`. An unknown
 author withholds the share (null) only when it decides a pull
 request: one with a confirmed bot comment counts regardless. A comment with no
 author login (a deleted account) is skipped, as in `delivery` (#769).
+`self_merged_share` is null when any sampled change has no author or no merger login
+(a deleted account, an unattributed merge), never a false "not self-merged" (#1684).
 `review_required` reads the default branch's effective rules
 (`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
 classic protection, each needing `required_approving_review_count` of 1 or more;
@@ -165,7 +168,7 @@ from lib.ci.review_rules import committed_merge_queue, scan_review_rules
 from lib.agent_identity import AuthorMatcher
 from lib.fleet_config import FleetConfig
 from lib.history.ai_usage import matcher_from_config
-from lib.hosting.approval_integrity import github_counts, gitlab_counts
+from lib.hosting.approval_integrity import github_counts, gitlab_counts, same_account
 from lib.hosting.gh_cli import GhUnavailable, gh_api, unavailable
 from lib.hosting.gitlab_cli import GitlabProject, branch_pattern, branch_protection, glab_api
 from lib.hosting.merged_sample import (
@@ -240,9 +243,14 @@ def _reviewed_by_other(pr: dict[str, Any], approving: bool = False) -> bool:
     return False
 
 
-def _self_merged(pr: dict[str, Any]) -> bool:
-    author, merger = _login(pr.get("author")), _login(pr.get("mergedBy"))
-    return author is not None and author == merger
+def _self_merged(pr: dict[str, Any]) -> bool | None:
+    """Author and merger the same account; None when either login is missing (#1684)."""
+    return same_account(_login(pr.get("author")), _login(pr.get("mergedBy")))
+
+
+def _known_share(flags: Sequence[bool | None], total: int) -> float | None:
+    """The share of True flags; None when any flag is unknown."""
+    return None if None in flags else _share(sum(bool(f) for f in flags), total)
 
 
 def _approvals(params: Any) -> int:
@@ -368,7 +376,7 @@ def summarize(prs: list[dict[str, Any]], required: bool | None,
     reviewed_flags = [_reviewed_by_other(pr) for pr in prs]
     approved_flags = [_reviewed_by_other(pr, approving=True) for pr in prs]
     reviewed, approved = sum(reviewed_flags), sum(approved_flags)
-    self_merged = sum(_self_merged(pr) for pr in prs)
+    self_merged = [_self_merged(pr) for pr in prs]
     verdicts = [_has_bot_comment(pr, bots) for pr in prs]
     bot_share = None if None in verdicts else _share(sum(bool(v) for v in verdicts), total)
     reviewed_share = _share(reviewed, total)
@@ -381,7 +389,7 @@ def summarize(prs: list[dict[str, Any]], required: bool | None,
         "reviewed_share": reviewed_share,
         "approved_share": approved_share,
         "bot_review_share": bot_share,
-        "self_merged_share": _share(self_merged, total),
+        "self_merged_share": _known_share(self_merged, total),
         "review_required": required,
         "hollow_required_review": _flag(required, reviewed_share, total),
         "required_approval_bypassed": _flag(required, approved_share, total),
@@ -497,7 +505,8 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
     approved_flags: list[bool] = []
     approvals_read: list[Any] = []
     try:
-        approved = self_merged = 0
+        approved = 0
+        self_merged: list[bool | None] = []
         ages: list[int] = []
         for mr in mrs:
             iid = mr.get("iid")
@@ -513,7 +522,7 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
             fact = facts[len(reviewed)] if len(reviewed) < len(facts) else None
             reviewed.append(_any_of(by_other, fact.human_comment, fact.ai_review)
                             if fact is not None else (True if by_other else None))
-            self_merged += author is not None and author == merger
+            self_merged.append(same_account(author, merger))
             age = _days_ago(mr.get("merged_at"), now)
             if age is not None:
                 ages.append(age)
@@ -535,7 +544,7 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
         "reviewed_share": reviewed_share,
         "approved_share": approved_share,
         "bot_review_share": None if None in bots else _share(sum(map(bool, bots)), total),
-        "self_merged_share": _share(self_merged, total),
+        "self_merged_share": _known_share(self_merged, total),
         "review_required": required,
         "hollow_required_review": hollow,
         "required_approval_bypassed": bypassed,

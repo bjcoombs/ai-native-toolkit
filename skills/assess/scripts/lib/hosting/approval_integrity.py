@@ -24,7 +24,9 @@ number of sampled changes:
   ``mergedAt`` (GitLab: ``approved_by[].approved_at`` against ``merged_at``; null where
   GitLab does not give the time).
 - ``self_merged_unapproved_count``: changes merged by their author with no qualifying
-  approval.
+  approval. A change with no author or no merger login (a deleted account, or a merge the
+  platform does not attribute) is unknown for self-merge, never "not self-merged" (#1684):
+  it makes the count null unless a qualifying approval settles it either way.
 - ``bot_authored_count``: changes a bot authored. The other counts still cover every
   sampled change, so the approval counts add up to ``merged_count``.
 
@@ -94,7 +96,7 @@ class Approval:
 @dataclass(frozen=True)
 class Change:
     author: Party
-    self_merged: bool
+    self_merged: bool | None
     approvals: tuple[Approval, ...]
     merged_at: datetime | None
 
@@ -196,11 +198,20 @@ def _after_merge(c: Change) -> bool | None:
     return True if late and len(known) == len(people) else None
 
 
+def same_account(author: str | None, merger: str | None) -> bool | None:
+    """Whether the author merged the change; None when either login is missing (#1684)."""
+    return None if author is None or merger is None else author == merger
+
+
 def _self_merged_unapproved(c: Change) -> bool | None:
-    if not c.self_merged:
+    if c.self_merged is False:
         return False
     independent = _independent(c)
-    return None if independent is None else not independent
+    if independent is True:
+        return False  # a person approved it, whoever merged it
+    if c.self_merged is None or independent is None:
+        return None
+    return True
 
 
 def _count(flags: Sequence[bool | None]) -> int | None:
@@ -244,7 +255,7 @@ def github_change(pr: dict[str, Any], party: PartyOf) -> Change:
         approvals.append(Approval(party(review.get("author")), stale,
                                   parse_time(review.get("submittedAt"))))
     merger = login(pr.get("mergedBy"))
-    return Change(party(pr.get("author")), author is not None and author == merger,
+    return Change(party(pr.get("author")), same_account(author, merger),
                   tuple(approvals), parse_time(pr.get("mergedAt")))
 
 
@@ -272,7 +283,7 @@ def gitlab_change(mr: dict[str, Any], approvals: Any, party: PartyOf) -> Change:
         if name is None or name == author:
             continue
         out.append(Approval(party(user), None, parse_time(entry.get("approved_at"))))
-    return Change(party(mr.get("author")), author is not None and author == merger,
+    return Change(party(mr.get("author")), same_account(author, merger),
                   tuple(out), parse_time(mr.get("merged_at")))
 
 

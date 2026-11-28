@@ -1096,7 +1096,7 @@
                     "number",
                     "null"
                   ],
-                  "description": "Share (0 to 1) of changes merged by their author (copied from review_reality); null when nothing was counted."
+                  "description": "Share (0 to 1) of changes merged by their author (copied from review_reality); null also when a change has no author or merger login; null when nothing was counted."
                 },
                 "agent_authored_share": {
                   "type": [
@@ -1383,7 +1383,7 @@
                     "number",
                     "null"
                   ],
-                  "description": "Share (0 to 1) of changes merged by their author; null when nothing was counted."
+                  "description": "Share (0 to 1) of changes merged by their author; null also when a change has no author or merger login (#1684); null when nothing was counted."
                 },
                 "review_required": {
                   "type": [
@@ -1474,7 +1474,7 @@
                     "integer",
                     "null"
                   ],
-                  "description": "Sampled changes merged by their author without an approval by a person; null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
+                  "description": "Sampled changes merged by their author without an approval by a person (unknown, so null, when an unapproved change has no author or merger login, #1684); null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
                 },
                 "bot_authored_count": {
                   "type": [

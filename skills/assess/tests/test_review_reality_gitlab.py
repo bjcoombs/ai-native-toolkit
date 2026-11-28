@@ -638,3 +638,14 @@ def test_gitlab_coverage_bot_token_notes_are_not_review(world: World) -> None:
     assert block["bot_review_share"] == 0.0
     assert block["reviewed_share"] == 0.0
     assert block["hollow_required_review"] is True  # nobody looked
+
+
+def test_gitlab_missing_merger_reads_self_merge_unknown(world: World) -> None:
+    """No merge_user and no merged_by: unknown, never "not self-merged" (#1684)."""
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    mrs = [_mr(1), {"iid": 2, "author": ALICE, "merged_at": "2026-09-01T00:00:00Z"}]
+    world.merged(mrs, {1: _approvals(), 2: _approvals()})
+    world.policy([])
+    block = scan_review_reality(world.root)
+    assert block["self_merged_share"] is None
+    assert block["self_merged_unapproved_count"] is None
