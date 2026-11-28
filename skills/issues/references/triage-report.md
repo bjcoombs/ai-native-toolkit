@@ -9,6 +9,7 @@ Tagged agent-ready: #12, #15, #18
 Tagged needs-triage:
 - #20, #21: research posted (Needs your call: 1 each)
 - #22: overlaps open PR #40 (both edit skills/issues/SKILL.md); after it merges: <what remains>
+- #23: definition of ready: sections-present: missing Root Cause, Success Criteria
 Promoted on confirmation: #19 (reading A folded into the issue body)
 
 Sizing:
