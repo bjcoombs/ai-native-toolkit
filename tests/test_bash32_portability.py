@@ -15,14 +15,19 @@ runs the skill scripts with it. Two kinds of failure matter there:
   whole ghsync and ghreport suites with /bin/bash first on PATH. Expand an
   array that can be empty as ${arr[@]+"${arr[@]}"}, or guard it with its
   length.
+- After such an abort bash 3.2 runs the EXIT trap with $? = 0, and the
+  trap's status becomes the script's, so the abort exited 0 (#1673). The
+  tests below force an abort after each trap and assert a non-zero exit, and
+  pin that ghreport reads a shell error from ghsync as a failed discovery.
 """
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
-from gitbash import IS_WINDOWS, base_env, write_script
+from gitbash import BASH, IS_WINDOWS, base_env, write_script
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPT_DIRS = (
@@ -205,3 +210,175 @@ def test_ghsync_handles_an_empty_org_under_bash32(tmp_path: Path) -> None:
     assert res.returncode == 0, res.stderr
     assert "unbound variable" not in res.stderr
     assert res.stdout == ""
+
+
+# ── An abort exits non-zero (#1673) ──────────────────────────────────────────
+# Bash 3.2 runs an EXIT trap with $? = 0 after a `set -u` abort, and the
+# trap's own status then becomes the script's: an abort exited 0 with nothing
+# on stdout, so --porcelain read as an empty org. The tests copy each script,
+# put a reference to an unset variable after the line named, and run it.
+
+GHREPORT_DIR = REPO / "skills" / "ghreport" / "scripts"
+ABORT_LINE = ': "$ghsync_test_unset_1673"\n'
+
+
+def _with_abort_after(script: Path, dest: Path, anchor: str) -> None:
+    """Copy ``script`` to ``dest`` with ABORT_LINE after the line ``anchor``."""
+    lines = script.read_text(encoding="utf-8").splitlines(keepends=True)
+    at = [i for i, line in enumerate(lines) if line.rstrip("\n") == anchor]
+    assert len(at) == 1, f"{anchor!r} is not one line of {script.name}"
+    lines.insert(at[0] + 1, ABORT_LINE)
+    dest.write_text("".join(lines), encoding="utf-8", newline="\n")
+    dest.chmod(0o755)
+
+
+def _copy_script(src: Path, dest: Path) -> None:
+    """Copy a script byte for byte: the scripts hold non-ASCII text."""
+    shutil.copyfile(src, dest)
+    dest.chmod(0o755)
+
+
+def _stub_env(tmp_path: Path, repos_json: str) -> dict[str, str]:
+    stub_dir = tmp_path / "bin"
+    stub_dir.mkdir()
+    write_script(stub_dir / "gh", GH_STUB)
+    (tmp_path / "repos.json").write_text(repos_json, encoding="utf-8")
+    env = {
+        **base_env(),
+        "HOME": str(tmp_path),
+        "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}",
+        "REPOS_JSON": str(tmp_path / "repos.json"),
+    }
+    env.pop("GHSYNC_BLACKLIST", None)
+    return env
+
+
+ONE_REPO = '[{"name":"alpha","isArchived":false,"defaultBranchRef":{"name":"main"}}]'
+
+
+@needs_bash3
+@pytest.mark.parametrize(
+    "anchor,args",
+    [
+        # After the first EXIT trap, in a --porcelain run.
+        ("discover_repos", ["--porcelain"]),
+        # After the trap that also removes the status directory.
+        (
+            "export QUIET_MODE DRY_RUN GITHUB_DEV_PATH ORG PROVIDER GITLAB_HOST"
+            " GITLAB_SCHEME GHSYNC_STATUS_DIR",
+            ["--dry-run", "--quiet"],
+        ),
+    ],
+    ids=["porcelain", "sync"],
+)
+def test_ghsync_abort_exits_nonzero_under_bash32(
+    tmp_path: Path, anchor: str, args: list[str]
+) -> None:
+    script = tmp_path / "ghsync.sh"
+    _with_abort_after(GHSYNC, script, anchor)
+    root = tmp_path / "root"
+    root.mkdir()
+    res = subprocess.run(
+        ["/bin/bash", str(script), "--org", "testorg", "--root", str(root), *args],
+        capture_output=True, encoding="utf-8", errors="replace",
+        env=_stub_env(tmp_path, ONE_REPO), timeout=60,
+    )
+    assert "unbound variable" in res.stderr, res.stderr
+    assert res.returncode != 0
+
+
+@needs_bash3
+def test_ghreport_abort_exits_nonzero_under_bash32(tmp_path: Path) -> None:
+    # ghreport finds ghsync at ../../ghsync/scripts/ghsync.sh from its own dir.
+    report_dir = tmp_path / "skills" / "ghreport" / "scripts"
+    sync_dir = tmp_path / "skills" / "ghsync" / "scripts"
+    report_dir.mkdir(parents=True)
+    sync_dir.mkdir(parents=True)
+    for part in GHREPORT_DIR.glob("ghreport_*.sh"):
+        _copy_script(part, report_dir / part.name)
+    _copy_script(GHSYNC, sync_dir / "ghsync.sh")
+    _with_abort_after(
+        GHREPORT_DIR / "ghreport.sh", report_dir / "ghreport.sh",
+        'echo "Querying state for ${#repos[@]} repo(s) ..." >&2',
+    )
+    root = tmp_path / "root"
+    root.mkdir()
+    res = subprocess.run(
+        ["/bin/bash", str(report_dir / "ghreport.sh"), "--org", "testorg",
+         "--root", str(root), "--quiet", "--no-file"],
+        capture_output=True, encoding="utf-8", errors="replace",
+        env=_stub_env(tmp_path, ONE_REPO), timeout=90,
+    )
+    assert "unbound variable" in res.stderr, res.stderr
+    assert res.returncode != 0
+
+
+# ── ghreport reads a failed discovery as a failure (#1673) ───────────────────
+# A stand-in ghsync.sh lets each test choose what discovery prints and how it
+# exits. These run under any bash: they pin ghreport's reading of ghsync.
+
+
+needs_bash_jq = pytest.mark.skipif(
+    shutil.which("bash") is None or shutil.which("jq") is None,
+    reason="requires bash and jq on PATH",
+)
+
+
+def _ghreport_with_ghsync(tmp_path: Path, ghsync_body: str) -> subprocess.CompletedProcess[str]:
+    report_dir = tmp_path / "skills" / "ghreport" / "scripts"
+    sync_dir = tmp_path / "skills" / "ghsync" / "scripts"
+    report_dir.mkdir(parents=True)
+    sync_dir.mkdir(parents=True)
+    for part in GHREPORT_DIR.glob("ghreport*.sh"):
+        _copy_script(part, report_dir / part.name)
+    write_script(sync_dir / "ghsync.sh", ghsync_body)
+    root = tmp_path / "root"
+    root.mkdir()
+    return subprocess.run(
+        [BASH, str(report_dir / "ghreport.sh"), "--org", "testorg",
+         "--root", str(root), "--quiet", "--no-file"],
+        capture_output=True, encoding="utf-8", errors="replace",
+        env={**base_env(), "HOME": str(tmp_path), "PATH": os.environ["PATH"]},
+        timeout=60,
+    )
+
+
+@needs_bash_jq
+def test_ghreport_reads_a_shell_error_from_ghsync_as_failed_discovery(
+    tmp_path: Path,
+) -> None:
+    # What a bash 3.2 abort looked like to ghreport: status 0, empty stdout,
+    # the shell's own error line on stderr.
+    res = _ghreport_with_ghsync(
+        tmp_path,
+        "#!/bin/bash\n"
+        'echo "Org:  testorg" >&2\n'
+        'echo "$0: line 1186: user_teams[@]: unbound variable" >&2\n'
+        "exit 0\n",
+    )
+    assert res.returncode != 0, res.stderr
+    assert "No repositories discovered" not in res.stderr
+    assert "repo discovery via ghsync failed" in res.stderr
+
+
+@needs_bash_jq
+def test_ghreport_reads_a_nonzero_ghsync_as_failed_discovery(tmp_path: Path) -> None:
+    res = _ghreport_with_ghsync(tmp_path, "#!/bin/bash\nexit 3\n")
+    assert res.returncode != 0
+    assert "No repositories discovered" not in res.stderr
+    assert "repo discovery via ghsync failed" in res.stderr
+
+
+@needs_bash_jq
+def test_ghreport_still_reports_an_empty_org(tmp_path: Path) -> None:
+    # ghsync's --porcelain sends its progress lines to stderr; they are not
+    # errors, and an org with no repositories is still a clean run.
+    res = _ghreport_with_ghsync(
+        tmp_path,
+        "#!/bin/bash\n"
+        'echo "Org:  testorg" >&2\n'
+        'echo "Found 0 archived repositories (cached to .ghsync-archived)" >&2\n'
+        "exit 0\n",
+    )
+    assert res.returncode == 0, res.stderr
+    assert "No repositories discovered for testorg" in res.stderr

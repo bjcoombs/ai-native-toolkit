@@ -479,7 +479,7 @@ discover_github() {
     if [ "$account_type" = "User" ]; then
         if [ "$LIST_TEAMS" = true ]; then
             echo "$ORG is a personal account; teams don't apply. Use --list-repos instead."
-            exit 0
+            exit_ok
         fi
 
         # Personal account: list the account's repos directly. Empty repos have
@@ -544,7 +544,7 @@ discover_github() {
                     echo "  - $team ($repo_count repos)"
                 done
             fi
-            exit 0
+            exit_ok
         fi
 
         # Source 1: repos from every team you belong to.
@@ -1180,9 +1180,32 @@ archived_repos_file=$(mktemp)
 # The metadata sidecar and the --porcelain-json lines (META_MODE only).
 meta_file=$(mktemp)
 meta_out_file=$(mktemp)
+temp_dir=""
 # Remove the temp files on any exit path, including the --list-teams early
 # exits below which return before the explicit rm -f calls.
-trap 'rm -f "$all_repos_file" "$archived_repos_file" "$meta_file" "$meta_out_file" "$meta_out_file.heads"' EXIT
+#
+# Bash 3.2 (macOS /bin/bash) runs an EXIT trap with $? = 0 after a `set -u`
+# abort, and the trap's status then becomes the script's, so an abort exited
+# 0 with nothing on stdout and --porcelain read as an empty org (#1673). The
+# trap cannot see the abort, so every deliberate success after this point
+# goes through exit_ok (or sets ghsync_finished at the end of the script),
+# and the trap turns any other 0 into 1. A bare `exit 0` after this line
+# therefore exits 1: use exit_ok.
+ghsync_finished=false
+exit_ok() {
+    ghsync_finished=true
+    exit 0
+}
+on_exit() {
+    local rc=$?
+    rm -f "$all_repos_file" "$archived_repos_file" "$meta_file" "$meta_out_file" "$meta_out_file.heads"
+    [ -z "$temp_dir" ] || rm -rf "$temp_dir"
+    if [ "$rc" -eq 0 ] && [ "$ghsync_finished" != true ]; then
+        rc=1
+    fi
+    exit "$rc"
+}
+trap on_exit EXIT
 ACTIVE_CUTOFF_ISO=""
 if [ "$ACTIVE_SINCE_SET" = true ]; then
     ACTIVE_CUTOFF_ISO=$(jq -rn --argjson e "$ACTIVE_CUTOFF_EPOCH" '$e | todate')
@@ -1238,7 +1261,7 @@ if [ "$META_MODE" = true ] && [ ${#repo_paths[@]} -gt 0 ]; then
     apply_activity_metadata
     if [ ${#repo_paths[@]} -eq 0 ]; then
         echo "No repositories have a default-branch commit since $ACTIVE_CUTOFF_ISO (--active-since $ACTIVE_SINCE)"
-        exit 0
+        exit_ok
     fi
 fi
 
@@ -1246,7 +1269,7 @@ total_repos=${#repo_paths[@]}
 
 if [ "$total_repos" -eq 0 ]; then
     report_no_repos
-    exit 0
+    exit_ok
 fi
 
 report_found_repos
@@ -1268,7 +1291,7 @@ if [ "$LIST_REPOS" = true ]; then
             echo "  - $repo"
         done
     fi
-    exit 0
+    exit_ok
 fi
 
 # Per-run status files live in a temp directory outside the root, so a dry
@@ -1280,7 +1303,6 @@ temp_dir=$(mktemp -d)
 mkdir -p "$temp_dir/status"
 status_dir="$temp_dir/status"
 GHSYNC_STATUS_DIR="$status_dir"
-trap 'rm -f "$all_repos_file" "$archived_repos_file" "$meta_file" "$meta_out_file" "$meta_out_file.heads"; rm -rf "$temp_dir"' EXIT
 
 export QUIET_MODE DRY_RUN GITHUB_DEV_PATH ORG PROVIDER GITLAB_HOST GITLAB_SCHEME GHSYNC_STATUS_DIR
 export CLONE_FILTER CLONE_SHALLOW_SINCE
@@ -1681,3 +1703,4 @@ fi
 
 # Cleanup
 rm -rf "$temp_dir"
+ghsync_finished=true
