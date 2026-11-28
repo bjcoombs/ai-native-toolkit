@@ -48,6 +48,7 @@ from typing import Any, TypedDict
 from lib.scoring.levels import Scalar
 from lib.scoring.next_step_guidance_backlog import BACKLOG_FLAGS, BACKLOG_HINT
 from lib.scoring.next_step_guidance_contracts import API_COMPAT_HINT, CONTRACT_FLAGS
+from lib.scoring.next_step_guidance_guards import GUARD_FLAGS, GUARD_HINT
 
 # The guardrail deny rule the permissions wording names (#1153); ``/assess --fix`` writes it,
 # with the repository's default branch in place of ``main`` (``lib/starter_templates.py``, #1154).
@@ -579,6 +580,7 @@ _WORDING: dict[str, Wording] = {
         "A tracked routine file, or a tracked scheduled or issue or pull request workflow that runs "
         "an agent, directly or through a local reusable workflow."),
     **{signal: _flag(change, done) for signal, (change, done) in BACKLOG_FLAGS.items()},  # #1324
+    **{signal: _flag(change, done) for signal, (change, done) in GUARD_FLAGS.items()},  # #854
     **{signal: _flag(change, done) for signal, (change, done) in CONTRACT_FLAGS.items()},  # #852, #853
 }
 _WORDING.update({f"{name}.value": _setting(name) for name in SETTING_NAMES})
@@ -750,6 +752,7 @@ _MEASURE_HINTS = {
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
     "backlog_ready": BACKLOG_HINT,
+    "repo_guards": GUARD_HINT,
     "api_compat": API_COMPAT_HINT,
 }
 _SETTING_HINT = ("ghreport could not read this setting (token scope or provider tier); rerun "

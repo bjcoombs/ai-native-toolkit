@@ -806,6 +806,20 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `promissory_markers.top_offenders.commit` | dropped |
 | `promissory_markers.stale_by_file.{}.families` | dropped |
 
+## repo_guards
+
+| Field | Kept as |
+|---|---|
+| `repo_guards.present_reason` | token |
+| `repo_guards.guard_tested_reason` | token |
+| `repo_guards.guards.path` | path (hashed when hashing is on) |
+| `repo_guards.guards.kind` | token |
+| `repo_guards.guards.via` | token |
+| `repo_guards.guards.target` | path (hashed when hashing is on) |
+| `repo_guards.guards.script` | path (hashed when hashing is on) |
+| `repo_guards.guards.trigger` | token |
+| `repo_guards.guards.tested_by` | path (hashed when hashing is on) |
+
 ## review_automation
 
 | Field | Kept as |

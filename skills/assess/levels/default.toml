@@ -358,6 +358,22 @@
 #   skills-lock.json and a hashed marketplace manifest are evidence, not counted. Files and
 #   link targets are read at HEAD. Outside a git repository, or with no commit, nothing is
 #   committed to list: unknown (not_a_git_repository), never unmet. It gates no Step. Graded measured (head_structure), read from the committed files.
+# - Ratchets and repo-owned guards (lib/ci/repo_guards.py, #854). repo-guards reads
+#   repo_guards.present: a CI job on an ordinary trigger runs, directly or through a script,
+#   make recipe or local action the shared CI-step follower reads, one of a lint baseline that
+#   a lint command or check script reads and that a tracked command updates or prunes; a
+#   boundary checker (import-boss, lint-imports, tach check, a check_layers or verify-imports
+#   script, an ArchUnit-style test that a CI test run covers); or a file-size cap. A baseline
+#   no CI step reads, a benchmark baseline, a masked line (|| true), a GitLab after_script and
+#   an install do not count. It is evidence for the linter and architecture practices, kept as
+#   its own condition because a criterion list is an AND and those rows read other signals.
+#   With none found, a guard on an unsettled trigger is unknown (trigger_unknown) and an
+#   unread CI system or step is unknown (ci_not_read), never unmet. repo-guard-tested reads
+#   repo_guards.guard_tested: a guard that is a committed script has a tracked test file
+#   named for it that names it. It requires repo-guards.1, and repo-guards.1 names it as its
+#   guarded_by guard. With guards that are only third-party tools it is unknown
+#   (no_guard_script). Both are tagged structure, gate no Step and are graded measured
+#   (head_structure), read from the committed files.
 # - Agent jobs run with least privilege reads agent_ops.summary.agent_jobs_least_privilege
 #   (lib/agents/agent_job_scope.py, #849): every committed workflow job that runs an agent
 #   (an agent action, claude -p, codex exec or a named model, followed through local actions
@@ -894,6 +910,30 @@ aggregation = "min"
   level = 1
   truth = ["agent_context"]
   criteria = [{ signal = "skill_library.present", op = "eq", value = true }]
+
+[[rows]]
+id = "repo-guards"
+title = "Ratchets and repo-owned guards run in CI"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["structure"]
+  guarded_by = "repo-guard-tested.1"
+  criteria = [{ signal = "repo_guards.present", op = "eq", value = true }]
+
+[[rows]]
+id = "repo-guard-tested"
+title = "Repo-owned guard is itself tested"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["structure"]
+  requires = ["repo-guards.1"]
+  criteria = [{ signal = "repo_guards.guard_tested", op = "eq", value = true }]
 
 [[rows]]
 id = "backlog-ready"
