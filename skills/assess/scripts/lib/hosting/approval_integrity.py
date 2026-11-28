@@ -170,9 +170,10 @@ def _stale(c: Change) -> bool | None:
         return False  # no qualifying approval: nothing to be stale
     if not people and all(a.stale is False for a in maybe):
         return False  # whichever of them are people, one is on the head
-    if maybe or any(a.stale is None for a in people):
-        return None
-    return True
+    if not people:
+        return None  # stale if any of them is a person, clean if all are bots
+    # A person approved: True when every approval, a person's or an unknown account's, is stale.
+    return None if any(a.stale is not True for a in people + maybe) else True
 
 
 def _after_merge(c: Change) -> bool | None:
@@ -190,9 +191,9 @@ def _after_merge(c: Change) -> bool | None:
     known = [a.at for a in people if a.at is not None]
     if known and min(known) <= c.merged_at:
         return False  # any other approval, unknown time or account, can only be earlier still
-    if maybe or len(known) < len(people):
-        return None
-    return True
+    # Every person approved late: True when every unknown account's approval is late too.
+    late = all(a.at is not None and a.at > c.merged_at for a in maybe)
+    return True if late and len(known) == len(people) else None
 
 
 def _self_merged_unapproved(c: Change) -> bool | None:

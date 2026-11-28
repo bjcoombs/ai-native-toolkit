@@ -226,6 +226,20 @@ def test_one_late_or_stale_unknown_reviewer_keeps_the_count_null() -> None:
     assert out["approved_after_merge_count"] is None
 
 
+def test_unknown_reviewer_as_stale_and_late_as_the_person_settles_true() -> None:
+    """Whoever the unknown account is, every qualifying approval is stale and late."""
+    pr = _pr(_review("mystery", commit=OLD, at=AFTER), _review("ben", commit=OLD, at=AFTER))
+    out = _counts([pr])
+    assert out["stale_approval_count"] == 1
+    assert out["approved_after_merge_count"] == 1
+    # An unknown approval with no readable commit or time still leaves them null.
+    pr = _pr(_review("mystery", commit=None, at="not a time"),
+             _review("ben", commit=OLD, at=AFTER))
+    out = _counts([pr])
+    assert out["stale_approval_count"] is None
+    assert out["approved_after_merge_count"] is None
+
+
 def test_unknown_reviewer_on_a_self_merge_leaves_that_count_null() -> None:
     out = _counts([_pr(_review("mystery"), merger="ann")])
     assert out["self_merged_unapproved_count"] is None
