@@ -271,12 +271,29 @@ def _words(part: str) -> list[str]:
     return command_words(part.strip().strip("(){} "))
 
 
+def _and_chain(rest: list[str]) -> list[str]:
+    """The commands of the ``&&`` chain that opens ``rest`` (``rest[0]`` is ``&&``), braces kept
+    together, up to the next ``||``, ``;`` or ``|`` outside them: in ``[ -s f ] && echo x || exit 1``
+    the ``exit 1`` runs only when the test fails, so it is not in the chain."""
+    out: list[str] = []
+    depth = 0
+    for k, part in enumerate(rest[1:]):
+        if k % 2:
+            if depth <= 0 and part != "&&":
+                break
+            continue
+        depth += part.count("{") + part.count("(") - part.count("}") - part.count(")")
+        out.append(part)
+    return out
+
+
 def _decides(parts: list[str], refs: list[str], later: list[str], held: frozenset[str], piped: bool = False) -> bool:
     """Whether a pipeline in the operator-split ``parts`` (commands at the even indexes) that reads
     apidiff's output (names one of ``refs``, or, with ``piped``, the first pipeline, which apidiff
-    feeds) decides a re-raise: its last command succeeds on a non-empty report and ``&&`` leads
-    into the re-raise, or fails on one and ``||`` does, or it is an ``if`` test that succeeds on
-    one with a re-raise in its ``then`` branch (read on across ``later`` lines). An ``exit 1``
+    feeds) decides a re-raise: its last command succeeds on a non-empty report and its ``&&`` chain
+    holds the re-raise (``_and_chain``), or fails on one and ``||`` does, or it is an ``if`` test that succeeds on
+    one with a re-raise in its ``then`` branch (``then`` on that line or the next, read on across
+    ``later`` lines). An ``exit 1``
     after a command that only prints the report (``cat out.txt; go build || exit 1``) is not."""
     i = 0
     while i < len(parts):
@@ -287,10 +304,11 @@ def _decides(parts: list[str], refs: list[str], later: list[str], held: frozense
         words, rest = _words(parts[j]), parts[j + 1:]
         polarity = _polarity(words) if reads else None
         if polarity is not None and words[:1] == ["if"]:
-            if polarity == "pos" and rest[:1] == [";"] and any(_reraises(c, held) for c in _then_body(rest, later)):
+            if polarity == "pos" and rest[:1] in ([";"], []) and any(_reraises(c, held) for c in _then_body(rest, later)):
                 return True
         elif polarity is not None and len(rest) > 1 and (polarity, rest[0]) in (("pos", "&&"), ("neg", "||")):
-            if any(_reraises(_words(p), held) for p in _OPERATOR.split(fallback(rest[1:]))[::2]):
+            branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
+            if any(_reraises(_words(p), held) for p in branch):
                 return True
         i = j + 2
     return False

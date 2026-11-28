@@ -463,6 +463,7 @@ def test_an_inline_apidiff_test_that_cannot_fail_on_a_break_does_not_count(tmp_p
     "apidiff -incompatible old new > out.txt; if [ -s out.txt ]; then exit 1; fi",
     "apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 1; }",
     "apidiff -incompatible old new > out.txt; diff /dev/null out.txt || exit 1",
+    "apidiff -incompatible old new > out.txt; [ -s out.txt ] && cat out.txt && exit 1",
 ])
 def test_a_one_line_apidiff_output_check_counts(tmp_path: Path, line: str) -> None:
     root = _repo(tmp_path, {WF: _workflow(line)})
@@ -482,6 +483,8 @@ def test_a_one_line_apidiff_output_check_counts(tmp_path: Path, line: str) -> No
     ("apidiff old new > report.txt", "if [ ! -s report.txt ]; then exit 1; fi"),
     ("apidiff old new | grep -q .; go build ./... || exit 1",),                # the pipe decides nothing
     ("apidiff old new | grep -vq x && exit 1",),                               # an inverted grep
+    ("apidiff old new > out.txt; [ -s out.txt ] && echo changed || exit 1",),  # red only when nothing changed
+    ("apidiff old new > out.txt", "[ -s out.txt ] && echo changed || exit 1"),
 ])
 def test_a_one_line_exit_that_reads_nothing_apidiff_wrote_does_not_count(tmp_path: Path, runs: tuple[str, ...]) -> None:
     body = "      - run: |\n" + "".join(f"          {r}\n" for r in runs)
@@ -544,3 +547,12 @@ def test_the_scorer_cites_a_pin_only_when_ci_runs_tests() -> None:
     para = next(p for p in scorer.read_text(encoding="utf-8").split("\n\n")
                 if p.startswith("**API and contract compatibility checks.**"))
     assert "Cite a test in `pins` only when `ci_checks.enforced_check_runs` is true" in para
+
+
+def test_then_on_its_own_line_after_an_output_test_counts(tmp_path: Path) -> None:
+    body = "#!/bin/sh\napidiff -incompatible old new > out.txt\nif [ -s out.txt ]\nthen\n  exit 1\nfi\n"
+    root = _repo(tmp_path, {"hack/api.sh": body, WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
+    quiet = body.replace("then\n  exit 1\nfi\n", "then\n  echo changed\nfi\nexit 1\n")
+    root = _repo(tmp_path / "q", {"hack/api.sh": quiet, WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == []
