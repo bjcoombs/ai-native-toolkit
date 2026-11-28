@@ -29,6 +29,12 @@ number (``tests/test_fleet_page.py`` checks it); a caller's own model is shown a
 **Achievements** are re-worded from their structured evidence with the same templates as
 ``fleet_achievements`` credit lines, so the unit and repository labels follow the mode above.
 
+**Tag tier** (#1625, criterion 1 of #692): each entry of ``tags`` lists the team-row conditions
+the model tags with it, as ``{row, level}`` (``row`` an index into ``rows``), so the page drills
+from a repository to a tag to a condition by row title and level, never by condition id. A
+repository's ``tags`` are its per-tag tally with ``unmet`` (measured less met) beside ``met``;
+null when the repository was not measured, never a row of zeros.
+
 **Practice packs** (#1276, ``lib/fleet/fleet_packs.py``): a ``--pack`` run's ``packs`` roll-up
 is copied as ``packs``, each pack's name and version and each practice's title, level and
 counts; no condition id. Absent without a pack.
@@ -38,7 +44,8 @@ counts; no condition id. Absent without a pack.
 repositories at the row's top level out of those with a known level, never a mean. ``radar``
 names the rows the page draws a spoke for: those measured (a known level) in at least
 ``min_share`` percent (``RADAR_MIN_SHARE``, 20) of the fleet's repositories, the axis rule #1367
-sets for ``radar.svg``. ``radar_axes`` picks them, the one count the bundle works out itself.
+sets for ``radar.svg``. ``radar_axes`` picks them, the one count the bundle works out itself
+(apart from a tag's ``unmet``).
 ``measured_counts``, ``keeps_axis`` and ``RADAR_MIN_SHARE`` are the one home of that rule:
 ``fleet_radar`` and the ``--radar-min-measured`` default import them from here.
 
@@ -84,6 +91,17 @@ class Radar(TypedDict):
     axes: list[int]  # indexes into ``rows``, in model order
 
 
+class TagCondition(TypedDict):
+    row: int  # an index into ``rows``
+    level: int  # the row's level the condition stands at
+
+
+class PageTag(TypedDict):
+    tag: str  # a TRUTH_TAGS token
+    title: str
+    conditions: list[TagCondition]  # the team-row conditions the model tags with it, in model order
+
+
 class _PackKeys(TypedDict, total=False):
     packs: list[dict[str, Any]]  # a --pack run's roll-up (#1276), copied from fleet-data.json; absent without
 
@@ -95,7 +113,7 @@ class PageBundle(_PackKeys):
     levels_version: str | None
     rows: list[dict[str, Any]]
     steps: list[dict[str, Any]]
-    tags: list[dict[str, str]]
+    tags: list[PageTag]
     views: list[dict[str, Any]]
     repos: list[dict[str, Any]]
     achievements: list[dict[str, Any]]
@@ -213,7 +231,10 @@ def _repo(repo: Mapping[str, Any], label: Mapping[str, str], rows: Mapping[str, 
                    "value": c.get("value"), "reason": c.get("reason"), "why": c.get("why")}
                   for c in repo.get("rows") or [] if c["row"] in rows],
         "units": {u["view"]: label[u["unit"]] for u in repo.get("units") or [] if u["unit"] in label},
-        "tags": [{k: c[k] for k in ("tag", "met", "measured", "not_measured")} for c in repo.get("tags") or []],
+        # None when the repository was not measured, never a row of zeros; unmet is measured less met
+        "tags": None if repo.get("tags") is None else [
+            {**{k: c[k] for k in ("tag", "met", "measured", "not_measured")}, "unmet": c["measured"] - c["met"]}
+            for c in repo["tags"]],
     }
 
 
@@ -255,7 +276,10 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
         "rows": [{"title": r["title"], "top_level": len(r["levels"])} for r in team],
         "steps": [{"step": s["step"], "name": s["name"], "gates": [g["id"] for g in s["gates"]]}
                   for s in sorted(model.get("steps", []), key=lambda s: s["step"])],
-        "tags": [{"tag": tag, "title": title} for tag, title in TRUTH_TAG_TITLES.items()],
+        "tags": [{"tag": tag, "title": title, "conditions": [{"row": i, "level": lv["level"]}
+                                                           for i, r in enumerate(team) for lv in r["levels"]
+                                                           if tag in lv.get("truth", [])]}
+                 for tag, title in TRUTH_TAG_TITLES.items()],
         "views": [{"view": v["view"], "units": [_unit(u, label, rows) for u in v["units"]]} for v in data.get("views") or []],
         "repos": [_repo(r, label, rows, titles, mode) for r in data.get("repos") or []],
         "achievements": [_achievement(a, label, titles, tops) for a in ach.get("achievements") or []
