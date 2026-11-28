@@ -402,3 +402,192 @@ def test_a_revapi_run_that_cannot_stop_the_build_is_declared(tmp_path: Path, con
     block = _block(root)
     assert block["runs"] == [] and block["present"] is not True   # a report goal's site phase reads unsettled
     assert "revapi" in {row["tool"] for row in block["declared"]}   # listed, never counted
+
+
+# --- #1612: gaps left by #1607 -------------------------------------------------------------
+
+def test_the_go_apidiff_action_meets_and_masked_does_not(tmp_path: Path) -> None:
+    """``joelanford/go-apidiff`` exits with go-apidiff's code, non-zero on an incompatible change."""
+    root = _repo(tmp_path, {WF: _workflow(extra="      - uses: joelanford/go-apidiff@v0.8.3\n")})
+    block = _block(root)
+    assert (block["runs"], block["declared"], block["present"]) == ([{"path": WF, "tool": "apidiff"}], [], True)
+    masked = _repo(tmp_path / "m", {WF: _workflow(
+        extra="      - uses: joelanford/go-apidiff@v0.8.3\n        continue-on-error: true\n")})
+    assert _block(masked)["runs"] == []
+
+
+@pytest.mark.parametrize("line", [
+    'if [ -n "$(apidiff -incompatible old new)" ]; then exit 1; fi',
+    'if [[ -n "$(apidiff -incompatible old new)" ]]; then echo broke; exit 1; fi',
+    'test -n "$(apidiff -incompatible old new)" && exit 1',
+    '[ -z "$(apidiff -incompatible old new)" ] || exit 1',
+])
+def test_an_inline_apidiff_output_test_that_re_raises_counts(tmp_path: Path, line: str) -> None:
+    root = _repo(tmp_path, {WF: _workflow(line)})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
+    script = _repo(tmp_path / "s", {"hack/api.sh": f"#!/bin/sh\n{line}\n", WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+def test_an_inline_apidiff_test_with_then_on_later_lines_counts(tmp_path: Path) -> None:
+    body = '#!/bin/sh\nif [ -n "$(apidiff -incompatible old new)" ]; then\n  echo broke\n  exit 1\nfi\n'
+    root = _repo(tmp_path, {"hack/api.sh": body, WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
+    quiet = '#!/bin/sh\nif [ -n "$(apidiff -incompatible old new)" ]; then\n  echo broke\nfi\nexit 1\n'
+    root = _repo(tmp_path / "q", {"hack/api.sh": quiet, WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == []   # the exit after ``fi`` does not depend on the test
+    step = '      - run: |\n          if [ -n "$(apidiff -incompatible old new)" ]; then\n            exit 1\n          fi\n'
+    assert _block(_repo(tmp_path / "w", {WF: _workflow(extra=step)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+    masked = step.replace("      - run: |\n", "      - continue-on-error: true\n        run: |\n")
+    assert _block(_repo(tmp_path / "m", {WF: _workflow(extra=masked)}))["runs"] == []
+
+
+@pytest.mark.parametrize("line", [
+    'if [ -z "$(apidiff -incompatible old new)" ]; then exit 1; fi',   # red when nothing changed
+    '[ -n "$(apidiff -incompatible old new)" ] || exit 1',            # red when nothing changed
+    '[ -n "$(apidiff -incompatible old new)" ] && echo changed',       # no re-raise
+    '[ -n "$(apidiff -incompatible old new)" ] && echo changed; exit 0',
+    '[ -n "$(apidiff -incompatible old new)" ] && exit 1 || true',     # masked
+    'if [ -n "$(apidiff -incompatible old new)" ]; then exit 0; fi',
+    'if [ -n "$(apidiff --help)" ]; then exit 1; fi',                  # invokes nothing
+    'echo "$(apidiff -incompatible old new)"',
+])
+def test_an_inline_apidiff_test_that_cannot_fail_on_a_break_does_not_count(tmp_path: Path, line: str) -> None:
+    root = _repo(tmp_path, {WF: _workflow(line)})
+    block = _block(root)
+    assert block["runs"] == [] and block["present"] is False
+
+
+@pytest.mark.parametrize("line", [
+    "apidiff -incompatible old new > out.txt; test ! -s out.txt || exit 1",
+    "apidiff -incompatible old new > out.txt; if [ -s out.txt ]; then exit 1; fi",
+    "apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 1; }",
+    "apidiff -incompatible old new > out.txt; diff /dev/null out.txt || exit 1",
+    "apidiff -incompatible old new > out.txt; [ -s out.txt ] && cat out.txt && exit 1",
+    "apidiff -incompatible old new > out.txt; if grep -q . out.txt; then exit 1; fi",
+    'apidiff -incompatible old new > out.txt; if ! [ -z "$(cat out.txt)" ]; then exit 1; fi',
+    "apidiff -incompatible old new > out.txt; if [ $(wc -l < out.txt) -gt 0 ]; then exit 1; fi",
+    "apidiff -incompatible old new > out.txt; ! grep -q . out.txt || exit 1",
+    "apidiff -incompatible old new > out.txt; if [ $(wc -l < out.txt) -gt 5 ]; then exit 1; fi",   # red on a large break
+])
+def test_a_one_line_apidiff_output_check_counts(tmp_path: Path, line: str) -> None:
+    root = _repo(tmp_path, {WF: _workflow(line)})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
+    script = _repo(tmp_path / "s", {"hack/api.sh": f"#!/bin/sh\n{line}\n", WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+@pytest.mark.parametrize("runs", [
+    ("apidiff old new; echo x > other.txt; test ! -s other.txt || exit 1",),   # other.txt is echo's
+    ("apidiff old new; echo x > other.txt", "test ! -s other.txt || exit 1"),
+    ("apidiff old new > out.txt; exit 1 || test -s out.txt",),                 # the exit reads nothing
+    ("apidiff old new > out.txt || test ! -s out.txt || exit 1",),             # apidiff's own fallback
+    ("apidiff old new > report.txt; cat report.txt; go build ./... || exit 1",),   # go build's fallback
+    ("apidiff old new > report.txt", "cat report.txt; go build ./... || exit 1"),
+    ("apidiff old new > report.txt; test -s report.txt || exit 1",),           # red only when nothing changed
+    ("apidiff old new > report.txt", "if [ ! -s report.txt ]; then exit 1; fi"),
+    ("apidiff old new | grep -q .; go build ./... || exit 1",),                # the pipe decides nothing
+    ("apidiff old new | grep -vq x && exit 1",),                               # an inverted grep
+    ("apidiff old new > out.txt; [ -s out.txt ] && echo changed || exit 1",),  # red only when nothing changed
+    ("apidiff old new > out.txt", "[ -s out.txt ] && echo changed || exit 1"),
+    ("apidiff old new > out.txt; if ! grep -q . out.txt; then exit 1; fi",),   # red only when nothing changed
+    ("apidiff old new > out.txt; if [ $(wc -l < out.txt) -eq 0 ]; then exit 1; fi",),
+    ("apidiff old new > out.txt; if [ $(wc -l < out.txt) -ge 0 ]; then exit 1; fi",),  # always true
+])
+def test_a_one_line_exit_that_reads_nothing_apidiff_wrote_does_not_count(tmp_path: Path, runs: tuple[str, ...]) -> None:
+    body = "      - run: |\n" + "".join(f"          {r}\n" for r in runs)
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=body)}))["runs"] == []
+
+
+def test_a_griffe_dependency_is_not_a_declared_check(tmp_path: Path) -> None:
+    pyproject = ('[project]\nname = "widgets"\n[dependency-groups]\n'
+                 'docs = ["mkdocstrings[python]", "griffe>=1.0", "griffe-typingdoc", "griffe-pydantic"]\n')
+    root = _repo(tmp_path, {"pyproject.toml": pyproject, "Jenkinsfile": "pipeline {}\n"})
+    block = _block(root)
+    assert (block["declared"], block["present"], block.get("present_reason")) == ([], False, None)
+
+
+@pytest.mark.parametrize(("rel", "text"), [
+    ("Makefile", "api:\n\tuv run griffe check widgets -a v1.0.0\n"),
+    ("pyproject.toml", '[project]\nname = "widgets"\n\n[tool.griffe]\nsearch-paths = ["src"]\n'),
+])
+def test_griffe_check_or_its_table_is_declared(tmp_path: Path, rel: str, text: str) -> None:
+    block = _block(_repo(tmp_path, {rel: text}))
+    assert block["declared"] == [{"path": rel, "tool": "griffe"}]
+
+
+def test_a_shell_glob_is_not_a_yaml_alias(tmp_path: Path) -> None:
+    ci = (".api:\n  script:\n    - buf breaking --against main\nlint:\n  script:\n    - ls *.txt\n    - cat [*.md]\n"
+          "docs:\n  script: [ls *.txt]\n")
+    block = _block(_repo(tmp_path, {".gitlab-ci.yml": ci}))
+    assert (block["runs"], block["present"], block.get("present_reason")) == ([], False, None)
+
+
+@pytest.mark.parametrize("use", ["api: *compat\n", "api:\n  script:\n    - *compat\n", "api:\n  <<: *compat\n",
+                                 "api:\n  script: [*compat, make check]\n", "api:\n  script: [make, *compat]\n",
+                                 'api:\n  "script": *compat\n', "api:\n  script: !!seq *compat\n"])
+def test_a_yaml_alias_value_still_reads_not_measured(tmp_path: Path, use: str) -> None:
+    """An alias as a whole YAML value (or a merge key) may run the hidden job: unsettled, never unmet."""
+    ci = ".compat: &compat\n  script:\n    - buf breaking --against main\n" + use
+    block = _block(_repo(tmp_path, {".gitlab-ci.yml": ci}))
+    assert (block["runs"], block["present"], block.get("present_reason")) == ([], None, "ci_not_read")
+
+
+@pytest.mark.parametrize("line", ["npm test", "npm t", "npm tst", "npm run test", "pnpm test", "yarn test",
+                                  "/usr/local/bin/yarn test"])
+def test_npm_test_and_its_aliases_are_followed(tmp_path: Path, line: str) -> None:
+    pkg = '{"scripts": {"test": "api-extractor run && jest"}}'
+    root = _repo(tmp_path, {"package.json": pkg, WF: _workflow(line)})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "api-extractor"}]
+
+
+def test_bun_test_runs_buns_own_runner_not_the_script(tmp_path: Path) -> None:
+    pkg = '{"scripts": {"test": "api-extractor run && jest"}}'
+    root = _repo(tmp_path, {"package.json": pkg, WF: _workflow("bun test")})
+    assert _block(root)["runs"] == []
+    run = _repo(tmp_path / "r", {"package.json": pkg, WF: _workflow("bun run test")})
+    assert _block(run)["runs"] == [{"path": WF, "tool": "api-extractor"}]
+
+
+def test_the_scorer_cites_a_pin_only_when_ci_runs_tests() -> None:
+    """``present`` can be true from ``runs`` alone, so the pin citation carries its own gate."""
+    scorer = Path(__file__).resolve().parents[3] / "agents" / "assess-layer-scorer.md"
+    para = next(p for p in scorer.read_text(encoding="utf-8").split("\n\n")
+                if p.startswith("**API and contract compatibility checks.**"))
+    assert "Cite a test in `pins` only when `ci_checks.enforced_check_runs` is true" in para
+
+
+def test_then_on_its_own_line_after_an_output_test_counts(tmp_path: Path) -> None:
+    body = "#!/bin/sh\napidiff -incompatible old new > out.txt\nif [ -s out.txt ]\nthen\n  exit 1\nfi\n"
+    root = _repo(tmp_path, {"hack/api.sh": body, WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
+    quiet = body.replace("then\n  exit 1\nfi\n", "then\n  echo changed\nfi\nexit 1\n")
+    root = _repo(tmp_path / "q", {"hack/api.sh": quiet, WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == []
+
+
+@pytest.mark.parametrize("check", [
+    "if grep -q . out.txt; then exit 1; fi",
+    'if ! [ -z "$(cat out.txt)" ]; then exit 1; fi',
+    "if [ $(wc -l < out.txt) -gt 0 ]; then exit 1; fi",
+])
+def test_a_later_line_if_check_that_read_met_on_main_still_counts(tmp_path: Path, check: str) -> None:
+    body = f"      - run: |\n          apidiff -incompatible old new > out.txt\n          {check}\n"
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=body)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+    script = _repo(tmp_path / "s", {"hack/api.sh": f"#!/bin/sh\napidiff -incompatible old new > out.txt\n{check}\n",
+                                    WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+@pytest.mark.parametrize("lines", [
+    ('if [ -n "$(apidiff -incompatible old new)" ]; then false; fi || true',),
+    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]; then false; fi || true"),
+    ("apidiff -incompatible old new > out.txt; if [ -s out.txt ]; then false; fi || true",),
+])
+def test_a_check_rescued_by_a_passing_fallback_does_not_count(tmp_path: Path, lines: tuple[str, ...]) -> None:
+    """``|| true`` after ``fi`` rescues the ``false``: the step stays green on a break, in either shell."""
+    step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == []
+    script = _repo(tmp_path / "s", {"hack/api.sh": "#!/bin/sh\n" + "".join(f"{line}\n" for line in lines),
+                                    WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == []

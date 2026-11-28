@@ -32,6 +32,7 @@ def test_no_claude_dir(git_repo) -> None:
     assert block["summary"] == {
         "permissions_encoded": False,
         "hooks_present": False,
+        "hooks_disabled": 0,
         "routines_present": False,
         "scheduled_agent_workflows": 0,
         "event_agent_workflows": 0,

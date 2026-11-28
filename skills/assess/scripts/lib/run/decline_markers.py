@@ -272,6 +272,8 @@ AGENT_DECLINE = "agents-declined.json"
 AGENTS_MARKER = "agents_marker"
 # A Copilot review opt-out's source (lib.ai_governance.COPILOT_OPT_OUT, #851).
 COPILOT_OPT_OUT = "copilot_opt_out"
+# Disabled hook files' source (lib.agents.harness_settings.HOOKS_DISABLED, #846).
+HOOKS_DISABLED = "hooks_disabled"
 
 
 def read_agent_decline(assess_dir: Path) -> DeclineRecord | None:
@@ -307,9 +309,12 @@ def read_agent_decline(assess_dir: Path) -> DeclineRecord | None:
 def decline_badge(record: DeclineRecord) -> str:
     """The DECLINED badge's words for one record: who declined, when and why, as recorded. A
     Copilot review opt-out (#851) names itself: its reason, which names the files, or, when
-    counts-only output has dropped the reason, ``Copilot review declined``."""
+    counts-only output has dropped the reason, ``Copilot review declined``. Disabled hook files
+    (#846) do the same, ``agent hooks disabled`` without the reason."""
     if record["source"] == COPILOT_OPT_OUT:
         return record["reason"] or "Copilot review declined"
+    if record["source"] == HOOKS_DISABLED:
+        return record["reason"] or "agent hooks disabled"
     who = record["declined_by"] or "an unknown user"
     line = f"agents declined by {who}"
     if record["declined_at"]:
