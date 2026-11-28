@@ -3110,8 +3110,8 @@
         },
         {
           "code": "response_pending",
-          "means": "The median wait is not settled yet: issues opened recently, not yet answered and younger than first_response_max_days, could put it either side of the threshold.",
-          "next_step": "Nothing to change; the condition settles once those issues are answered or pass the threshold."
+          "means": "The median wait is not settled yet: issues still unanswered could put it either side of first_response_max_days, depending on when they are answered.",
+          "next_step": "Answer, label or close the open new issues; the condition settles once their waits decide the median."
         },
         {
           "code": "no_response",
@@ -7410,7 +7410,7 @@
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue got a response; response_unread or window_truncated: a response or issue was not read; response_pending: young unanswered issues could tip the median"
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue got a response; response_unread or window_truncated: a response or issue was not read; response_pending: unanswered issues could tip the median"
     },
     {
       "path": "backlog_ready.ready_label_documented",

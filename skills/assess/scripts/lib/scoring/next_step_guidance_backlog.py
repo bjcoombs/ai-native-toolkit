@@ -40,8 +40,8 @@ BACKLOG_FLAGS: dict[str, tuple[str, str]] = {
         "Over the last `window_days` (default 90), the median wait for a first response from "
         "someone other than the author, unanswered issues included, is within the threshold."),
     "backlog_ready.untriaged_met": (
-        "Triage open issues older than 7 days: give each a label other than the untriaged one, or "
-        "close it.",
+        "Triage open issues older than 7 days: remove the untriaged label and give each a triage "
+        "label (such as `bug` or the ready label), or close it.",
         "At most `untriaged_max_share` (default 10%) of the open issues older than 7 days carry no "
         "label or an untriaged label."),
     "backlog_ready.close_open_met": (

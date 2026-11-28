@@ -48,8 +48,7 @@ later response is already past the threshold. Each
 ``<x>_met`` bool is null whenever its metric is not measured: not measured is never unmet. A null
 ``<x>_met`` carries ``<x>_met_reason`` (#1324), the code the backlog-ready condition reports: its
 metric's reason, or for ``first_response_met`` over a measured median ``window_truncated``,
-``response_unread``, or ``response_pending`` (unanswered issues younger than the threshold could
-still tip it).
+``response_unread``, or ``response_pending`` (issues still unanswered could tip it either way).
 
 Block fields this module adds to ``backlog_ready``::
 
@@ -132,20 +131,22 @@ def _days(a: datetime, b: datetime) -> float:
     return (b - a).total_seconds() / _DAY
 
 
-def _response_met(waits: list[float], overdue: int, pending: list[float], unread: int,
+def _response_met(waits: list[float], overdue: list[float], pending: list[float], unread: int,
                   limit: float) -> bool | None:
     """Whether the median wait of every issue opened in the window is within ``limit``.
 
-    An unanswered issue older than ``limit`` (``overdue``) has already waited past it, so it counts
-    as a wait above the limit. An unanswered issue younger than the limit has waited its age so far
+    An unanswered issue older than ``limit`` (``overdue``, its age in days) has already waited past
+    it, so it counts as a wait above the limit: at least its age so far, which bounds the median
+    from below (#1324), so one overdue issue beside a fast answer stays undecided until its wait
+    settles the median past the limit. An unanswered issue younger than the limit has waited its age so far
     (``pending``, in days) and may wait longer; an issue whose response was not read (``unread``)
     may have been answered at once. Met when the median is within the limit with every unknown wait
     above it, unmet when it is past the limit with each pending issue answered now and each unread
     one at 0, else None. So a few fast answers among many ignored issues read unmet."""
     if not waits and not overdue:
         return None
-    worst = sorted([*waits, *[inf] * (overdue + len(pending) + unread)])
-    best = sorted([*waits, *[inf] * overdue, *pending, *[0.0] * unread])
+    worst = sorted([*waits, *[inf] * (len(overdue) + len(pending) + unread)])
+    best = sorted([*waits, *overdue, *pending, *[0.0] * unread])
     if median(worst) <= limit:
         return True
     if median(best) > limit:
@@ -160,19 +161,21 @@ def _unmeasured(code: str) -> dict[str, Any]:
         fields[f"{metric}_reason"] = code
     fields.update(first_response_met=None, untriaged_met=None, close_open_met=None,
                   outcomes={"available": False, "reason": code})
-    return _met_reasons(fields, code)
+    return _met_reasons(fields, None)
 
 
 _MET = {"first_response_met": "first_response_median_days", "untriaged_met": "untriaged_after_7d_share",
         "close_open_met": "close_open_ratio"}
 
 
-def _met_reasons(fields: dict[str, Any], first_response: str) -> dict[str, Any]:
+def _met_reasons(fields: dict[str, Any], first_response: str | None) -> dict[str, Any]:
     """A null ``<x>_met`` gets ``<x>_met_reason``, so the condition names why (#1324): its metric's
-    reason, or ``first_response`` for a median measured but not settled against the threshold."""
+    reason, except that ``first_response`` (the code that left the median open: a capped list, an
+    unread response or a young unanswered issue) wins for ``first_response_met``."""
     for met, metric in _MET.items():
         if fields.get(met) is None:
-            fields[f"{met}_reason"] = fields.get(f"{metric}_reason") or first_response
+            own = first_response if met == "first_response_met" else None
+            fields[f"{met}_reason"] = own or fields.get(f"{metric}_reason") or EMPTY_WINDOW
     return fields
 
 
@@ -198,8 +201,9 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
     fields: dict[str, Any] = {}
 
     ages = [_days(i.created, read.now) for i in owed]
-    overdue = sum(1 for age in ages if age > limit)
-    met = _response_met(waits, overdue, [age for age in ages if age <= limit], unread, limit)
+    pending = [age for age in ages if age <= limit]
+    overdue = [age for age in ages if age > limit]
+    met = _response_met(waits, overdue, pending, unread, limit)
     # the capped list (newest first) dropped issues opened in the window: they may decide it
     dropped = read.window_truncated and not any(i.created < read.start for i in read.recent)
     if dropped:
@@ -242,7 +246,8 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
         "untriaged_after_7d": untriaged_n, "truncated": read.truncated,
         "thresholds_from_config": from_config,
     }
-    return _met_reasons(fields, WINDOW_TRUNCATED if dropped else RESPONSE_UNREAD if unread else RESPONSE_PENDING)
+    return _met_reasons(fields, WINDOW_TRUNCATED if dropped else RESPONSE_UNREAD if unread
+                        else RESPONSE_PENDING if pending or overdue else None)
 
 
 def scan_backlog_ready_outcomes(repo_root: Path, backlog_outcomes: OutcomeRead) -> BacklogReadyOutcomesBlock:

@@ -664,13 +664,22 @@ def test_no_actor_on_an_issue_whose_author_is_gone_leaves_the_response_unread(tm
     assert (block["outcomes"]["responded"], block["outcomes"]["response_unread"]) == (2, 1)
 
 
-def test_a_measured_median_not_settled_names_why() -> None:
-    # #1324: a null first_response_met over a measured median takes the code that left it open.
-    from lib.backlog_ready_outcomes import RESPONSE_PENDING, _met_reasons
-    fields: dict[str, Any] = {"first_response_met": None, "first_response_median_days": 1.5,
-                              "untriaged_met": True, "close_open_met": None, "close_open_ratio": None,
-                              "close_open_ratio_reason": "window_truncated"}
-    out = _met_reasons(fields, RESPONSE_PENDING)
-    assert out["first_response_met_reason"] == "response_pending"
-    assert out["close_open_met_reason"] == "window_truncated"
-    assert "untriaged_met_reason" not in out
+@pytest.mark.parametrize(("overdue_days", "met", "reason"), [
+    (3.0, None, "response_pending"),  # answered at 3.1 days, the median is 1.8: within the limit
+    (5.0, False, None),                # the median is at least 2.75 days whenever it is answered
+])
+def test_an_overdue_issue_waits_at_least_its_age(overdue_days: float, met: bool | None, reason: str | None) -> None:
+    # #1324: an overdue issue's wait is bounded below by its age, not by infinity.
+    fast = Issue(NOW - timedelta(days=10), None, (), NOW - timedelta(days=9.5))  # waited 0.5 days
+    late = Issue(NOW - timedelta(days=overdue_days), None, ())
+    fields = outcome_fields(_read([fast, late]), BacklogThresholds(), False, ())
+    assert (fields["first_response_median_days"], fields["first_response_met"]) == (0.5, met)
+    assert fields.get("first_response_met_reason") == reason
+
+
+def test_a_window_of_young_unanswered_issues_reads_response_pending() -> None:
+    fields = outcome_fields(_read([Issue(NOW - timedelta(days=1), None, ())]), BacklogThresholds(), False, ())
+    assert fields["first_response_met"] is None
+    assert fields["first_response_median_days_reason"] == "empty_window"
+    assert fields["first_response_met_reason"] == "response_pending"
+    assert outcome_fields(_read([]), BacklogThresholds(), False, ())["first_response_met_reason"] == "empty_window"

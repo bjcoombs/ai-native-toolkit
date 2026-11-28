@@ -15,7 +15,8 @@ ghsync layout (``<root>/<path>/<repo>/<repo>-main``). The logic is in
   toolkit's run.
 - ``report`` prints the non-discriminating conditions of the expected files alone; with
   ``--row`` (``backlog-ready``, #1324) it first prints how each of that row's conditions falls
-  across the corpus, counts only.
+  across the corpus, counts only. An unknown row, or one no file holds, is refused; files that lack
+  the row are counted, since the per-state counts then sum to less than the corpus.
 - ``--platform`` also reads the issue tracker for ``backlog_ready`` (``cc.PLATFORM_READS``)
   through the fleet platform pass, so level 2 of the backlog-ready row is measured; it needs
   network and gh or glab signed in. Seed and diff a corpus the same way.
@@ -69,6 +70,23 @@ def _platform(jobs: int) -> cc.PlatformFn:
     return read
 
 
+def _report(expected: list[cc.ExpectedState], row: str | None) -> int:
+    """The non-discriminating conditions of the expected files, after ``row``'s split when given."""
+    states = {e["repo"]: e["states"] for e in expected}
+    if row:
+        split = cc.row_split(states, row)
+        if not split:
+            print(f"error: no expected-state file holds a condition of row {row!r}: an unknown "
+                  "row, or a corpus seeded before the row; reseed with seed --platform", file=sys.stderr)
+            return 2
+        lacking = sum(1 for s in states.values() if not any(c.startswith(f"{row}.") for c in s))
+        _print(cc.split_lines(split, len(states)))
+        if lacking:
+            print(f"{lacking} of {len(states)} expected-state files hold no condition of {row}: reseed them")
+    _print(cc.discrimination_lines(cc.discrimination(states)))
+    return 0
+
+
 def main(argv: list[str] | None = None, scan: ScanFn = scan_target,
          platform: cc.PlatformFn | None = None) -> int:
     args = _parse(argv)
@@ -81,11 +99,7 @@ def main(argv: list[str] | None = None, scan: ScanFn = scan_target,
         print(f"error: no expected-state files in {args.corpus}", file=sys.stderr)
         return 2
     if args.command == "report":
-        states = {e["repo"]: e["states"] for e in expected}
-        if args.row:
-            _print(cc.split_lines(cc.row_split(states, args.row), len(states)))
-        _print(cc.discrimination_lines(cc.discrimination(states)))
-        return 0
+        return _report(expected, args.row)
     if not args.clone_root.is_dir():
         print(f"error: {args.clone_root} is not a directory", file=sys.stderr)
         return 2

@@ -283,3 +283,11 @@ def test_the_row_split_counts_every_state_of_the_rows_conditions(
     _, out, _ = corpus
     code, lines = _run(["report", "--corpus", str(out), "--row", "b"], capsys)
     assert code == 0 and lines[0] == "b.1: met 1, unmet 2 (of 3)"
+    assert cli.main(["report", "--corpus", str(out), "--row", "backlog_ready"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == "" and "no expected-state file holds a condition of row 'backlog_ready'" in captured.err
+    expected = cc.load_corpus(out)
+    del expected[0]["states"]["b.1"]  # one file seeded before the row
+    cc.write_expected(out, expected[0])
+    code, lines = _run(["report", "--corpus", str(out), "--row", "b"], capsys)
+    assert code == 0 and lines[1] == "1 of 3 expected-state files hold no condition of b: reseed them"
