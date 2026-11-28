@@ -2,8 +2,9 @@ name: Issue needs-triage
 
 # Mark every new issue as untriaged, so the untriaged backlog is countable
 # (docs/contributing/definition-of-ready.md, "Labels"). The maintainer
-# removes the label once the issue is settled, as will the refiner workflow
-# once it exists (#1321).
+# removes the label once the issue is settled, and the refiner
+# (refine-triage.yml and refine-sweep.yml) removes it when it applies
+# `agent-ready`.
 #
 # An issue that already carries `agent-ready` was triaged by whoever filed it
 # (the maintainer, or /issues creating an approved decomposition), so it is
