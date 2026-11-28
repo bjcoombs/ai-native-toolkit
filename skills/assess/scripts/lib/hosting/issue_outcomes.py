@@ -16,12 +16,14 @@ run time (``NOW``):
   issues list, then each window issue's notes (one page) and its ``closed_by``.
 - **Open issues older than 7 days**: their labels only.
 
-Each list stops at ``MAX_PAGES`` pages; a list still going then is ``truncated``. The counts
-read are kept and the read is still measured.
+Each list stops at ``MAX_PAGES`` pages; a list still going then is ``truncated``, and so is a
+GitHub issue timeline longer than ``TIMELINE_ITEMS`` or a GitLab notes page that came back full
+(#1591). The counts read are kept and the read is still measured.
 
 **First response.** The first comment, label event or close event by an account that is neither
 the issue's author nor a bot. GitHub: an actor whose GraphQL ``__typename`` is ``Bot`` or whose
-login ends ``[bot]`` is a bot. GitLab (``issue_outcomes_gitlab``): system notes are skipped (so a
+login ends ``[bot]`` is a bot; an event with no actor (a deleted account) is a person's, unless the
+issue's author is gone too, when it may be the author's own and leaves the response unknown (#1591). GitLab (``issue_outcomes_gitlab``): system notes are skipped (so a
 label added there is not read), ``bot: true`` on the user, a project or group access-token user,
 or a user whose ``users/<id>`` read says ``bot: true`` is a bot. An issue whose events ran past
 what was read, or whose responder could not be classified, has an unknown response
@@ -138,12 +140,14 @@ def gh_is_bot(actor: Any) -> bool:
                 or (login and login.endswith("[bot]")))
 
 
-def _gh_response(node: dict[str, Any]) -> tuple[datetime | None, bool, bool]:
-    """The first response to one issue node, whether its timeline read settles it, and whether the
-    last close read was by the issue's author (a later close by someone else decides)."""
+def _gh_response(node: dict[str, Any]) -> tuple[datetime | None, bool, bool, bool]:
+    """The first response to one issue node, whether its timeline read settles it, whether the
+    last close read was by the issue's author (a later close by someone else decides), and whether
+    the timeline ran past ``TIMELINE_ITEMS`` (a cap hit, #1591)."""
     author = _gh_login(node.get("author"))
     timeline = _dict(node.get("timelineItems"))
     events: list[datetime] = []
+    unknown: list[datetime] = []  # no actor on an issue whose author is gone too: maybe the author's
     closes: list[tuple[datetime, bool]] = []
     for item in timeline.get("nodes") or []:
         if not isinstance(item, dict):
@@ -153,15 +157,18 @@ def _gh_response(node: dict[str, Any]) -> tuple[datetime | None, bool, bool]:
         when = parse_time(item.get("createdAt"))
         if item.get("__typename") == "ClosedEvent" and when is not None:
             closes.append((when, login is not None and login == author))
-        if login is None or when is None or login == author or gh_is_bot(actor):
+        # no actor is a deleted account (GitHub's ghost), a person who is not a bot (#1591)
+        if when is None or (login is not None and login == author) or gh_is_bot(actor):
             continue
-        events.append(when)
+        (unknown if login is None and author is None else events).append(when)
     more = _dict(timeline.get("pageInfo")).get("hasNextPage") is True
     # an unread page may hold a later close; a reopened issue (no closedAt) is not closed at all
     self_closed = bool(closes) and max(closes)[1] and not more and parse_time(node.get("closedAt")) is not None
+    if unknown and (not events or min(unknown) <= min(events)):
+        return None, False, self_closed, more  # the first event may be the author's own
     if events:
-        return min(events), True, self_closed
-    return None, not more, self_closed
+        return min(events), True, self_closed, more
+    return None, not more, self_closed, more
 
 
 def _labels(node: dict[str, Any]) -> tuple[str, ...]:
@@ -195,12 +202,14 @@ def github_read(repo: GithubRepo, start: datetime, now: datetime) -> IssueRead:
     """The issues of a GitHub repository (see the module doc)."""
     since = start.strftime("%Y-%m-%dT%H:%M:%SZ")
     recent_nodes, cut_recent = _gh_pages(repo, RECENT_QUERY, ["-f", f"since={since}"])
+    cut_timeline = False
     recent = []
     for node in recent_nodes:
         created = parse_time(node.get("createdAt"))
         if created is None:
             raise GhUnavailable("gh_bad_json: an issue has no createdAt")
-        first, settled, self_closed = _gh_response(node)
+        first, settled, self_closed, more = _gh_response(node)
+        cut_timeline = cut_timeline or more
         recent.append(Issue(created, parse_time(node.get("closedAt")), (), first, settled,
                             self_closed=self_closed))
     open_nodes, cut_open = _gh_pages(repo, OPEN_QUERY, [])
@@ -213,8 +222,8 @@ def github_read(repo: GithubRepo, start: datetime, now: datetime) -> IssueRead:
             total = _dict(node.get("labels")).get("totalCount")
             complete = not isinstance(total, int) or total <= len(names)
             open_old.append(Issue(created, None, names, labels_complete=complete))
-    return IssueRead("github", start, now, tuple(recent), tuple(open_old), cut_recent or cut_open, cut_recent,
-                     cut_open)
+    return IssueRead("github", start, now, tuple(recent), tuple(open_old), cut_recent or cut_open or cut_timeline,
+                     cut_recent, cut_open)
 
 
 # --- the registry values -------------------------------------------------------------

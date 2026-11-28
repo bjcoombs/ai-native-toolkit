@@ -1,0 +1,63 @@
+# Check manifest fragment: the ai_governance collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.ai_governance"
+kind = "collector"
+title = "AI governance"
+summary = "Whether a workflow on pull requests reads the body or commit trailers for AI disclosure, then turns the check red or adds a label. It also lists an AI_POLICY.md at a fixed path and template checkboxes that ask for AI disclosure. It lists Copilot instruction files that decline Copilot review for the whole repository."
+issues = [851]
+callable = "lib.ai_governance:scan_ai_governance"
+publishes = ["ai_governance"]
+reads = ["repo_root"]
+stage = "post_offers"
+headless = { ai_governance = "registered" }
+whys.ai_governance = "A policy on AI contributions holds only when something checks it. A workflow that reads each pull request for disclosure turns the policy into a rule an agent meets on every change; a policy file or a checkbox alone asks for it and checks nothing."
+shapes = [
+  { path = "ai_governance", type = "lib.ai_governance:AiGovernanceBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "no_pr_workflows", block = "ai_governance", means = "No GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it.", next_step = "Nothing to change: this reads as not measured until a workflow runs on pull requests." },
+]
+  [entries.privacy]
+  "ai_governance.enforced_reason" = "token"
+  "ai_governance.enforcing_workflows" = "path"
+  "ai_governance.policy_files" = "path"
+  "ai_governance.template_files" = "path"
+  "ai_governance.opt_out_files" = "path"
+
+[[entries]]
+id = "core:ai_governance.enforced"
+kind = "signal"
+title = "A pull request workflow enforces AI disclosure"
+collector = "core.ai_governance"
+path = "ai_governance.enforced"
+type = "bool"
+evidence = "head_structure"
+null_means = "no_pr_workflows: no GitHub Actions workflow runs on pull requests"
+
+[[entries]]
+id = "core.cond.ai-policy-enforced.1.enforced"
+kind = "condition"
+title = "AI policy enforced on pull requests"
+key = "ai-policy-enforced.1:ai_governance.enforced"
+why = "An agent follows the rules a check holds it to. A workflow that reads each pull request for AI disclosure or attribution, and turns the check red or labels on it, applies the policy to every change, an agent's included, without a reviewer having to remember it."
+fix = "Add a workflow on pull_request that reads the pull request body or the commit trailers for the disclosure your policy asks for. Have it turn the check red or add a label when the disclosure is absent or a banned marker is present."
+
+[[entries]]
+id = "core:ai_governance.policy_declared"
+kind = "signal"
+title = "An AI policy file or disclosure checkbox is committed"
+collector = "core.ai_governance"
+path = "ai_governance.policy_declared"
+type = "bool"
+evidence = "head_text"
+
+[[entries]]
+id = "core.cond.ai-policy-declared.1.policy_declared"
+kind = "condition"
+title = "AI policy declared"
+key = "ai-policy-declared.1:ai_governance.policy_declared"
+why = "A written policy tells contributors and agents what the project expects of AI-assisted work. It is listed, not counted: a file or a checkbox asks for the practice, and only a check that reads it shows the practice holds."
+fix = "Commit an AI_POLICY.md at the root, in .github/ or in docs/. Or add a template checkbox that asks the author to disclose AI assistance. Then enforce it with a workflow that reads the disclosure."

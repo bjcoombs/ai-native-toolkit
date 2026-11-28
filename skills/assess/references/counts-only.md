@@ -208,6 +208,16 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_outcome.rework_null_reason` | token |
 | `agent_outcome.limits` | dropped |
 
+## ai_governance
+
+| Field | Kept as |
+|---|---|
+| `ai_governance.enforced_reason` | token |
+| `ai_governance.enforcing_workflows` | path (hashed when hashing is on) |
+| `ai_governance.policy_files` | path (hashed when hashing is on) |
+| `ai_governance.template_files` | path (hashed when hashing is on) |
+| `ai_governance.opt_out_files` | path (hashed when hashing is on) |
+
 ## ai_usage
 
 | Field | Kept as |
@@ -252,7 +262,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `backlog_ready.stale_job_safe_reason` | token |
 | `backlog_ready.first_response_median_days_reason` | token |
 | `backlog_ready.untriaged_after_7d_share_reason` | token |
-| `backlog_ready.close_open_ratio_90d_reason` | token |
+| `backlog_ready.close_open_ratio_reason` | token |
 | `backlog_ready.outcomes.reason` | token |
 
 ## broken_instruction_refs

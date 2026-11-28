@@ -144,6 +144,8 @@ That people stay in the loop on what agents change, and that what agents may do 
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
+| `ai-policy-declared.1` AI policy declared | `ai_governance` | An AI policy file or disclosure checkbox is committed: is true (`ai_governance.policy_declared eq true`) | `declared` | no, listed | - | positive | - | - | A written policy tells contributors and agents what the project expects of AI-assisted work. It is listed, not counted: a file or a checkbox asks for the practice, and only a check that reads it shows the practice holds. | Commit an AI_POLICY.md at the root, in .github/ or in docs/. Or add a template checkbox that asks the author to disclose AI assistance. Then enforce it with a workflow that reads the disclosure. |
+| `ai-policy-enforced.1` AI policy enforced on pull requests | `ai_governance` | A pull request workflow enforces AI disclosure: is true (`ai_governance.enforced eq true`) | `measured` | yes | - | positive | - | - | An agent follows the rules a check holds it to. A workflow that reads each pull request for AI disclosure or attribution, and turns the check red or labels on it, applies the policy to every change, an agent's included, without a reviewer having to remember it. | Add a workflow on pull_request that reads the pull request body or the commit trailers for the disclosure your policy asks for. Have it turn the check red or add a label when the disclosure is absent or a banned marker is present. |
 | `layer-7-review.1` Changes get reviewed | `review_evidence` | Review evidence exists: is true (`review_evidence.present eq true`) | `declared` | no, listed | - | positive | - | - | A second reader, a person or a review agent, catches what an agent misunderstood about intent, which tests and linters do not look for. | Commit an AI review step in CI, or review merged changes before they land. |
 | `layer-7-review.2` Most merged changes are reviewed | `review_reality` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | - | positive | requires `layer-7-review.1` | - | Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader. | Aim for a review on at least four in five merged changes. |
 | `layer-7-review.2` Half of merged changes are approved | `review_reality` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | - | positive | requires `layer-7-review.1` | - | An explicit approval records that someone accepted the change, not just that it was looked at. | Approve changes explicitly when you review them. |
@@ -216,6 +218,8 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `agent-job-write-access` | Agent job write access | team | `min` | `agent-job-write-access.1` |
 | `agent-least-privilege` | Agent jobs run with least privilege | team | `min` | `agent-least-privilege.1` |
 | `agent-rewrites-instructions` | An agent job can rewrite its own instructions | team | `min` | `agent-rewrites-instructions.1` |
+| `ai-policy-declared` | AI policy declared | team | `min` | `ai-policy-declared.1` |
+| `ai-policy-enforced` | AI policy enforced on pull requests | team | `min` | `ai-policy-enforced.1` |
 | `ci-instructions-unchecked` | Pull request checks skip the instruction files | team | `min` | `ci-instructions-unchecked.1` |
 | `ci-skip-label` | A label skips every CI check | team | `min` | `ci-skip-label.1` |
 | `ci-test-failures-ignored` | CI ignores test failures | team | `min` | `ci-test-failures-ignored.1` |
@@ -362,6 +366,26 @@ No other scan says whether agent work holds once it lands; this records the shar
   - `git_failed`: A git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read. Nothing to change in the repository; re-run the scan, and report the failure if it repeats.
   - `git_timeout`: A git read took longer than the scan allows. Nothing to change in the repository; a shorter --window reads less history.
 
+### `ai_governance`: AI governance
+
+A policy on AI contributions holds only when something checks it. A workflow that reads each pull request for disclosure turns the policy into a rule an agent meets on every change; a policy file or a checkbox alone asks for it and checks nothing.
+
+Whether a workflow on pull requests reads the body or commit trailers for AI disclosure, then turns the check red or adds a label. It also lists an AI_POLICY.md at a fixed path and template checkboxes that ask for AI disclosure. It lists Copilot instruction files that decline Copilot review for the whole repository.
+
+- Collector: `core.ai_governance`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ai_governance.enforced_reason` token, `ai_governance.enforcing_workflows` path, `ai_governance.opt_out_files` path, `ai_governance.policy_files` path, `ai_governance.template_files` path.
+- Used by: row `ai-policy-declared`, row `ai-policy-enforced`.
+- Evidence: `ai_governance.enforced` head_structure (measured), `ai_governance.policy_declared` head_text (declared).
+- Not measured when:
+  - `no_pr_workflows`: No GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it. Nothing to change: this reads as not measured until a workflow runs on pull requests.
+
+Why the signals named here matter:
+
+- `ai_governance.policy_declared` feeds `ai-policy-declared.1:ai_governance.policy_declared`: A written policy tells contributors and agents what the project expects of AI-assisted work. It is listed, not counted: a file or a checkbox asks for the practice, and only a check that reads it shows the practice holds.
+- `ai_governance.enforced` feeds `ai-policy-enforced.1:ai_governance.enforced`: An agent follows the rules a check holds it to. A workflow that reads each pull request for AI disclosure or attribution, and turns the check red or labels on it, applies the policy to every change, an agent's included, without a reviewer having to remember it.
+
 ### `ai_usage`: AI-assisted change share
 
 Run plumbing: no row or finding reads this scan.
@@ -409,9 +433,9 @@ How new issues are taken in and answered. An issue form has a required field, or
 - Collector: `core.backlog_ready`, reading `repo_root`, `backlog_outcomes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `backlog_ready.close_open_ratio_90d_reason` token, `backlog_ready.first_response_median_days_reason` token, `backlog_ready.outcomes.reason` token, `backlog_ready.required_form_field_reason` token, `backlog_ready.stale_job_safe_reason` token, `backlog_ready.untriaged_after_7d_share_reason` token, `backlog_ready.untriaged_on_open_reason` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `backlog_ready.close_open_ratio_reason` token, `backlog_ready.first_response_median_days_reason` token, `backlog_ready.outcomes.reason` token, `backlog_ready.required_form_field_reason` token, `backlog_ready.stale_job_safe_reason` token, `backlog_ready.untriaged_after_7d_share_reason` token, `backlog_ready.untriaged_on_open_reason` token.
 - Used by: no row or finding yet.
-- Evidence: `unclassified`, as no criterion reads its signals: `backlog_ready.close_open_met` platform (verified), `backlog_ready.close_open_ratio_90d` platform (verified), `backlog_ready.first_response_median_days` platform (verified), `backlog_ready.first_response_met` platform (verified), `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_after_7d_share` platform (verified), `backlog_ready.untriaged_met` platform (verified), `backlog_ready.untriaged_on_open` config_text (config_only).
+- Evidence: `unclassified`, as no criterion reads its signals: `backlog_ready.close_open_met` platform (verified), `backlog_ready.close_open_ratio` platform (verified), `backlog_ready.first_response_median_days` platform (verified), `backlog_ready.first_response_met` platform (verified), `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_after_7d_share` platform (verified), `backlog_ready.untriaged_met` platform (verified), `backlog_ready.untriaged_on_open` config_text (config_only).
 - Not measured when:
   - `form_unreadable`: No issue form read has a required field, and a GitHub issue form could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit. Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue.
   - `gitlab_template_unreadable`: No form or template read meets the bar. A GitLab issue template could not be read: it is too large or could not be opened. Nothing to change if the template has the six sections; a GitLab issue template under the size limit lets the scan read its headings.
@@ -425,7 +449,7 @@ How new issues are taken in and answered. An issue form has a required field, or
   - `platform_error`: A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error. Run again later.
   - `empty_window`: The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days. Nothing to change; the metric reads once there are issues to measure.
   - `response_unread`: A first response may exist that was not read: a long timeline, the note cap or an unclassified account. Run again with gh or glab signed in as an account that can read users; the caps are fixed.
-  - `window_truncated`: The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken. Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window.
+  - `window_truncated`: The window's issue list passed the read cap, so issues may be missing. The ratio is not taken, nor the median when no issue read was answered. Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window.
   - `open_truncated`: The open-issue list passed the read cap, so the untriaged share would cover only part of it and is not taken. Nothing to change; close or triage old open issues to bring the list under the cap.
   - `no_response`: No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days. Answer, label or close new issues within first_response_max_days.
 
@@ -887,7 +911,7 @@ The SECURITY file in the owner's public .github repository, which GitHub shows o
 
 It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.
 
-The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined.
+The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which is shown and declines no condition.
 
 - Collector: `core.owner_exclusions`, reading `repo_root`.
 - Network: no.
@@ -1234,6 +1258,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `agent_harness` | Committed agent harness | `repo_root`, `scope`, `excludes` | `agent_harness` | no |
 | `agent_ops` | Agent-operations guardrails | `repo_root`, `managed_settings` | `agent_ops` | no |
 | `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
+| `ai_governance` | AI governance | `repo_root` | `ai_governance` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `ancestor_instruction_files` | Ancestor instruction files | `repo_root` | `ancestor_instruction_files` | no |
 | `anomalies` | Anomalies | `run_header` | `anomalies` | no |
@@ -1287,7 +1312,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
 | `keyhole_blocks` | Keyhole blocks | `keyhole`, `run_scope` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
 | `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
 | `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
 | `measured_commit` | Measured commit | `repo_root` | private input | no |
@@ -1329,7 +1354,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `test_pressure_scan` | Test pressure scan | `repo_root`, `current`, `coverage_data` | private input | no |
 | `unfinalized` | Unfinalized exclusions | `assess_dir`, `superseded`, `first_flagged`, `current`, `diff`, `excludes` | private input | no |
 | `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |
 | `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |
