@@ -53,6 +53,10 @@
       "revision": 1
     },
     {
+      "id": "core.api_compat",
+      "revision": 1
+    },
+    {
       "id": "core.archetype",
       "revision": 1
     },

@@ -69,6 +69,7 @@ from lib.ci.ci_hazards import CiHazardsBlock
 from lib.ci.repo_guards import RepoGuardsBlock
 from lib.run_context_types_behaviour_pins import BehaviourPinsBlock
 from lib.ai_governance import AiGovernanceBlock
+from lib.run_context_types_api_compat import ApiCompatBlock
 from lib.backlog_ready_outcomes import BacklogReadyOutcomesBlock
 from lib.contributor_files import ContributorFilesBlock
 from lib.hosting.org_security_policy import OrgSecurityPolicyBlock
@@ -174,6 +175,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("repo_guards", RepoGuardsBlock),
     ("behaviour_pins", BehaviourPinsBlock),
     ("ai_governance", AiGovernanceBlock),
+    ("api_compat", ApiCompatBlock),
     ("contributor_files", ContributorFilesBlock),
     ("backlog_ready", BacklogReadyOutcomesBlock),
     ("org_security_policy", OrgSecurityPolicyBlock),

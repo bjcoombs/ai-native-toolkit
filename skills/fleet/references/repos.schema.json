@@ -1447,6 +1447,30 @@
                 ]
               }
             },
+            "api_compat": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: tests_not_read (a test pins the public exports, but whether CI runs tests is not settled (ci_checks.enforced_check_runs is null or the block is absent)); ci_not_read (a compatibility tool is named in a build file, or found in a form whose exit status the step may hide. A CI file this reader cannot follow may run it. Examples are a CI system it does not parse, a GitLab include, or a step the follower could not settle). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
             "backlog_ready": {
               "type": "object",
               "if": {

@@ -79,7 +79,7 @@ def test_a_multi_tagged_condition_leaves_the_real_tally_unchanged() -> None:
     after = level_result(cast(MaturityModel, tagged), ctx)
     assert after["tally"] == before["tally"]
     rows = {r["tag"]: r for r in after["tags"]}
-    assert rows["contracts"]["conditions"] == 2   # docs-kept-true carries it in the shipped model (#852)
+    assert rows["contracts"]["conditions"] == 3   # docs-kept-true (#852) and api-compat (#853) carry it
 
 
 def test_countable_not_measured_leaves_out_the_listed_and_hazard_conditions() -> None:
@@ -126,9 +126,9 @@ def test_corpus_rows_equal_the_strip_cells(name: str) -> None:
         assert {m["id"] for m in row["countable_not_measured"]} <= {m["id"] for m in row["not_measured"]}
 
 
-def test_contracts_has_one_condition_in_the_shipped_model() -> None:
+def test_contracts_has_two_conditions_in_the_shipped_model() -> None:
     rows = {r["tag"]: r for r in level_result(default_model(), {})["tags"]}
-    assert rows["contracts"]["conditions"] == 1   # docs-kept-true.1 (#852)
+    assert rows["contracts"]["conditions"] == 2   # docs-kept-true.1 (#852), api-compat.1 (#853)
 
 
 def test_rows_are_byte_identical_on_rerun_and_survive_counts_only() -> None:

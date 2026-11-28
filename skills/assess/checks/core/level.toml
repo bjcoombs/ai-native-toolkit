@@ -9,7 +9,7 @@ summary = "The conditions of the run's maturity model, each with its state, grad
 issues = [744, 828]
 callable = "lib.run.core_scans:level"
 publishes = ["level"]
-reads = ["agent_consistency", "agent_environment", "agent_ops", "ai_governance", "backlog_ready", "ci_checks", "ci_hazards", "ci_model_jobs", "contributor_files", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "repo_guards", "review_evidence", "review_reality", "secrets_guard", "skill_disclosure", "skill_library", "skill_personal_data", "skill_script_tests", "stats_summary", "structure", "structure_drift", "test_pressure", "behaviour_pins", "owner_exclusions", "maturity_model", "pack"]
+reads = ["agent_consistency", "agent_environment", "agent_ops", "ai_governance", "api_compat", "backlog_ready", "ci_checks", "ci_hazards", "ci_model_jobs", "contributor_files", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "repo_guards", "review_evidence", "review_reality", "secrets_guard", "skill_disclosure", "skill_library", "skill_personal_data", "skill_script_tests", "stats_summary", "structure", "structure_drift", "test_pressure", "behaviour_pins", "owner_exclusions", "maturity_model", "pack"]
 stage = "post_offers"
 shapes = [
   { path = "level", type = "lib.scoring.level_result_types:LevelResult" },

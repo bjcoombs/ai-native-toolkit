@@ -423,6 +423,8 @@ rg 'import.*archunit|ArchTest|@ArchTest' "$REPO_ROOT" --type java --type kotlin 
 ls "$REPO_ROOT"/scripts/*convention* "$REPO_ROOT"/scripts/*verify* 2>/dev/null
 ```
 
+**API and contract compatibility checks.** Read `api_compat` from run-context. A tool listed in `runs` (a CI file runs `apidiff`, `japicmp`, `api-extractor`, `griffe check`, `cargo semver-checks`, `buf breaking` or `revapi`, or uses `cargo-semver-checks-action` or `buf-breaking-action`), or a test in `pins` while `ci_checks.enforced_check_runs` is true, is evidence that CI holds the public interface as a contract: cite the CI file or the test path in the Evidence column. A tool in `declared` only is named in a build file that no CI run reaches, or runs in CI in a form that cannot turn the job red (`apidiff` with no exit check, `japicmp` with its default settings); cite it as a gap, not as evidence. A null `present` (`tests_not_read`, `ci_not_read`) is not measured: say so, and score on the other evidence.
+
 **If found, assess coverage:**
 - Do they enforce file/function size limits?
 - Do they enforce import boundaries?

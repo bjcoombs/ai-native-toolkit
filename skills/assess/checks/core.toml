@@ -110,6 +110,7 @@ fragments = [
   "repo_guards",
   "behaviour_pins",
   "ai_governance",
+  "api_compat",
   "org_security_policy",
   "github_secret_scanning",
   "contributor_files",
