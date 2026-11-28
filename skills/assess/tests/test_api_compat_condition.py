@@ -461,6 +461,8 @@ def test_an_inline_apidiff_test_that_cannot_fail_on_a_break_does_not_count(tmp_p
 @pytest.mark.parametrize("line", [
     "apidiff -incompatible old new > out.txt; test ! -s out.txt || exit 1",
     "apidiff -incompatible old new > out.txt; if [ -s out.txt ]; then exit 1; fi",
+    "apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 1; }",
+    "apidiff -incompatible old new > out.txt; diff /dev/null out.txt || exit 1",
 ])
 def test_a_one_line_apidiff_output_check_counts(tmp_path: Path, line: str) -> None:
     root = _repo(tmp_path, {WF: _workflow(line)})
@@ -474,6 +476,12 @@ def test_a_one_line_apidiff_output_check_counts(tmp_path: Path, line: str) -> No
     ("apidiff old new; echo x > other.txt", "test ! -s other.txt || exit 1"),
     ("apidiff old new > out.txt; exit 1 || test -s out.txt",),                 # the exit reads nothing
     ("apidiff old new > out.txt || test ! -s out.txt || exit 1",),             # apidiff's own fallback
+    ("apidiff old new > report.txt; cat report.txt; go build ./... || exit 1",),   # go build's fallback
+    ("apidiff old new > report.txt", "cat report.txt; go build ./... || exit 1"),
+    ("apidiff old new > report.txt; test -s report.txt || exit 1",),           # red only when nothing changed
+    ("apidiff old new > report.txt", "if [ ! -s report.txt ]; then exit 1; fi"),
+    ("apidiff old new | grep -q .; go build ./... || exit 1",),                # the pipe decides nothing
+    ("apidiff old new | grep -vq x && exit 1",),                               # an inverted grep
 ])
 def test_a_one_line_exit_that_reads_nothing_apidiff_wrote_does_not_count(tmp_path: Path, runs: tuple[str, ...]) -> None:
     body = "      - run: |\n" + "".join(f"          {r}\n" for r in runs)
@@ -498,12 +506,15 @@ def test_griffe_check_or_its_table_is_declared(tmp_path: Path, rel: str, text: s
 
 
 def test_a_shell_glob_is_not_a_yaml_alias(tmp_path: Path) -> None:
-    ci = ".api:\n  script:\n    - buf breaking --against main\nlint:\n  script:\n    - ls *.txt\n    - cat [*.md]\n"
+    ci = (".api:\n  script:\n    - buf breaking --against main\nlint:\n  script:\n    - ls *.txt\n    - cat [*.md]\n"
+          "docs:\n  script: [ls *.txt]\n")
     block = _block(_repo(tmp_path, {".gitlab-ci.yml": ci}))
     assert (block["runs"], block["present"], block.get("present_reason")) == ([], False, None)
 
 
-@pytest.mark.parametrize("use", ["api: *compat\n", "api:\n  script:\n    - *compat\n", "api:\n  <<: *compat\n"])
+@pytest.mark.parametrize("use", ["api: *compat\n", "api:\n  script:\n    - *compat\n", "api:\n  <<: *compat\n",
+                                 "api:\n  script: [*compat, make check]\n", "api:\n  script: [make, *compat]\n",
+                                 'api:\n  "script": *compat\n', "api:\n  script: !!seq *compat\n"])
 def test_a_yaml_alias_value_still_reads_not_measured(tmp_path: Path, use: str) -> None:
     """An alias as a whole YAML value (or a merge key) may run the hidden job: unsettled, never unmet."""
     ci = ".compat: &compat\n  script:\n    - buf breaking --against main\n" + use

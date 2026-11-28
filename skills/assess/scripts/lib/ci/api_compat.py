@@ -17,8 +17,8 @@ as text, and Python test files are parsed with ``ast``, never imported.
   ``plugins``). An install (``go install .../apidiff``, ``npm i -D @microsoft/api-extractor``), a
   ``--help`` or ``--version`` call and an ``echo`` invoke nothing. A run counts only when it can
   turn the job red (``can_stop``): ``apidiff`` exits 0 on an incompatible change, so it needs a
-  re-raise (``exit 1``) that reads its output in the job, script or recipe that runs it, on the
-  same line or a later one, or a test of its ``$(...)`` output that decides one
+  re-raise (``exit 1``) that a read of its output decides (``_decides``: ``test ! -s out.txt || exit 1``)
+  in the job, script or recipe that runs it, on the same line or a later one, or a test of its ``$(...)`` output that decides one
   (``if [ -n "$(apidiff a b)" ]; then exit 1; fi``, ``inline_apidiff``); the japicmp CLI needs an
   ``--error-on-*`` flag, and its Maven or Gradle plugin a ``breakBuild*`` or ``failOn*`` setting
   true. A run that cannot stop the job is listed under ``declared``, never counted.
@@ -44,7 +44,7 @@ shell bodies are read: GitHub ``run:``, GitLab ``script:`` and ``before_script:`
 local includes, and an ``extends:`` job's effective ``script:``). On GitLab a job whose ``when:`` or every ``rules:`` entry is ``never``
 or ``manual`` runs nothing, and a hidden job (``.compat:``) runs only as far as a visible job that
 runs ``extends:`` it without setting that body itself; a tool in a hidden job nothing extends, in a file that uses
-an alias as a whole YAML value (``key: *name``, ``- *name``; never a shell glob), a merge key or
+a YAML alias as a whole value or a flow-sequence item (never a shell glob), a merge key or
 ``!reference``, is unsettled.
 
 ``present`` is true when a tool runs, or a pinning test is tracked and CI runs tests. Otherwise
@@ -76,6 +76,7 @@ from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_job_commands import OPERATOR as _OPERATOR
 from lib.ci.ci_job_commands import commands as _commands
+from lib.ci.ci_job_commands import fallback
 from lib.instructions.command_resolver import command_words
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.run_context_types_api_compat import ApiCompatBlock, ApiCompatRun
@@ -103,8 +104,10 @@ _JAPICMP_BREAK = re.compile(_JAPICMP_SETTING + r"\s*(?:>|=|\(|\.set\()\s*true")
 ACTIONS = {"obi1kenobi/cargo-semver-checks-action": "cargo-semver-checks",
            "bufbuild/buf-breaking-action": "buf-breaking",
            "joelanford/go-apidiff": "apidiff"}   # exits with go-apidiff's code: non-zero on a break
-# A YAML alias only as a whole value (``key: *name``, ``- *name``), never a shell glob (``ls *.txt``).
-_ALIASING = re.compile(r"!reference|<<\s*:|^\s*(?:-\s+)?(?:[\w.-]+\s*:\s+|-\s+)\*[\w.-]+\s*(?:#.*)?$", re.M)
+# A YAML alias only where YAML reads one: a whole value (``key: *name``, ``"key": !!seq *name``,
+# ``- *name``) or a flow-sequence item (``key: [*name, make]``), never a shell glob (``ls *.txt``).
+_ALIASING = re.compile(r"!reference|<<\s*:|^\s*(?:-\s+)?(?:[\"']?[\w.-]+[\"']?\s*:\s+|-\s+)(?:!!?\w+\s+)?"
+                       r"(?:\*[\w.-]+\s*(?:#.*)?$|\[(?:[^\]\n]*,)?\s*\*[\w.-]+)", re.M)
 # Words a launcher puts before the program it runs (``uv run``, ``npx --yes``, ``pnpm exec``).
 _LAUNCHERS = frozenset({"uv", "uvx", "pipx", "poetry", "pdm", "hatch", "rye", "pipenv", "npx", "bunx",
                         "pnpx", "pnpm", "yarn", "bun", "run", "exec", "dlx", "x", "python", "python3", "-m"})
@@ -208,11 +211,6 @@ def _rest(text: str, words: list[str]) -> list[str]:
     return []
 
 
-def _after(text: str, words: list[str]) -> list[list[str]]:
-    """The commands of one shell line after the one whose words are ``words`` (``_rest``)."""
-    return [command_words(p.strip().strip("(){} ")) for p in _rest(text, words)[1::2]]
-
-
 def _reraises(words: list[str], held: frozenset[str] = frozenset()) -> bool:
     """A command that ends its script red: ``exit`` or ``return`` with a non-zero literal or a
     variable other than ``$?`` or one ``held`` (assigned ``$?``), or ``false`` (``then exit 1`` inside an ``if`` too)."""
@@ -242,28 +240,79 @@ def _names(ref: str, text: str) -> bool:
     return re.search(r"(?<![\w./-])" + re.escape(ref) + r"(?![\w./-])", text) is not None
 
 
+def _test_words(words: list[str]) -> list[str] | None:
+    """The operands of a ``[ ... ]``, ``[[ ... ]]`` or ``test ...`` command (an ``if`` before it
+    dropped), or None for any other command."""
+    words = words[1:] if words[:1] == ["if"] else words
+    if words[:1] in (["["], ["[["]) and words[-1:] == ["]" if words[0] == "[" else "]]"]:
+        return words[1:-1]
+    return words[1:] if words[:1] == ["test"] else None
+
+
+def _polarity(words: list[str]) -> str | None:
+    """``"pos"`` when a command that reads apidiff's output succeeds on a non-empty report
+    (``[ -s out.txt ]``, ``[ -n "$out" ]``, ``grep -q . out.txt``), ``"neg"`` when it fails on one
+    (``[ ! -s out.txt ]``, ``[ -z "$out" ]``, ``diff``, ``cmp``), else None (``cat``: decides nothing)."""
+    operands = _test_words(words)
+    if operands is None:
+        head = _name(words[0]) if words else ""
+        flags = "".join(w[1:] for w in words[1:] if w.startswith("-") and not w.startswith("--"))
+        if head == "grep" and "v" not in flags and "--invert-match" not in words:
+            return "pos"
+        return "neg" if head in ("diff", "cmp") else None
+    negated = operands[:1] == ["!"]
+    operands = operands[1:] if negated else operands
+    if len(operands) != 2 or operands[0] not in ("-s", "-n", "-z"):
+        return None
+    return "pos" if (operands[0] != "-z") != negated else "neg"
+
+
+def _words(part: str) -> list[str]:
+    return command_words(part.strip().strip("(){} "))
+
+
+def _decides(parts: list[str], refs: list[str], later: list[str], held: frozenset[str], piped: bool = False) -> bool:
+    """Whether a pipeline in the operator-split ``parts`` (commands at the even indexes) that reads
+    apidiff's output (names one of ``refs``, or, with ``piped``, the first pipeline, which apidiff
+    feeds) decides a re-raise: its last command succeeds on a non-empty report and ``&&`` leads
+    into the re-raise, or fails on one and ``||`` does, or it is an ``if`` test that succeeds on
+    one with a re-raise in its ``then`` branch (read on across ``later`` lines). An ``exit 1``
+    after a command that only prints the report (``cat out.txt; go build || exit 1``) is not."""
+    i = 0
+    while i < len(parts):
+        j = i
+        while j + 1 < len(parts) and parts[j + 1] == "|":
+            j += 2
+        reads = (piped and i == 0) or any(_names(r, p) for p in parts[i:j + 1:2] for r in refs)
+        words, rest = _words(parts[j]), parts[j + 1:]
+        polarity = _polarity(words) if reads else None
+        if polarity is not None and words[:1] == ["if"]:
+            if polarity == "pos" and rest[:1] == [";"] and any(_reraises(c, held) for c in _then_body(rest, later)):
+                return True
+        elif polarity is not None and len(rest) > 1 and (polarity, rest[0]) in (("pos", "&&"), ("neg", "||")):
+            if any(_reraises(_words(p), held) for p in _OPERATOR.split(fallback(rest[1:]))[::2]):
+                return True
+        i = j + 2
+    return False
+
+
 def _checks_output(words: list[str], unit: list[str]) -> bool:
-    """Whether apidiff's output decides a re-raise: a later command on its own line that reads its
-    pipe (``apidiff a b | grep -q . && exit 1``), or a later command of its line or a later line of
-    the same shell that names its captured variable or output file and re-raises
-    (``if [ -s out.txt ]; then exit 1; fi``). An ``exit 1`` that reads nothing apidiff wrote is not
-    its check."""
+    """Whether apidiff's output decides a re-raise (``_decides``): the pipeline it feeds on its own
+    line (``apidiff a b | grep -q . && exit 1``), or a later command of its line or of a later line
+    of the same shell that reads its captured variable or output file
+    (``apidiff a b > out.txt; test ! -s out.txt || exit 1``, ``if [ -s out.txt ]; then exit 1; fi``).
+    An ``exit 1`` that reads nothing apidiff wrote, or that its read does not decide, is not its check."""
     if not unit:
         return False
     held = frozenset(_STATUS_VAR.findall("\n".join(unit)))   # ``rc=$?`` holds apidiff's 0
     first = _shell(unit[0])
-    piped = re.search(r"apidiff[^|;&]*\|(?!\|)", first) is not None
-    if piped and any(_reraises(w, held) for w in _after(first, words)):
-        return True
     refs = _output_refs(unit[0])
-    named = False   # the same line, a re-raise after a command that reads the output:
-    for part in _rest(first, words)[1::2]:   # ``apidiff a b > out.txt; test ! -s out.txt || exit 1``
-        named = named or any(_names(r, part) for r in refs)
-        if named and _reraises(command_words(part.strip().strip("(){} ")), held):
-            return True
-    return any(any(_names(r, ci_line_text(line)) for r in refs) and any(_reraises(c["words"], held)
-                                                               for c in _commands(_shell(line)))
-               for line in unit[1:])
+    rest = _rest(first, words)
+    piped = rest[:1] == ["|"]
+    if _decides(rest[1:], refs, unit[1:], held, piped):
+        return True
+    return any(_decides(_OPERATOR.split(ci_line_text(line)), refs, unit[k + 1:], held)
+               for k, line in enumerate(unit[1:], start=1))
 
 
 _SUBST = re.compile(r"^\$\((.*)\)$", re.S)
@@ -272,13 +321,10 @@ _SUBST = re.compile(r"^\$\((.*)\)$", re.S)
 def _tested_substitution(words: list[str]) -> tuple[str, list[str]] | None:
     """``(flag, inner words)`` for a test of one command substitution's output:
     ``[ -n "$(apidiff a b)" ]``, ``[[ -z ... ]]``, ``test -n ...``, an ``if`` before any of them."""
-    words = words[1:] if words[:1] == ["if"] else words
-    if words[:1] in (["["], ["[["]) and words[-1:] == ["]" if words[0] == "[" else "]]"]:
-        words = words[1:-1]
-    elif words[:1] == ["test"]:
-        words = words[1:]
-    else:
+    operands = _test_words(words)
+    if operands is None:
         return None
+    words = operands
     sub = _SUBST.match(words[1]) if len(words) == 2 and words[0] in ("-n", "-z") else None
     return (words[0], command_words(sub.group(1))) if sub else None
 
