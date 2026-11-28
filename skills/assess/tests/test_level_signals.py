@@ -277,9 +277,9 @@ def test_default_levels_loads_against_the_schema() -> None:
     maturity_model = load_default_levels()
     assert maturity_model["version"].startswith("default-")
     assert all(row["scope"] == "team" for row in maturity_model["rows"])
-    one = {"skill-disclosure", "skill-script-tests", "skill-personal-data", "model-ci-gated", "contributor-files",
-           "skill-library", "agent-least-privilege", "agent-job-write-access", "agent-evals", "docs-kept-true", "ci-skip-label", "ci-test-failures-ignored", "agent-rewrites-instructions"}  # else 2
-    assert all(len(row["levels"]) == (1 if row["id"] in one else 2) for row in maturity_model["rows"])
+    two = {*(r for r in (row["id"] for row in maturity_model["rows"]) if r.startswith("layer-")),
+           "doc-freshness", "guardrails-stated", "agent-consistency", "secrets-guard"}  # else 1
+    assert all(len(row["levels"]) == (2 if row["id"] in two else 1) for row in maturity_model["rows"])
     assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 
 
@@ -343,8 +343,8 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "skill-script-tests": None,  # no skill holds a script: no_skill_scripts
             "model-ci-gated": None,      # no model-calling CI job detected: no_model_jobs
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
-            "secrets-guard": 0, "agent-evals": 0, "docs-kept-true": 0,  # no secrets guard; no eval suite or docs check
-            "skill-library": 0, "agent-least-privilege": None, "agent-job-write-access": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "agent-rewrites-instructions": None,  # no SKILL.md; no_agent_jobs; no CI file
+            "secrets-guard": 0, "agent-evals": 0, "docs-kept-true": 0, "ai-policy-declared": 0,  # none of these files
+            "skill-library": 0, "agent-least-privilege": None, "agent-job-write-access": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "ai-policy-enforced": None, "agent-rewrites-instructions": None, "ci-instructions-unchecked": None,  # no SKILL.md; no_agent_jobs; no CI file
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -381,7 +381,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "skill-script-tests": None,  # the capture predates skill_script_tests
         "skill-personal-data": None, "contributor-files": None,  # the capture predates both blocks
         "secrets-guard": None, "model-ci-gated": None,  # the capture predates both blocks
-        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None, "agent-evals": None, "docs-kept-true": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "agent-rewrites-instructions": None,  # predate all eight
+        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None, "agent-evals": None, "docs-kept-true": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "ai-policy-enforced": None, "ai-policy-declared": None, "agent-rewrites-instructions": None, "ci-instructions-unchecked": None,  # predate all eleven
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]

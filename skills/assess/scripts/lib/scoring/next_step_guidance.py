@@ -484,6 +484,19 @@ _WORDING: dict[str, Wording] = {
         "Jenkinsfile and the poms; quarantine a flaky test by name instead.",
         "No CI file, Jenkinsfile, `.mvn/maven.config`, reactor pom or followed CI step sets "
         "`maven.test.failure.ignore` or `testFailureIgnore` to true."),
+    "ci_hazards.instructions_unchecked": _flag_count(
+        "Remove the instruction files from `paths-ignore`, or add them to the `paths` filter, in at "
+        "least one workflow that runs checks on pull requests.",
+        "Every instruction file is on the paths of a workflow that runs checks on pull requests."),
+    "ai_governance.enforced": _flag(
+        "Add a workflow on `pull_request` that reads the pull request body or the commit trailers "
+        "for the AI disclosure your policy asks for, and turns the check red or adds a label on it.",
+        "A workflow on pull requests reads the pull request body or the commit trailers for an AI "
+        "disclosure or attribution marker and turns the check red or labels on it."),
+    "ai_governance.policy_declared": _flag(
+        "Commit an `AI_POLICY.md` at the root, in `.github/` or in `docs/`, or add a pull request "
+        "template checkbox that asks the author to disclose AI assistance.",
+        "An `AI_POLICY.md` is committed at a fixed path, or a pull request template checkbox asks for AI disclosure."),
     "secrets_guard.configured": _flag(
         "Add a secrets hook to `.pre-commit-config.yaml` (gitleaks or detect-secrets), or a secrets "
         "scan step to CI.",
@@ -639,6 +652,8 @@ _MEASURE_HINTS = {
                  "or another value the scan cannot read.",
     "skill_library": "Not measured (`not_a_git_repository`) outside a git repository, where the "
                      "committed files cannot be listed.",
+    "ai_governance": "Not measured (`no_pr_workflows`) when no GitHub Actions workflow runs on pull "
+                     "requests, so no check that could read an AI disclosure is in view.",
     "ci_hazards": "Not measured (`no_pr_checks`) when no GitHub Actions workflow runs a check on pull "
                   "requests, and (`no_ci_files`) when no CI file, Jenkinsfile or root `pom.xml` is tracked.",
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "

@@ -1,7 +1,7 @@
-"""CI practices that undermine the ``ci_runs_tests`` gate: a skip label and ignored test failures (issue #828).
+"""CI practices that undermine a Step gate: a skip label and ignored test failures (#828), unchecked instruction files (#857).
 
-Two hazards of the default maturity model read this block. Each is a harm, never a practice: a
-hazard condition is never counted, and while it is met it holds the ``ci_runs_tests`` Step gate
+Three hazards of the default maturity model read this block. Each is a harm, never a practice: a
+hazard condition is never counted, and while it is met it holds its Step gate, the first two the ``ci_runs_tests`` gate
 (``blocks``, ``lib/scoring/level_tally.py``), so CI that can be told not to fail never earns
 the Step that trusts it. Nothing is executed; the committed files are read as text, and a CI step
 is followed into the repository only through the shared CI-step follower
@@ -46,7 +46,13 @@ is followed into the repository only through the shared CI-step follower
   ``test_failures_ignored_reason`` ``no_ci_files`` when none of those CI files or a root pom is
   tracked.
 
-``ci_hazard_files`` lists the files behind both counts, sorted, for evidence. Every value is a
+- **``instructions_unchecked``** (issue #857): the number of tracked instruction files that every
+  GitHub Actions workflow running a check on pull requests filters out with ``paths:`` or
+  ``paths-ignore:``, listed in ``unchecked_instruction_files``. Its hazard holds the
+  ``instructions`` gate. Read by ``lib.ci.ci_path_filters`` (the filter rules are in its
+  docstring). Null with ``instructions_unchecked_reason`` ``no_pr_checks``, as for ``skip_labels``.
+
+``ci_hazard_files`` lists the files behind the counts, sorted, for evidence. Every value is a
 count, a reason code or a repo-relative path, so the block survives counts-only output with its
 paths. ``scan_ci_hazards(repo_root)`` builds the block (``CiHazardsBlock``). Tests:
 ``tests/test_ci_hazards.py``.
@@ -62,6 +68,7 @@ from lib.ci.ci_build_follower import Followed, follow_maven
 from lib.ci.ci_checks import check_commands
 from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_matrix import jobs
+from lib.ci.ci_path_filters import unchecked_instructions
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_triggers import workflow_events
@@ -101,7 +108,10 @@ class CiHazardsBlock(TypedDict):
     skip_labels_reason: str | None  # NO_PR_CHECKS when null
     test_failures_ignored: int | None  # files that set Maven to ignore test failures
     test_failures_ignored_reason: str | None  # NO_CI_FILES when null
-    ci_hazard_files: list[str]  # the files behind both counts, sorted
+    instructions_unchecked: int | None  # instruction files every PR check workflow filters out (#857)
+    instructions_unchecked_reason: str | None  # NO_PR_CHECKS when null
+    unchecked_instruction_files: list[str]  # those instruction files, sorted
+    ci_hazard_files: list[str]  # the files behind the counts, sorted
 
 
 def jenkinsfiles(tracked: frozenset[str]) -> list[str]:
@@ -252,6 +262,7 @@ def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
     # the action's, which the follower reads as a file of its own
     own = {rel: read_config(root, rel) for rel in gating}
     skip, skip_files = _skip_labels(workflows)
+    unchecked, unchecked_files, filter_files = unchecked_instructions(workflows, tracked)
     sources = dict(texts)
     if MAVEN_CONFIG in tracked:
         sources[MAVEN_CONFIG] = read_config(root, MAVEN_CONFIG)
@@ -275,5 +286,8 @@ def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
         "skip_labels": skip, "skip_labels_reason": None if skip is not None else NO_PR_CHECKS,
         "test_failures_ignored": len(ignoring) if measured else None,
         "test_failures_ignored_reason": None if measured else NO_CI_FILES,
-        "ci_hazard_files": sorted({*skip_files, *ignoring}),
+        "instructions_unchecked": unchecked,
+        "instructions_unchecked_reason": None if unchecked is not None else NO_PR_CHECKS,
+        "unchecked_instruction_files": unchecked_files,
+        "ci_hazard_files": sorted({*skip_files, *ignoring, *filter_files}),
     }

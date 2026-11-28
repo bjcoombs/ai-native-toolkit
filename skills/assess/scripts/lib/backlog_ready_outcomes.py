@@ -16,16 +16,18 @@ window of ``window_days`` (default 90) ending at the run time:
   whose response the read could not settle are ``outcomes.response_unread``. The reported number
   is that CHAOSS median; ``first_response_met`` asks the stricter question, whether the median
   wait of every issue opened in the window is within ``first_response_max_days`` (default 2): an
-  unanswered issue older than the threshold counts as a wait past it, and an issue whose wait is
-  not known yet can fall either side, so the bool is null when they could tip it. An unanswered
+  unanswered issue older than the threshold counts as a wait past it, an unanswered issue younger
+  than it has waited at least its age so far, and an issue whose response was not read can fall
+  either side, so the bool is null when they could tip it. An unanswered
   issue its own author closed (``Issue.self_closed``) within ``first_response_max_days`` is owed
   no response, so it is in neither set; one closed later had already waited past the limit and
   stays overdue. Either stays in ``no_response_count`` (#1587).
 - ``untriaged_after_7d_share``: among open issues older than 7 days, the share with no label or
   an untriaged label (``[backlog_ready] untriaged_labels``, else ``backlog_ready.UNTRIAGED_LABELS``).
   Met when at most ``untriaged_max_share`` (default 0.10).
-- ``close_open_ratio_90d``: issues closed in the window over issues opened in it. Met when at
-  least ``close_open_min_ratio`` (default 0.9).
+- ``close_open_ratio``: issues closed in the window over issues opened in it. Met when at
+  least ``close_open_min_ratio`` (default 0.9). It was ``close_open_ratio_90d`` before release;
+  the window is ``window_days``, not always 90, so the name no longer says 90 (#1591).
 
 Each metric is null with a ``<metric>_reason`` code when it is not measured: the read's code
 (``no_network``, ``no_platform_auth``, ``unsupported_host``, ``platform_error``), or
@@ -35,7 +37,8 @@ read (a capped timeline, note read or bot probe). The ratio reads ``window_trunc
 window's issue list stopped at its page cap: that list is newest first, so the issues it drops are
 old ones closed in the window, and a ratio over the rest would be low. For the same reason
 ``first_response_met`` is null when that capped list never reached an issue opened before the
-window: issues opened in the window were dropped, and they may decide the median. The untriaged
+window: issues opened in the window were dropped, and they may decide the median; the median
+then reads ``window_truncated`` too when no issue read was answered. The untriaged
 share reads ``open_truncated`` when the open-issue list stopped at its page cap: a capped slice
 holds only the oldest issues on GitHub or the newest on GitLab, and untriaged issues gather at one
 end, so a share over it could read met while others sit untriaged. One exception keeps an ignored tracker from reading
@@ -47,7 +50,7 @@ later response is already past the threshold. Each
 Block fields this module adds to ``backlog_ready``::
 
     {"first_response_median_days": float | None, "untriaged_after_7d_share": float | None,
-     "close_open_ratio_90d": float | None, "<metric>_reason": str (beside a null metric),
+     "close_open_ratio": float | None, "<metric>_reason": str (beside a null metric),
      "first_response_met": bool | None, "untriaged_met": bool | None, "close_open_met": bool | None,
      "outcomes": {"available": True, "window_days": int, "opened": int, "closed": int,
                   "responded": int, "no_response_count": int, "response_unread": int,
@@ -80,7 +83,7 @@ NO_RESPONSE = "no_response"
 RESPONSE_UNREAD = "response_unread"
 WINDOW_TRUNCATED = "window_truncated"
 OPEN_TRUNCATED = "open_truncated"
-METRICS = ("first_response_median_days", "untriaged_after_7d_share", "close_open_ratio_90d")
+METRICS = ("first_response_median_days", "untriaged_after_7d_share", "close_open_ratio")
 _DAY = 86400.0
 
 
@@ -108,8 +111,8 @@ class BacklogReadyOutcomesBlock(BacklogReadyBlock):
     first_response_median_days_reason: NotRequired[str]
     untriaged_after_7d_share: float | None
     untriaged_after_7d_share_reason: NotRequired[str]
-    close_open_ratio_90d: float | None
-    close_open_ratio_90d_reason: NotRequired[str]
+    close_open_ratio: float | None
+    close_open_ratio_reason: NotRequired[str]
     first_response_met: bool | None
     untriaged_met: bool | None
     close_open_met: bool | None
@@ -120,18 +123,20 @@ def _days(a: datetime, b: datetime) -> float:
     return (b - a).total_seconds() / _DAY
 
 
-def _response_met(waits: list[float], overdue: int, unknown: int, limit: float) -> bool | None:
+def _response_met(waits: list[float], overdue: int, pending: list[float], unread: int,
+                  limit: float) -> bool | None:
     """Whether the median wait of every issue opened in the window is within ``limit``.
 
     An unanswered issue older than ``limit`` (``overdue``) has already waited past it, so it counts
-    as a wait above the limit; an issue whose wait is not known yet (``unknown``: unanswered and
-    younger than the limit, or its response unread) could fall either side. Met when the median is
-    within the limit with every unknown wait above it, unmet when it is past the limit with every
-    unknown wait at 0, else None. So a few fast answers among many ignored issues read unmet."""
+    as a wait above the limit. An unanswered issue younger than the limit has waited its age so far
+    (``pending``, in days) and may wait longer; an issue whose response was not read (``unread``)
+    may have been answered at once. Met when the median is within the limit with every unknown wait
+    above it, unmet when it is past the limit with each pending issue answered now and each unread
+    one at 0, else None. So a few fast answers among many ignored issues read unmet."""
     if not waits and not overdue:
         return None
-    worst = sorted([*waits, *[inf] * (overdue + unknown)])
-    best = sorted([*waits, *[inf] * overdue, *[0.0] * unknown])
+    worst = sorted([*waits, *[inf] * (overdue + len(pending) + unread)])
+    best = sorted([*waits, *[inf] * overdue, *pending, *[0.0] * unread])
     if median(worst) <= limit:
         return True
     if median(best) > limit:
@@ -170,17 +175,21 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
                       if not i.labels or marks & set(i.labels) or not i.labels_complete)
     fields: dict[str, Any] = {}
 
-    overdue = sum(1 for i in owed if _days(i.created, read.now) > limit)
-    met = _response_met(waits, overdue, len(owed) - overdue + unread, limit)
-    if read.window_truncated and not any(i.created < read.start for i in read.recent):
-        met = None  # the capped list (newest first) dropped issues opened in the window: they may decide it
+    ages = [_days(i.created, read.now) for i in owed]
+    overdue = sum(1 for age in ages if age > limit)
+    met = _response_met(waits, overdue, [age for age in ages if age <= limit], unread, limit)
+    # the capped list (newest first) dropped issues opened in the window: they may decide it
+    dropped = read.window_truncated and not any(i.created < read.start for i in read.recent)
+    if dropped:
+        met = None
     fields["first_response_met"] = met
     if waits:
         fields["first_response_median_days"] = round(median(waits), 2)
     else:
         fields["first_response_median_days"] = None
         fields["first_response_median_days_reason"] = (
-            NO_RESPONSE if met is False else RESPONSE_UNREAD if unread else EMPTY_WINDOW)
+            NO_RESPONSE if met is False else RESPONSE_UNREAD if unread
+            else WINDOW_TRUNCATED if dropped else EMPTY_WINDOW)
 
     if read.open_truncated:  # a capped slice is the oldest (GitHub) or newest (GitLab) issues only
         fields.update(untriaged_after_7d_share=None, untriaged_after_7d_share_reason=OPEN_TRUNCATED,
@@ -194,14 +203,14 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
                       untriaged_met=None)
 
     if read.window_truncated:  # the dropped rows are the oldest: they could only add closes
-        fields.update(close_open_ratio_90d=None, close_open_ratio_90d_reason=WINDOW_TRUNCATED,
+        fields.update(close_open_ratio=None, close_open_ratio_reason=WINDOW_TRUNCATED,
                       close_open_met=None)
     elif opened:
         ratio = closed / len(opened)
-        fields["close_open_ratio_90d"] = round(ratio, 4)
+        fields["close_open_ratio"] = round(ratio, 4)
         fields["close_open_met"] = ratio >= thresholds.close_open_min_ratio
     else:
-        fields.update(close_open_ratio_90d=None, close_open_ratio_90d_reason=EMPTY_WINDOW,
+        fields.update(close_open_ratio=None, close_open_ratio_reason=EMPTY_WINDOW,
                       close_open_met=None)
 
     fields["outcomes"] = {
