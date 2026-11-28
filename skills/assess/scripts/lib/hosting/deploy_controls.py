@@ -18,7 +18,8 @@ until a short page, at most ``MAX_PAGES`` (10) pages; a list still full after th
 ``truncated`` unavailable block, never a partial count. A production environment is unreviewed
 when it has no ``required_reviewers`` protection rule, and allows self-review when that rule's
 ``prevent_self_review`` is false; a rule that does not report the flag makes
-``self_review_allowed_count`` null with ``not_reported``.
+``self_review_allowed_count`` null with ``not_reported``. ``protection_rules`` that is present
+and not a list is bad JSON (the block is unavailable), never "no reviewers".
 
 GitLab. ``projects/<id>/environments`` gives the names and deployment tiers (the same paging).
 With no production environment no other read is made. Otherwise
@@ -147,8 +148,11 @@ def _github(repo_root: Path, names: frozenset[str], configured: bool) -> DeployC
             raise GhUnavailable("gh_bad_json: the environment list was not a list")
         return envs
     production = _named(_paged(read, "environment", "gh_bad_json"), names)
-    rules = [next((r for r in (e.get("protection_rules") or []) if isinstance(r, dict)
-                   and r.get("type") == "required_reviewers"), None) for e in production]
+    for env in production:  # a rule list GitHub does not send as a list is never "no reviewers"
+        if not isinstance(env.get("protection_rules", []), list):
+            raise GhUnavailable("gh_bad_json: an environment's protection rules were not a list")
+    rules = [next((r for r in env.get("protection_rules", []) if isinstance(r, dict)
+                   and r.get("type") == "required_reviewers"), None) for env in production]
     reviewed = [r for r in rules if r is not None]
     flags = [r.get("prevent_self_review") for r in reviewed]
     self_review = (None if any(not isinstance(f, bool) for f in flags)
@@ -225,13 +229,16 @@ def _gitlab(project: GitlabProject, names: frozenset[str], configured: bool) -> 
         return _block("gitlab", configured, len(production), None, None, _code(e), _code(e))
     approved = {p["name"] for p in protected if _approvals(p)}  # GitLab protects by exact name
     meta_reason = NOT_REPORTED
+    meta: dict[str, Any] = {}
     try:
         got = glab_api(project, base)
+        if not isinstance(got, dict):
+            raise GhUnavailable("glab_bad_json: the project read was not an object")
+        meta = got
     except GhUnavailable as e:
         if _code(e) not in REFUSED:
             raise
-        got, meta_reason = None, _code(e)
-    meta: dict[str, Any] = got if isinstance(got, dict) else {}
+        meta_reason = _code(e)
     pending = [e for e in production if e["name"] not in approved]
     unreviewed, unreviewed_reason = _gitlab_unreviewed(project, meta, pending, meta_reason)
     reviewed = None if unreviewed is None else len(production) - unreviewed

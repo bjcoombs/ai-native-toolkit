@@ -189,6 +189,15 @@ def test_a_malformed_list_is_unavailable(tmp_path: Path, monkeypatch: pytest.Mon
     assert block["available"] is False and block["reason"].startswith("gh_bad_json:")
 
 
+@pytest.mark.parametrize("rules", ["required_reviewers", {"type": "required_reviewers"}, 1])
+def test_protection_rules_that_are_not_a_list_are_not_measured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                               rules: Any) -> None:
+    env = {"name": "production", "protection_rules": rules}
+    _github(monkeypatch, {GH_ENVS: {"total_count": 1, "environments": [env]}})
+    block = dc.scan_deploy_controls(tmp_path)
+    assert block["available"] is False and block["reason"].startswith("gh_bad_json:")
+
+
 # --- GitLab ------------------------------------------------------------------------------
 
 
@@ -353,3 +362,15 @@ def test_the_block_leaves_the_default_level_unchanged(tmp_path: Path, monkeypatc
     model = lt.default_model()
     assert lt.level_result(model, {"deploy_controls": dc.scan_deploy_controls(tmp_path)}) == \
         lt.level_result(model, {})
+
+
+@pytest.mark.parametrize("meta", [[], "x", None])
+def test_gitlab_project_read_that_is_not_an_object_is_unavailable(tmp_path: Path,
+                                                                  monkeypatch: pytest.MonkeyPatch,
+                                                                  meta: Any) -> None:
+    pages = {GL_ENVS: [{"name": "production"}], GL_PROTECTED: [_approval(1)]}
+    _gitlab(monkeypatch, pages)
+    monkeypatch.setattr(dc, "glab_api", lambda project, path, cache=True: meta if path == GL_PROJECT
+                        else pages[path])
+    block = dc.scan_deploy_controls(tmp_path)
+    assert block["available"] is False and block["reason"].startswith("glab_bad_json:")
