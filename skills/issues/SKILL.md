@@ -65,16 +65,18 @@ this order, and every write it makes shows up in the report the human approves:
    collisions as edges or hot-file notes.
 4. **Size by Judgment** - decide one PR or several, and propose any decomposition.
 5. **Dependency Authoring** - write the ordering as native `blocked_by` edges.
-6. **Triage Report** - apply every label write at once, then render labels, decomposition
+6. **Readiness Check** - run the definition-of-ready checks over every candidate.
+7. **Triage Report** - apply every label write at once, then render labels, decomposition
    tree, execution order, overlaps; STOP.
 
-An issue is `agent-ready` only when it survives all of steps 2 to 4: clear after research,
-no unresolved overlap, and sized to one PR (or approved as a decomposed parent). Everything
-else stays or becomes `needs-triage`. Research and sizing read widely, so fan them out with
+An issue is `agent-ready` only when it survives all of steps 2 to 4 and passes the Readiness
+Check: clear after research, no unresolved overlap, sized to one PR (or approved as a
+decomposed parent), and no definition-of-ready item failed. Everything else stays or becomes
+`needs-triage`. Research and sizing read widely, so fan them out with
 subagents (the `Agent` tool); never teammates.
 
-Steps 1 to 4 decide the label of each issue that exists at the start of the pass but do not
-write it: the verdict needs all four inputs, so every `agent-ready` / `needs-triage` label change
+Steps 1 to 4 and the Readiness Check decide the label of each issue that exists at the start
+of the pass but do not write it: the verdict needs all five inputs, so every `agent-ready` / `needs-triage` label change
 on those issues happens in one write at the Triage Report step. Creating an approved
 decomposition is a separate phase after approval that labels its own children and parent (see
 Size by Judgment). An interrupted pass therefore never leaves an issue `agent-ready` while it overlaps an open
@@ -185,6 +187,15 @@ Every split and every deliberate non-split carries a one-line reason in the tria
 reason a reader can disagree with ("one file, one reviewer sitting" or "schema change must land
 before the two consumers"). No hierarchy is created without a reason.
 
+Record the size of each issue left whole as a comment whose first line is the definition of
+ready's size marker, then the same one-line reason, so the Readiness Check and the refiner read
+one size. Skip the comment when the newest marker, or a body `Size:` line with no marker after it,
+already records the same points. The newest marker wins, so a resize is a new comment:
+
+```bash
+gh issue comment <N> --body "$(printf '<!-- refine:size %s -->\n%s' <P> '<one-line reason>')"
+```
+
 When decomposition is warranted:
 1. **Propose, then wait for approval.** Show the decomposition tree (parent, each child's scope,
    the reason for the split, and the child order) in the triage report, and persist the same
@@ -235,14 +246,43 @@ behind an open PR is not an edge (PR-as-blocker is unsupported); that is the Ove
 call. Render the resulting order in the report as waves, so the human approves the sequence and
 not just the membership.
 
+### Readiness Check
+
+The definition of ready (`docs/contributing/definition-of-ready.md` in the target repository,
+or the toolkit's copy when it has none) is the one checklist `/issues` and the refiner apply.
+Run the refiner's deterministic checks once, after the size markers and edges above are
+written, rather than reading the checklist by eye:
+
+```bash
+: "${CLAUDE_PLUGIN_ROOT:=.}"   # unset outside an installed plugin: fall back to the current checkout
+VERDICT=$(mktemp); echo "VERDICT=$VERDICT"   # shell variables do not survive between Bash calls
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/refine/scripts/refine.py" --repo "$ORG/$REPO" --dry-run --out "$VERDICT"
+```
+
+The script is read-only. Exit 2 is a usage or definition error and exit 3 a failed `gh` read:
+report it and stop before any label write. Each issue's entry in `$VERDICT` carries a
+`verdict`, its `reasons` and a `checklist` of items with a `status`:
+
+- **`not_ready`** - an item the script settles failed (missing sections, oversize with no
+  sub-issues, an unrecorded blocker, an open-PR overlap, an exact duplicate). The verdict is
+  `needs-triage`, whatever steps 2 to 4 decided; name the reasons in the report.
+- **`needs_judgement`** or **`ready`** - each `needs_judgement` item is decided by the step
+  that owns it: `no-open-question` and `criteria-checkable` by the Research Pass (a criterion
+  that names no command or test is a question), `sized` by Size by Judgment, and
+  `blockers-recorded` by Dependency Authoring. The issue is `agent-ready` only when every one
+  holds.
+
+Script results are final: triage never overrides a `fail`, and an item it cannot settle keeps
+the issue `needs-triage`.
+
 ### Triage Report
 
-Apply the label verdicts from steps 1 to 4 in one sequential write per issue (never parallel
+Apply the label verdicts from steps 1 to 4 and the Readiness Check in one sequential write per issue (never parallel
 background writes), then **report and STOP** (mirrors `/tm` planning):
 
 ```bash
-gh issue edit <N> --remove-label "needs-triage" --add-label "agent-ready"   # clear, no overlap, one PR
-gh issue edit <N> --add-label "needs-triage"                                # research left a call, or overlap
+gh issue edit <N> --remove-label "needs-triage" --add-label "agent-ready"   # clear, no overlap, one PR, checklist holds
+gh issue edit <N> --add-label "needs-triage"                                # research left a call, overlap, or a failed item
 ```
 
 An issue proposed for decomposition gets `needs-triage` (its proposal comment is the record) until the
