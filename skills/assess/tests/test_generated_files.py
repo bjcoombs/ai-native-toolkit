@@ -260,3 +260,27 @@ def test_artifact_evidence_ignores_sourcemap_words_in_prose(tmp_path):
     f.write_text("const DIRECTIVE = 'sourceMappingURL';\nexport { DIRECTIVE };\n",
                  encoding="utf-8")
     assert artifact_evidence(f) is None
+
+
+def test_artifact_evidence_inline_sourcemap_longer_than_a_small_tail(tmp_path):
+    """An inline map puts tens of KB of base64 after the directive, so the
+    directive line starts well before the last few KB of the file."""
+    from lib.complexity.generated_files import artifact_evidence
+    f = tmp_path / "app.js"
+    f.write_text("var a = 1;\n" * 400
+                 + "//# sourceMappingURL=data:application/json;base64,"
+                 + "QUJD" * 10_000 + "\n", encoding="utf-8")
+    assert artifact_evidence(f) == "sourcemap"
+
+
+def test_artifact_evidence_webpack_eval_devtool_banner(tmp_path):
+    """webpack 5's eval devtool opens with a 7-line notice, which pushes the
+    bootstrap marker past the first 5 lines."""
+    from lib.complexity.generated_files import artifact_evidence
+    f = tmp_path / "main.js"
+    f.write_text('/*\n * ATTENTION: The "eval" devtool has been used (maybe by '
+                 'default in mode: "development").\n * This devtool is neither '
+                 'made for production nor for readable output files.\n *\n *\n'
+                 ' *\n */\n/******/ (() => { // webpackBootstrap\n',
+                 encoding="utf-8")
+    assert artifact_evidence(f) == "bundler-banner"

@@ -186,13 +186,19 @@ def generated_reason(path: Path) -> str | None:
 REASON_SOURCEMAP = "sourcemap"
 REASON_BUNDLER_BANNER = "bundler-banner"
 
-# The sourcemap directive sits on a comment line at the end of the file.
+# The sourcemap directive sits on a comment line at the end of the file. An
+# inline map (`data:...;base64,`) puts tens of KB after it on the same line, so
+# the tail read is 1 MB, the bound the long-line check uses; a longer inline
+# map is missed and the file reads as only dominant.
 _SOURCEMAP_COMMENT = re.compile(
     rb"^\s*(//[#@]|/\*[#@])\s*sourceMappingURL=", re.MULTILINE)
-_SOURCEMAP_TAIL_BYTES = 4096
-# Bootstrap code webpack and Parcel emit near the top of a bundle.
+_SOURCEMAP_TAIL_BYTES = 1024 * 1024
+# Bootstrap code webpack and Parcel emit near the top of a bundle, and the
+# notice webpack 5's eval devtool writes above it (seven lines, so the
+# bootstrap marker itself falls outside the first five).
 _BUNDLER_MARKERS = re.compile(
-    r"webpackBootstrap|__webpack_require__|__webpack_modules__|parcelRequire")
+    r"webpackBootstrap|__webpack_require__|__webpack_modules__|parcelRequire"
+    r'|The "eval" devtool has been used')
 
 
 def _has_sourcemap(path: Path) -> bool:
@@ -223,9 +229,9 @@ def artifact_evidence(path: Path) -> str | None:
 
     ``generated-header`` or ``long-lines`` (the filter's own reasons, seen when
     ``--include-artifacts`` scores such a file), ``sourcemap`` (a
-    ``sourceMappingURL`` comment in the last 4 KB or a sibling ``<name>.map``),
-    or ``bundler-banner`` (webpack or Parcel bootstrap code in the first 5
-    lines). None means no content evidence, so a large file is only dominant.
+    ``sourceMappingURL`` comment in the last 1 MB or a sibling ``<name>.map``),
+    or ``bundler-banner`` (webpack or Parcel bootstrap code, or webpack's eval
+    devtool notice, in the first 5 lines). None means no content evidence, so a large file is only dominant.
     """
     reason = generated_reason(path)
     if reason is not None:
