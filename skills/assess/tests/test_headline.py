@@ -239,7 +239,10 @@ CI2 = {
                        "        self.assertTrue(True)\n",
     ".github/workflows/ci.yml": "name: ci\non: [pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
                                "    steps:\n      - uses: actions/checkout@v4\n      - run: make test\n",
-    "CLAUDE.md": "# Project\n\nBefore every commit run `make test` and fix any failure.\n",
+    # a check command and one claim the repository keeps, so the instructions gate (layer-0-instructions
+    # up to level 2, #1641) is measured: no claim to check reads not measured (#827)
+    "CLAUDE.md": "# Project\n\nBefore every commit run `make test` and fix any failure.\n"
+                 "The suite has 1 module in `tests/*.py`.\n",
 }
 
 
@@ -289,11 +292,6 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path, monkeypatch: pytest.
     # A doc beside the code and the 20-doc floor lowered, so doc freshness is a practice in
     # place and the In place line shows (#822: a base doc reads only the code beside it).
     (ci2 / "src" / "README.md").write_text("# src\n", encoding="utf-8", newline="\n")
-    # A claim the instruction file makes and the repository keeps, so the instructions gate
-    # (layer-0-instructions up to level 2, #1641) is measured rather than not measured.
-    (ci2 / ".python-version").write_text("3.12\n", encoding="utf-8", newline="\n")
-    with (ci2 / "CLAUDE.md").open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write("Python 3.12 is pinned in `.python-version`.\n")
     _commit(ci2, "2026-11-03T10:00:00Z", "three")
     monkeypatch.setattr("lib.docs.doc_staleness.MIN_MEASURED_DOCS", 1)
     first = _run(ci2, "2026-11-21")

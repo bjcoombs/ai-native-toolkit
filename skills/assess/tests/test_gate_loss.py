@@ -35,18 +35,23 @@ def _ctx(lost: list[str] | None, held: list[str] | None, step: int,
     return ctx
 
 
+STEP3 = ["instructions", "ci_runs_tests", "review", "linters", "secrets_guard"]  # cumulative (#1641)
+STEP4 = [*STEP3, "coverage_gate", "wide_review", "agent_permissions", "boundaries"]
+
+
 def test_baseline_step_follows_the_gates_in_step_order():
     assert baseline_step([]) == 1
     assert baseline_step(["instructions"]) == 2
-    assert baseline_step(["instructions", "ci_runs_tests"]) == 3
-    assert baseline_step(["instructions", "ci_runs_tests", "coverage_gate"]) == 4
+    assert baseline_step(["instructions", "ci_runs_tests"]) == 2  # Step 3 needs all five of its gates
+    assert baseline_step(STEP3) == 3
+    assert baseline_step(STEP4) == 4
     # A higher gate without the lower ones reaches no further than the lower Step.
     assert baseline_step(["ci_runs_tests", "coverage_gate"]) == 1
     assert baseline_step([], steps=[]) is None
 
 
 def test_step_change_only_when_the_step_dropped():
-    held = ["instructions", "ci_runs_tests"]
+    held = STEP3
     assert step_change(_ctx(["ci_runs_tests"], held, 2, {"ci_runs_tests": "unmet"})) == (3, 2)
     assert step_change(_ctx([], held, 3)) is None
     assert step_change(_ctx([], None, 2)) is None

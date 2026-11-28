@@ -35,6 +35,11 @@ def _level(instr: str, ci: str, cov: str = "unmet") -> dict[str, Any]:
     blockers = [{"kind": "gate", "gate": g, "condition": c["id"], "state": c["state"]}
                 for g, c in zip(("instructions", "ci_runs_tests", "coverage_gate"), conditions)
                 if c["state"] != "met"]
+    # the instructions gate reads layer-0-instructions up to level 2, and the other gates the
+    # cumulative Steps add (#1641) are unmet in every run here, so they never move
+    conditions.insert(1, _cond("layer-0-instructions.2", instr))
+    conditions += [_cond(cid, "unmet") for cid in ("layer-7-review.1", "layer-7-review.2", "layer-3-linters.1",
+                                                    "secrets-guard.1", "layer-8-agent-ops.1", "layer-4-architecture.1")]
     # a level the run can record as its baseline: the default model's version and tags (#1256)
     return {"levels_version": STEPS_VERSION, "tags": [], "conditions": conditions,
             "next_step": {"step": 2, "blockers": blockers} if blockers else None}
@@ -336,7 +341,7 @@ def test_a_committed_baseline_without_a_run_context_compares_the_gates(repo: Pat
     block = since_last_run(_level("unmet", "met"), repo / ".assess", repo)
     assert (block["first_run"], block["previous_run_id"]) == (False, "prev-run")
     assert (block["gates_gained"], block["gates_lost"]) == ([], ["instructions"])
-    assert "Gates lost: instruction file" in block["lines"]
+    assert "Gates lost: instruction file with a check command" in block["lines"]
 
 
 def test_a_custom_models_log_with_earlier_runs_but_no_context_is_not_a_first_run(repo: Path) -> None:

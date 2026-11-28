@@ -559,14 +559,15 @@ def test_a_new_counted_condition_the_repository_meets_never_moves_its_step(signa
 
 
 def test_the_default_steps_stage_their_gates():
-    """I744-2: Step 2 gates on layer 0, Step 3 adds layer 5, Step 4 adds layer 6."""
+    """I744-2, #1641: the Steps are cumulative foundations; each keeps every gate below it."""
     steps = load_default_levels()["steps"]
     assert [s["step"] for s in steps] == [1, 2, 3, 4]
     assert [s["name"] for s in steps] == ["Assisted", "Supervised agent changes", "Unattended agent changes",
                                            "Autonomous loops"]
     prefixes = [[g["row"].split("-")[1] for g in s["gates"]] for s in steps]
-    assert prefixes == [[], ["0"], ["0", "5"], ["0", "5", "6"]]
-    assert [g["id"] for g in steps[3]["gates"]] == ["instructions", "ci_runs_tests", "coverage_gate"]
+    assert prefixes == [[], ["0"], ["0", "5", "7", "3", "guard"], ["0", "5", "7", "3", "guard", "6", "7", "8", "4"]]
+    assert [g["id"] for g in steps[3]["gates"]] == ["instructions", "ci_runs_tests", "review", "linters", "secrets_guard",
+                                                     "coverage_gate", "wide_review", "agent_permissions", "boundaries"]
     assert all(set(s) == {"step", "name", "gates"} for s in steps)  # gates only, no count (#1083)
 
 
@@ -625,7 +626,9 @@ FL5 = {
 }
 CIWF = {".github/workflows/ci.yml": "name: ci\non: [pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
                                     "    steps:\n      - uses: actions/checkout@v4\n      - run: make test\n"}
-CLMD = {"CLAUDE.md": "# Project\n\nBefore every commit run `make test` and fix any failure.\n"}
+# a check command and one claim the repository keeps (#1641: the instructions gate reads level 2)
+CLMD = {"CLAUDE.md": "# Project\n\nBefore every commit run `make test` and fix any failure.\n"
+                     "The suite has 1 module in `tests/*.py`.\n"}
 FIXTURES = {"ci0": {**FL5, **CLMD}, "ci1": {**FL5, **CIWF}, "ci2": {**FL5, **CIWF, **CLMD}, "nci": FL5,
             "inc": {**FL5, ".gitlab-ci.yml": "include:\n  - component: gl.test/grp/comp/test@1.0\n"}}
 

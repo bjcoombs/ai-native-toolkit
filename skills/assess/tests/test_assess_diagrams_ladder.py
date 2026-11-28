@@ -22,18 +22,25 @@ from svg_cascade import overridden_text_attributes
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 STEPS: list[StepDef] = default_model()["steps"]
-# The condition each shipped gate needs, the Step whose gate it is.
-GATE_CONDITIONS = {"layer-0-instructions.1": 2, "layer-5-ci.1": 3, "layer-6-coverage.1": 4}
+# The Step whose gates read each shipped gate id (#1641: cumulative foundations).
+GATE_STEP = {g["id"]: s["step"] for s in reversed(STEPS) for g in s["gates"]}
+# The conditions each shipped gate reads, the Step whose gate it is: the lowest Step reading it.
+GATE_CONDITIONS: dict[str, int] = {}
+for _s in STEPS:
+    for _g in _s["gates"]:
+        for _n in range(1, _g["level"] + 1):
+            GATE_CONDITIONS.setdefault(f"{_g['row']}.{_n}", _s["step"])
 
 
 def _at(step: int) -> LevelResult:
     """A level result at ``step``: the gates below it met, the ones above not yet."""
     conditions: list[ConditionResult] = [
-        {"id": cid, "row": cid.rpartition(".")[0], "level": 1, "grade": "verified", "counted": True,
+        {"id": cid, "row": cid.rpartition(".")[0], "level": int(cid.rpartition(".")[2]), "grade": "verified",
+         "counted": True,
          "state": "met" if gate_step <= step else "unmet"}
         for cid, gate_step in GATE_CONDITIONS.items()]
     top = max(s["step"] for s in STEPS)
-    gate = {2: "instructions", 3: "ci_runs_tests", 4: "coverage_gate"}.get(step + 1, "")
+    gate = {2: "instructions", 3: "ci_runs_tests", 4: "coverage_gate"}.get(step + 1, "")  # each Step's first new gate
     nxt = None if step == top else {"step": step + 1,
                                      "blockers": [{"kind": "gate", "gate": gate}]}
     level = copy.deepcopy(LEVEL)
@@ -82,13 +89,14 @@ def test_each_rung_names_its_step_and_what_an_agent_can_do(step: int) -> None:
 def test_gate_words_come_from_gate_change_and_say_whether_they_hold(step: int) -> None:
     content = ladder.render_ladder(_at(step), STEPS)
     for gate_id, words in GATE_CHANGE.items():
-        gate_step = {"instructions": 2, "ci_runs_tests": 3, "coverage_gate": 4}[gate_id]
+        gate_step = GATE_STEP[gate_id]
         state = "in place" if gate_step <= step else "not yet"
         assert f"{words} ({state})" in content
 
 
 @pytest.mark.parametrize("step, caption", [
-    (1, "Step 2, Supervised agent changes, opens when an instruction file an agent reads is committed."),
+    (1, "Step 2, Supervised agent changes, opens when a committed instruction file names the check an agent runs, "
+        "and its claims hold."),
     (2, "Step 3, Unattended agent changes, opens when CI turns red on a broken check."),
     (3, "Step 4, Autonomous loops, opens when a coverage gate is enforced."),
     (4, "This is the top Step; it holds while its gates hold."),
@@ -145,8 +153,9 @@ def test_the_caption_says_why_a_next_gate_is_open_as_the_headline_does() -> None
 
 def test_new_gates_are_the_ones_a_step_adds() -> None:
     assert [g["id"] for g in ladder.new_gates(STEPS, 2)] == ["instructions"]
-    assert [g["id"] for g in ladder.new_gates(STEPS, 3)] == ["ci_runs_tests"]
-    assert [g["id"] for g in ladder.new_gates(STEPS, 4)] == ["coverage_gate"]
+    assert [g["id"] for g in ladder.new_gates(STEPS, 3)] == ["ci_runs_tests", "review", "linters", "secrets_guard"]
+    assert [g["id"] for g in ladder.new_gates(STEPS, 4)] == ["coverage_gate", "wide_review", "agent_permissions",
+                                                             "boundaries"]
 
 
 def test_a_model_of_its_own_draws_its_own_steps() -> None:
@@ -177,13 +186,14 @@ def test_two_renders_are_byte_identical() -> None:
 
 
 def _one_file_from_step_3() -> LevelResult:
-    """#1333: Step 1, the instruction file missing, the Step 3 gate (CI) already held."""
+    """#1333: Step 1, the check command missing from the instruction file, the Step 3 gates already held."""
     level = _at(1)
-    next(c for c in level["conditions"] if c["id"] == "layer-5-ci.1")["state"] = "met"
+    for c in level["conditions"]:
+        if GATE_CONDITIONS[c["id"]] == 3 or c["id"] == "layer-0-instructions.1":
+            c["state"] = "met"
     assert level["next_step"] is not None
-    level["next_step"]["blockers"][0].update({"condition": "layer-0-instructions.1", "state": "unmet"})
-    level["conditions"] = [{**c, "row": c["id"].rpartition(".")[0]} for c in level["conditions"]]
-    level.update({"ceiling_step": 3, "held_above": ["ci_runs_tests"]})
+    level["next_step"]["blockers"][0].update({"condition": "layer-0-instructions.2", "state": "unmet"})
+    level.update({"ceiling_step": 3, "held_above": ["ci_runs_tests", "review", "linters", "secrets_guard"]})
     return level
 
 

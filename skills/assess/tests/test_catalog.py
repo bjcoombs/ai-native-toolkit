@@ -258,8 +258,11 @@ def test_every_condition_carries_its_frame_fields() -> None:
                 assert c["producer"]["scan"] == c["signal"].split(".", 1)[0]
                 assert c["eq_signal"] is None
     gated = {lv["id"]: lv["step_gates"] for r in catalog["rows"] for lv in r["levels"] if lv["step_gates"]}
-    assert gated == {"layer-0-instructions.1": ["instructions"], "layer-5-ci.1": ["ci_runs_tests"],
-                     "layer-6-coverage.1": ["coverage_gate"]}
+    assert gated == {"layer-0-instructions.1": ["instructions"], "layer-0-instructions.2": ["instructions"],
+                     "layer-3-linters.1": ["linters"], "layer-4-architecture.1": ["boundaries"],
+                     "layer-5-ci.1": ["ci_runs_tests"], "layer-6-coverage.1": ["coverage_gate"],
+                     "layer-7-review.1": ["review", "wide_review"], "layer-7-review.2": ["wide_review"],
+                     "layer-8-agent-ops.1": ["agent_permissions"], "secrets-guard.1": ["secrets_guard"]}
 
 
 def test_tags_list_each_condition_once_under_its_first_tag() -> None:
@@ -285,7 +288,8 @@ def test_tag_pairs_steps_and_links() -> None:
     assert all(TRUTH_TAGS.index(a) < TRUTH_TAGS.index(b) for a, b in pairs)
     steps = catalog["steps"]
     assert [s["step"] for s in steps] == [1, 2, 3, 4]
-    assert [s["added_gates"] for s in steps] == [[], ["instructions"], ["ci_runs_tests"], ["coverage_gate"]]
+    assert [s["added_gates"] for s in steps] == [[], ["instructions"], ["ci_runs_tests", "review", "linters", "secrets_guard"],
+                                                 ["coverage_gate", "wide_review", "agent_permissions", "boundaries"]]
     ci = next(g for g in steps[2]["gates"] if g["id"] == "ci_runs_tests")
     assert ci["conditions"] == ["layer-5-ci.1"] and ci["tags"] == ["behaviour", "contracts", "governance"]
     links = catalog["links"]
@@ -319,7 +323,8 @@ def test_markdown_has_one_section_per_tag_and_each_criterion_once() -> None:
     assert "equals `structure.front_door_ratio`" in _section(text, "### Docs")
     assert "| hazard |" in _section(text, "### Governance")
     assert "`layer-6-coverage.2` is guarded by `layer-5-ci.1`." in text
-    assert "| 3 | Unattended agent changes | `ci_runs_tests` | `layer-5-ci.1` |" in text
+    assert ("| 3 | Unattended agent changes | `ci_runs_tests`, `review`, `linters`, `secrets_guard` | "
+            "`layer-5-ci.1`, `layer-7-review.1`, `layer-3-linters.1`, `secrets-guard.1` |") in text
     claims = [line for line in table_rows if line.startswith("| `layer-0-instructions.2` ")]
     assert len(claims) == 3 and all("| `declared` | no, listed |" in line for line in claims)  # the condition's
     headers = [line for line in text.splitlines() if line.startswith("| Condition |")]

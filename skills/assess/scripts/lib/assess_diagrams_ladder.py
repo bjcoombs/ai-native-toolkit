@@ -13,8 +13,9 @@ here" marker; the gate below ``level["next_step"]`` is drawn in the warn colour 
 next one. When one change would take the run past its next Step (``headline.one_change_ceiling``
 over the level result's ``ceiling_step``, #1333), the Step it reaches carries the "One change
 away" marker and ``data-one-change``, and each gate the result lists in ``held_above`` reads
-"already in place" rather than "in place". Nothing is hard-coded about the number of Steps or
-their gates.
+"already in place" rather than "in place". Each gate a band names takes its own line
+(``band_height``), so a Step that adds several gates (the cumulative Steps, #1641) stays inside
+the drawing. Nothing is hard-coded about the number of Steps or their gates.
 
 ``ladder_in_place`` and ``ladder_caption`` are the report section's opening line and
 caption; the caption reads ``next_step.blockers`` the way the headline's Next line does, so
@@ -114,19 +115,31 @@ def _rung(x: float, y: float, step: StepDef, state: str, one_change: bool = Fals
     return parts
 
 
+LINE_H = 16.0
+
+
+def band_height(gates: Sequence[StepGate]) -> float:
+    """A gate band's height: ``GATE_H`` for one gate, one more line for each further gate (#1641)."""
+    return GATE_H + LINE_H * max(len(gates) - 1, 0)
+
+
 def _gate_band(x: float, y: float, gates: Sequence[StepGate], to: int, level: LevelResult,
                is_next: bool) -> list[str]:
+    """The arrow between two rungs and the gates it needs, one line per gate, so a Step that
+    adds several gates (the cumulative Steps, #1641) never runs past the drawing's width."""
     cls = "warn" if is_next else "muted"
     mid = x + 30
+    height = band_height(gates)
     extra = ' data-next="true"' if is_next else ""
-    parts = [f'<path d="M{mid:.1f} {y + GATE_H - 4:.1f} L{mid:.1f} {y + 8:.1f} M{mid - 6:.1f} {y + 14:.1f} '
+    parts = [f'<path d="M{mid:.1f} {y + height - 4:.1f} L{mid:.1f} {y + 8:.1f} M{mid - 6:.1f} {y + 14:.1f} '
              f'L{mid:.1f} {y + 8:.1f} L{mid + 6:.1f} {y + 14:.1f}" fill="none" class="s-{cls}" '
              f'stroke-width="{2.5 if is_next else 1.5}" data-gate-to="{to}"{extra}/>']
-    words = "; ".join(f"{_gate_words(g)} ({_held_state(level, g)})"
-                      for g in gates) or "no new gate"
-    label = f"{'Next gate' if is_next else 'Gate'}: {words}"
-    parts.append(svg.text(mid + 18, y + GATE_H / 2 + 4, label, size=12,
-                          weight="600" if is_next else None, cls="warn" if is_next else "muted"))
+    words = [f"{_gate_words(g)} ({_held_state(level, g)})" for g in gates] or ["no new gate"]
+    lead = f"{'Next gate' if is_next else 'Gate'}{'s' if len(words) > 1 else ''}: "
+    top = y + GATE_H / 2 + 4
+    for i, line in enumerate(words):
+        parts.append(svg.text(mid + 18, top + LINE_H * i, (lead if i == 0 else "") + line + (";" if i < len(words) - 1 else ""),
+                              size=12, weight="600" if is_next else None, cls="warn" if is_next else "muted"))
     return parts
 
 
@@ -154,8 +167,9 @@ def render_ladder(level: LevelResult, steps: Sequence[StepDef]) -> str:
                                  weight="600", cls="accent"))
         y += RUNG_H
         if index < len(ordered) - 1:
-            body += _gate_band(RUNG_X, y, new_gates(ordered, n), n, level, n == nxt)
-            y += GATE_H
+            gates = new_gates(ordered, n)
+            body += _gate_band(RUNG_X, y, gates, n, level, n == nxt)
+            y += band_height(gates)
     desc = f"{ladder_in_place(level, ordered)} {ladder_caption(level, ordered)}"
     return svg.document(WIDTH, y + PAD, LADDER_TITLE, desc, body, scope=SCOPES["step-ladder"])
 
@@ -197,6 +211,6 @@ def gate_conditions(steps: Sequence[StepDef]) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
-__all__ = ["ALREADY", "LADDER_FILE", "ONE_CHANGE", "LADDER_TITLE", "STEP_MEANING", "gate_conditions", "gate_state",
+__all__ = ["ALREADY", "LADDER_FILE", "ONE_CHANGE", "LADDER_TITLE", "STEP_MEANING", "band_height", "gate_conditions", "gate_state",
            "ladder_caption", "ladder_in_place", "meaning", "new_gates", "render_ladder"]
 

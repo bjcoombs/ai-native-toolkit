@@ -290,7 +290,9 @@ def test_the_shipped_model_gates_are_outlined_in_the_report_waffle() -> None:
     from lib.assess_diagrams_ladder import gate_conditions
     from lib.scoring.level_tally import default_model
     steps = default_model()["steps"]
-    assert gate_conditions(steps) == ["layer-0-instructions.1", "layer-5-ci.1", "layer-6-coverage.1"]
+    assert gate_conditions(steps) == ["layer-0-instructions.2", "layer-5-ci.1", "layer-7-review.1", "layer-3-linters.1",
+                                      "secrets-guard.1", "layer-6-coverage.1", "layer-7-review.2",
+                                      "layer-8-agent-ops.1", "layer-4-architecture.1"]
     waffle = _by_file(ad.build_diagrams({"level": LEVEL}, MODEL_ROWS))[ad.WAFFLE_FILE]["svg"] or ""
     assert waffle.count("data-gate=") == 2
 

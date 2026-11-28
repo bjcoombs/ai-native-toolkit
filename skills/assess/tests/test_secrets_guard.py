@@ -327,13 +327,14 @@ def test_a_pre_commit_config_without_a_secrets_hook_is_not_a_guard(tmp_path: Pat
 # --- the manifest ----------------------------------------------------------------------
 
 
-def test_the_levels_carry_their_grades_and_gate_no_step() -> None:
+def test_the_levels_carry_their_grades_and_level_1_gates_step_3() -> None:
     manifest = cm.core_manifest()
     signals = {e["path"]: e for e in manifest["entries"] if e.get("kind") == "signal"
                and str(e.get("path", "")).startswith("secrets_guard.")}
     assert signals["secrets_guard.configured"]["evidence"] == "config_text"  # type: ignore[typeddict-item]
     assert signals["secrets_guard.enforcement.present"]["evidence"] == "head_structure"  # type: ignore[typeddict-item]
-    assert not [c for c in lt.gate_conditions(lt.default_model()) if c.startswith("secrets-guard.")]
+    # level 1 is the Step 3 secrets_guard gate (#1641); level 2 gates no Step
+    assert [c for c in lt.gate_conditions(lt.default_model()) if c.startswith("secrets-guard.")] == ["secrets-guard.1"]
 
 
 def test_stages_before_the_id_is_read(tmp_path: Path) -> None:

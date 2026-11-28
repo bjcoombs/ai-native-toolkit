@@ -72,7 +72,8 @@ def test_every_default_condition_carries_known_truth_tags() -> None:
 
 def test_step_gates_keep_their_condition_names() -> None:
     gates = {g["id"] for step in load_levels(DEFAULT_LEVELS)["steps"] for g in step["gates"]}
-    assert gates == {"instructions", "ci_runs_tests", "coverage_gate"}
+    assert gates == {"instructions", "ci_runs_tests", "review", "linters", "secrets_guard", "coverage_gate",
+                     "wide_review", "agent_permissions", "boundaries"}
 
 
 # --- the legacy alias, rule A ------------------------------------------------------

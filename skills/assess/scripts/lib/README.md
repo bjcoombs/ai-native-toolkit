@@ -271,7 +271,7 @@ New code imports the new path.
   the input class and grade of each signal a condition reads, the verified tally with its
   per-tag rows and result types, the layer and signal grades, the headline, the action
   conditions and the next-step guidance. `signal_grades` locates `levels/default.toml` from
-  its own path (`parents[3]`). Files: `__init__.py`, `action_conditions.py`, `condition_evidence.py`, `headline.py`, `layer_grades.py`, `level_result_types.py`, `level_signals.py`, `level_tags.py`, `level_tally.py`, `levels.py`, `levels_fields.py`, `levels_hints.py`, `levels_starter.py`, `next_step_guidance.py`, `next_step_guidance_backlog.py`, `next_step_guidance_contracts.py`, `next_step_guidance_guards.py`, `next_step_guidance_hooks.py`, `next_step_guidance_includes.py`, `signal_grades.py`, `step_reading.py`.
+  its own path (`parents[3]`). Files: `__init__.py`, `action_conditions.py`, `condition_evidence.py`, `gate_words.py`, `headline.py`, `layer_grades.py`, `level_result_types.py`, `level_signals.py`, `level_tags.py`, `level_tally.py`, `levels.py`, `levels_fields.py`, `levels_hints.py`, `levels_starter.py`, `next_step_guidance.py`, `next_step_guidance_backlog.py`, `next_step_guidance_contracts.py`, `next_step_guidance_guards.py`, `next_step_guidance_hooks.py`, `next_step_guidance_includes.py`, `signal_grades.py`, `step_reading.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 - **`testing/`** ([README](testing/README.md)): the Layer 6 test signals outside `test_pressure/`: the coverage gate and

@@ -43,6 +43,10 @@ INTERNAL = (
     re.compile(r"\b[a-z]+(?:_[a-z]+)+\b"),  # a snake_case id such as ci_runs_tests
     re.compile(r"\b\d+ of \d+ measured\b"),  # a catalogue count
 )
+# A gate the run could not read is worded "not measured here (<reason>)" on the card (#1640), a
+# plain phrase, not a catalogue term: with the cumulative Step 4 gates (#1641) the tour's fixed
+# sample has one, wide review, which needs GitHub or GitLab access. The phrase is read out first.
+NOT_MEASURED = re.compile(r"\bnot measured here\b")
 
 
 class ColdReading(TypedDict):
@@ -108,7 +112,8 @@ def test_the_first_screen_says_where_what_and_next(
     name = step_name(model, step)
     assert (reading["step"], reading["of"]) == (step, top_step(model))
     assert reading["meaning"] == name[:1].lower() + name[1:]
-    assert (reading["next_step"], reading["blocked_by"]) == (step + 1, GATE_GAP[gate])
+    # the Blocks line names every gate the next Step waits on, the first one first (#1641)
+    assert reading["next_step"] == step + 1 and reading["blocked_by"].startswith(GATE_GAP[gate])
     # One call to action: the gate as a task, linked to how to do it, and when it is done.
     assert (reading["actions"], reading["done_when"]) == (1, 1)
     assert reading["start_here"] == [(GATE_TASK[gate][0].upper() + GATE_TASK[gate][1:], STEP_GATES_URL)]
@@ -119,7 +124,7 @@ def test_the_sample_reads_step_2_with_ci_next(reports: dict[str, tuple[assess_to
     reading = cold_read(first_screen(reports["sample"][1]))
     assert (reading["step"], reading["blocked_by"]) == (2, GATE_GAP["ci_runs_tests"])
     reading = cold_read(first_screen(reports["fixed"][1]))
-    assert (reading["step"], reading["blocked_by"]) == (3, GATE_GAP["coverage_gate"])
+    assert reading["step"] == 3 and reading["blocked_by"].startswith(GATE_GAP["coverage_gate"])
 
 
 @pytest.mark.parametrize("label", ["sample", "fixed"])
@@ -128,7 +133,7 @@ def test_the_first_screen_holds_no_jargon(
     for line in first_screen(reports[label][1]):
         # A glossary term may stand only as a link to its entry: drop those links, then read.
         unlinked = LINK.sub(lambda m: "" if m.group(2).startswith(GLOSSARY_URL) else m.group(1), line)
-        text = unlinked.replace("**", "").lower()
+        text = NOT_MEASURED.sub("", unlinked.replace("**", "").lower())
         assert not [term for term in JARGON if re.search(rf"\b{term}s?\b", text)], line
         assert not [p.pattern for p in INTERNAL if p.search(text)], line
 

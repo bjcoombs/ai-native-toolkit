@@ -30,9 +30,10 @@ from golden import normalize_run_context
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SHIPPED = "skills/assess/tour"
-# The sample's HEAD before and after the fix, as the #1144 fixture tree built them.
-SAMPLE_HEAD = "f2dee5aa81be46cd8787b0d89be85acfc4426896"
-FIXED_HEAD = "1232fffbe0a885d7338cb68c3cfae9b49042cfff"
+# The sample's HEAD before and after the fix, as the #1144 fixture tree built them, with the
+# lint, review and secrets-scan commit and the check-naming AGENTS.md the cumulative gates need (#1641).
+SAMPLE_HEAD = "2b98de5d90e8d888042b68c20b6a62370b47959e"
+FIXED_HEAD = "559d16737a54e73d6cf149a30c12e767e1349be8"
 
 
 def _head(repo: Path) -> str:
@@ -173,7 +174,8 @@ def test_the_tour_runs_from_the_unpacked_standalone_zip(tmp_path: Path) -> None:
     assert _tour(script, work, "run", str(repo))["step"] == 2
     assert _tour(script, work, "fix", str(repo))["fix"] == "applied"
     after = _tour(script, work, "run", str(repo))
-    assert (after["step"], after["next_gates"]) == (3, ["coverage_gate"])
+    assert (after["step"], after["next_gates"]) == (3, ["coverage_gate", "wide_review", "agent_permissions",
+                                                        "boundaries"])
     # The report names the version the build wrote, never "vunknown" (#1166).
     version = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
     header = Path(after["report"]).read_text(encoding="utf-8").splitlines()[2]

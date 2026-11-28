@@ -62,7 +62,9 @@ def test_every_default_gate_has_a_task() -> None:
 def test_the_landing_page_shows_the_card_the_code_prints() -> None:
     """The site's "What the report says first" example is the code's own output, word for word."""
     page = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-    conds = [_cond("layer-0-instructions.1"), _cond("layer-5-ci.1", "unmet"), _cond("layer-6-coverage.1", "unmet")]
+    conds = [_cond("layer-0-instructions.1"), _cond("layer-0-instructions.2"), _cond("layer-5-ci.1", "unmet"),
+             _cond("layer-7-review.1"), _cond("layer-3-linters.1"), _cond("secrets-guard.1"),
+             _cond("layer-6-coverage.1", "unmet")]
     level = _card_level(2, {"step": 3, "blockers": [{"kind": "gate", "gate": "ci_runs_tests",
                                                      "condition": "layer-5-ci.1", "state": "unmet"}]}, conds)
     action: Any = {"start": "add `pytest` to the `test` job in `.github/workflows/ci.yml`",
