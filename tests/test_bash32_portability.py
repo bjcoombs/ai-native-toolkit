@@ -228,7 +228,14 @@ def _with_abort_after(script: Path, dest: Path, anchor: str) -> None:
     at = [i for i, line in enumerate(lines) if line.rstrip("\n") == anchor]
     assert len(at) == 1, f"{anchor!r} is not one line of {script.name}"
     lines.insert(at[0] + 1, ABORT_LINE)
-    write_script(dest, "".join(lines))
+    dest.write_text("".join(lines), encoding="utf-8", newline="\n")
+    dest.chmod(0o755)
+
+
+def _copy_script(src: Path, dest: Path) -> None:
+    """Copy a script byte for byte: the scripts hold non-ASCII text."""
+    shutil.copyfile(src, dest)
+    dest.chmod(0o755)
 
 
 def _stub_env(tmp_path: Path, repos_json: str) -> dict[str, str]:
@@ -288,8 +295,8 @@ def test_ghreport_abort_exits_nonzero_under_bash32(tmp_path: Path) -> None:
     report_dir.mkdir(parents=True)
     sync_dir.mkdir(parents=True)
     for part in GHREPORT_DIR.glob("ghreport_*.sh"):
-        write_script(report_dir / part.name, part.read_text(encoding="utf-8"))
-    write_script(sync_dir / "ghsync.sh", GHSYNC.read_text(encoding="utf-8"))
+        _copy_script(part, report_dir / part.name)
+    _copy_script(GHSYNC, sync_dir / "ghsync.sh")
     _with_abort_after(
         GHREPORT_DIR / "ghreport.sh", report_dir / "ghreport.sh",
         'echo "Querying state for ${#repos[@]} repo(s) ..." >&2',
@@ -323,7 +330,7 @@ def _ghreport_with_ghsync(tmp_path: Path, ghsync_body: str) -> subprocess.Comple
     report_dir.mkdir(parents=True)
     sync_dir.mkdir(parents=True)
     for part in GHREPORT_DIR.glob("ghreport*.sh"):
-        write_script(report_dir / part.name, part.read_text(encoding="utf-8"))
+        _copy_script(part, report_dir / part.name)
     write_script(sync_dir / "ghsync.sh", ghsync_body)
     root = tmp_path / "root"
     root.mkdir()
