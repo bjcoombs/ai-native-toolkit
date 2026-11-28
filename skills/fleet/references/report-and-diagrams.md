@@ -45,7 +45,10 @@ none does. A sentence written about the
 fleet follows the same rule: never say a practice is in place nowhere, or nowhere in the fleet,
 while `not_measured` is above 0 for it; say where it was not found and how many repositories
 were not measured, split by reason (`included_jobs` and `ci_includes_unresolved` name CI in an
-include the scan did not read, apart from every other cause).
+include the scan did not read, apart from every other cause). A practice a team can set outside
+the repository (agent permissions in managed settings, a secrets scan in the host's push
+protection) reads "not found in the repository" when unmet, never absent, and names where else it
+can be set (#1662); the secrets guard's line and the team pages already do.
 
 **Opportunities.** Rendered from `fleet-data.json`'s [`opportunities`](fleet-data.md#opportunities), so
 the two always agree. Its `In place:` line points at "What's working across the fleet", which

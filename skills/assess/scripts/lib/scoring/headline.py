@@ -8,7 +8,9 @@ under the model that produced it; ``run_context_headline(level)`` (the ``headlin
 the layered "X / 8" score and its band names. A Step reads its gates only (#1083). The
 Step itself and the gate that blocks the next one are stated once, on the report's top card
 (``lib/top_card.py``, #1252), which reads ``card_facts``; ``gate_change`` stays public so the
-Step ladder's caption words gates as the headline did. The lines, in order:
+Step ladder's caption words gates as the headline did. An unmet agent-permission or
+secrets-guard gate reads "not found in the repository" with where else it can be set
+(``gate_note``, ``lib/scoring/next_step_guidance_outside.py``, #1662). The lines, in order:
 
 1. catalogue coverage: ``Catalogue coverage: K not measured (reasons) · model <version>``.
    K is ``tally.not_measured`` with each reason code (``REASON_WORDS``) and its count,
@@ -80,6 +82,7 @@ from lib.scoring.level_result_types import Blocker, ConditionResult, DeclineReco
 from lib.scoring.level_tags import tag_cells
 from lib.scoring.level_tally import NOT_APPLICABLE_REASONS, default_model, scan_not_applicable
 from lib.scoring.levels import MaturityModel, StepDef, condition_id
+from lib.scoring.next_step_guidance_outside import ELSEWHERE_CONDITIONS, not_found_note
 from lib.scoring.step_reading import first_measured, next_unread, step_reading
 
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
@@ -159,7 +162,9 @@ def reason_word(code: str) -> str:
 
 def gate_note(blocker: Blocker) -> str:
     """Why a blocking gate is open when it was not measured or the owner excluded it, as
-    `` (...)``; ``""`` for a gate that is simply not yet in place."""
+    `` (...)``; for an unmet agent-permission or secrets-guard gate, "not found in the repository" and
+    where else it can be set (``next_step_guidance_outside``, #1662); ``""`` for any other gate that
+    is simply not yet in place."""
     if blocker.get("polarity") == "hazard":  # #828: a met hazard holds a gate whose conditions are met
         return f" (held by the hazard {blocker.get('condition', '')}; see HAZARD)"
     if blocker.get("state") == "declined":
@@ -172,6 +177,8 @@ def gate_note(blocker: Blocker) -> str:
     if blocker.get("state") == "not_applicable" and blocker.get("reason") in NOT_APPLICABLE_REASONS:
         # a scan's own code only: a requires:<id> blocker may trace to the owner's exclusion
         return f" (not applicable here: {reason_word(blocker.get('reason', ''))}; a gate holds only when met)"
+    if blocker.get("state") == "unmet" and (where := ELSEWHERE_CONDITIONS.get(blocker.get("condition", ""))):
+        return f" ({not_found_note(where)})"  # #1662: a practice that can be set outside the repository
     return ""
 
 
