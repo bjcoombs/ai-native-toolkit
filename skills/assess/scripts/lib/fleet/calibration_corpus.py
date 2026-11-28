@@ -35,7 +35,10 @@ of the pinned commit and the toolkit code alone.
   corpus seeded with ``--platform`` is diffed with it, and a ``backlog-ready.2`` diff line can be
   a tracker's own change rather than the toolkit's. ``platform_seeded`` tells such a corpus apart (a
   ``PLATFORM_CONDITIONS`` state other than ``not_measured``), and the command refuses to diff it
-  offline, where every such line would read as a move to ``not_measured``.
+  offline, where every such line would read as a move to ``not_measured``. It refuses the reverse
+  too (#1628): a ``--platform`` diff of a corpus seeded offline would print a ``backlog-ready.2``
+  line per repository that looks like a regression. A corpus seeded with ``--platform`` whose
+  every tracker read failed reads as seeded offline, so reseed it.
 - ``seed``: an expected-state file per scanned clone, from this toolkit's run.
 - ``refusals``: before any scan, an expected file with no clone under the root
   (``no_clone``), or a clone whose ``HEAD`` is not its pinned commit (``wrong_commit``) is
