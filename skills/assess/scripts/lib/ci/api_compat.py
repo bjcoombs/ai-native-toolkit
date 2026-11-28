@@ -353,10 +353,17 @@ def _checks_output(words: list[str], unit: list[str]) -> bool:
     refs = _output_refs(unit[0])
     rest = _rest(first, words)
     piped = rest[:1] == ["|"]
-    if _decides(rest[1:], refs, unit[1:], held, piped):
+    if not _rescued("".join(rest[1:])) and _decides(rest[1:], refs, unit[1:], held, piped):
         return True
-    return any(_decides(_OPERATOR.split(ci_line_text(line)), refs, unit[k + 1:], held)
+    return any(not _rescued(ci_line_text(line)) and _decides(_OPERATOR.split(ci_line_text(line)), refs, unit[k + 1:], held)
                for k, line in enumerate(unit[1:], start=1))
+
+
+def _rescued(text: str) -> bool:
+    """Whether a passing ``||`` fallback follows a command of the line as written
+    (``if [ -s o ]; then false; fi || true``): its re-raise cannot turn the job red. Read here
+    because a CI line's masking drops the ``if`` test and with it this ``fi || true``."""
+    return any(c["masked"] for c in _commands(_shell(text)))
 
 
 _SUBST = re.compile(r"^\$\((.*)\)$", re.S)
@@ -475,7 +482,7 @@ class _Reader:
         for index, line in enumerate(lines):
             commands = list(_commands(_shell(line)))
             inline = inline_apidiff(ci_line_text(raw[index]), raw[index + 1:])   # masking drops an ``if`` test
-            if inline and not any(c["masked"] for c in commands):
+            if inline and not any(c["masked"] for c in commands) and not _rescued(ci_line_text(raw[index])):
                 found.add("apidiff")
             elif inline is not None:
                 self.report_only.add("apidiff")

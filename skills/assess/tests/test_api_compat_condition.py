@@ -577,3 +577,17 @@ def test_a_later_line_if_check_that_read_met_on_main_still_counts(tmp_path: Path
     script = _repo(tmp_path / "s", {"hack/api.sh": f"#!/bin/sh\napidiff -incompatible old new > out.txt\n{check}\n",
                                     WF: _workflow("hack/api.sh")})
     assert _block(script)["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+@pytest.mark.parametrize("lines", [
+    ('if [ -n "$(apidiff -incompatible old new)" ]; then false; fi || true',),
+    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]; then false; fi || true"),
+    ("apidiff -incompatible old new > out.txt; if [ -s out.txt ]; then false; fi || true",),
+])
+def test_a_check_rescued_by_a_passing_fallback_does_not_count(tmp_path: Path, lines: tuple[str, ...]) -> None:
+    """``|| true`` after ``fi`` rescues the ``false``: the step stays green on a break, in either shell."""
+    step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == []
+    script = _repo(tmp_path / "s", {"hack/api.sh": "#!/bin/sh\n" + "".join(f"{line}\n" for line in lines),
+                                    WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == []
