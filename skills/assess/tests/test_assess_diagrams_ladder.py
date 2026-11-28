@@ -95,8 +95,7 @@ def test_gate_words_come_from_gate_change_and_say_whether_they_hold(step: int) -
 
 
 @pytest.mark.parametrize("step, caption", [
-    (1, "Step 2, Supervised agent changes, opens when a committed instruction file names the check an agent runs, "
-        "and its claims hold."),
+    (1, "Step 2, Supervised agent changes, opens when the instruction file names a check, and its claims hold."),
     (2, "Step 3, Unattended agent changes, opens when CI turns red on a broken check."),
     (3, "Step 4, Autonomous loops, opens when a coverage gate is enforced."),
     (4, "This is the top Step; it holds while its gates hold."),
@@ -213,3 +212,18 @@ def test_the_step_one_change_reaches_is_marked() -> None:
     assert marked == [3] and ladder.ONE_CHANGE in content
     assert ladder.ONE_CHANGE not in ladder.render_ladder(_at(1), STEPS)
     assert _rungs(content) == {1: "here", 2: "ahead", 3: "ahead", 4: "ahead"}
+
+
+# A conservative average glyph width for 12px bold sans-serif text, the gate lines' font.
+GLYPH_PX = 6.6
+
+
+def test_every_gate_line_fits_the_drawing_with_its_longest_state() -> None:
+    """#1641: one gate per line, and each line, with the longest state a gate can read, ends
+    inside the drawing, measured at a conservative average glyph width."""
+    start = ladder.RUNG_X + 30 + 18  # the gate band's text start (``_gate_band``)
+    longest = max(("in place", "not yet", "not measured", "not applicable", "excluded by owner", ladder.ALREADY),
+                  key=len)
+    for gate_id, words in GATE_CHANGE.items():
+        line = f"Next gates: {words} ({longest});"
+        assert start + GLYPH_PX * len(line) <= ladder.WIDTH, gate_id

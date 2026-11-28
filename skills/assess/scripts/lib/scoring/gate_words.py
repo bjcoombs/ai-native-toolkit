@@ -19,7 +19,10 @@ the fallback its reader gives:
 
 The words follow the plain-English rule (``lib/plain_english.py``: short sentences, no idiom)
 and hold no critical word; ``tests/test_plain_english.py`` lints them through
-``plain_english.fixed_lines``. ``headline`` and ``top_card`` re-export the tables under their
+``plain_english.fixed_lines``. A ``GATE_CHANGE`` entry with its longest state fits one line of
+the Step ladder (``tests/test_assess_diagrams_ladder.py``). The instructions gate also needs a
+claim the scan can check (an enforcement, pin or count claim): ``instruction_claims.failed``
+reads not measured on a file that makes none (#827). ``headline`` and ``top_card`` re-export the tables under their
 old names. Tests: ``tests/test_cumulative_gates.py``.
 """
 from __future__ import annotations
@@ -27,7 +30,7 @@ from __future__ import annotations
 __all__ = ["GATE_CHANGE", "GATE_GAP", "GATE_NOUN", "GATE_TASK"]
 
 GATE_CHANGE = {
-    "instructions": "a committed instruction file names the check an agent runs, and its claims hold",
+    "instructions": "the instruction file names a check, and its claims hold",
     "ci_runs_tests": "CI turns red on a broken check",
     "review": "merged changes show review evidence",
     "linters": "CI runs a linter",
@@ -51,8 +54,8 @@ GATE_NOUN = {
 }
 
 GATE_TASK = {
-    "instructions": "commit an instruction file, such as AGENTS.md or CLAUDE.md, that names the command "
-                    "an agent runs to check its work",
+    "instructions": "commit an AGENTS.md or CLAUDE.md that names the command an agent runs and makes one "
+                    "claim the scan can check",
     "ci_runs_tests": "make CI turn red when a check breaks",
     "review": "commit an AI review step in CI, or review each change before it is merged",
     "linters": "run a linter in CI",
@@ -64,7 +67,7 @@ GATE_TASK = {
 }
 
 GATE_GAP = {
-    "instructions": "no committed instruction file names the check an agent runs with every claim holding",
+    "instructions": "no committed instruction file names the agent's check and makes a claim that holds",
     "ci_runs_tests": "CI does not turn red when a check breaks",
     "review": "merged changes show no review evidence",
     "linters": "CI runs no linter",

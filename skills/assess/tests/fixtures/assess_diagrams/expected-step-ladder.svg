@@ -29,7 +29,7 @@
 <text x="54.0" y="369.0" font-size="14" text-anchor="start" class="t-fg" font-weight="600">Step 2 · Supervised agent changes</text>
 <text x="54.0" y="388.0" font-size="12" text-anchor="start" class="t-fg">An agent makes changes, and a person reviews each one</text>
 <path d="M70.0 436.0 L70.0 408.0 M64.0 414.0 L70.0 408.0 L76.0 414.0" fill="none" class="s-muted" stroke-width="1.5" data-gate-to="2"/>
-<text x="88.0" y="424.0" font-size="12" text-anchor="start" class="t-muted">Gate: a committed instruction file names the check an agent runs, and its claims hold (in place)</text>
+<text x="88.0" y="424.0" font-size="12" text-anchor="start" class="t-muted">Gate: the instruction file names a check, and its claims hold (in place)</text>
 <rect x="40.0" y="440.0" width="500.0" height="52.0" rx="6" class="f-bg s-accent" stroke-width="2" data-step="1" data-state="reached"/>
 <text x="54.0" y="461.0" font-size="14" text-anchor="start" class="t-fg" font-weight="600">Step 1 · Assisted</text>
 <text x="54.0" y="480.0" font-size="12" text-anchor="start" class="t-fg">An agent can read and help with your code</text>

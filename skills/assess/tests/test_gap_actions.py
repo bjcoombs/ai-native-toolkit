@@ -114,6 +114,7 @@ def test_a_stub_is_told_to_fill_in_the_committed_file_not_to_commit_one() -> Non
     assert words is not None
     assert "fill it in" in words["change"] and "more than headings" in words["done_when"]
     assert "names the command an agent runs" in GATE_TASK["instructions"]  # a stub names none (#1641)
+    assert "claim the scan can check" in GATE_TASK["instructions"]
     assert "is committed" not in GATE_GAP["instructions"]
 
 

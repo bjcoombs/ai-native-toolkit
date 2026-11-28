@@ -6,13 +6,13 @@ _Generated <<normalized>>._
 
 Holding: 0 of 1 Step 2 gates held · 0 of 10 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
 
-Blocks Step 2: no committed instruction file names the check an agent runs with every claim holding.
+Blocks Step 2: no committed instruction file names the agent's check and makes a claim that holds.
 
 Since last run: gate changes [not known](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#not-measured); closed actions not known (no baseline is committed yet, and this run's result cannot be recorded as one).
 
-Start here: [Commit an instruction file, such as AGENTS.md or CLAUDE.md, that names the command an agent runs to check its work](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates)
+Start here: [Commit an AGENTS.md or CLAUDE.md that names the command an agent runs and makes one claim the scan can check](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates)
 
-Done when: the next `/assess` run reads that a committed instruction file names the check an agent runs, and its claims hold.
+Done when: the next `/assess` run reads that the instruction file names a check, and its claims hold.
 
 _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md) explains [Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step), [gate](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#gate), [practice](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#practice), [level](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#level), [evidence grade](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) and [truth tag](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#truth-tag) in a sentence or two each._
 
@@ -28,7 +28,7 @@ In place: Step 1 of 4, Assisted: an agent can read and help with your code.
 
 [![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
 
-Step 2, Supervised agent changes, opens when a committed instruction file names the check an agent runs, and its claims hold.
+Step 2, Supervised agent changes, opens when the instruction file names a check, and its claims hold.
 
 ## Evidence behind the Step
 

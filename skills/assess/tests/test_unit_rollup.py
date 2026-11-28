@@ -110,8 +110,7 @@ def test_no_instruction_file_anywhere_ranks_the_root_file_first(tmp_path: Path) 
                                    "held": 3, "lifted": 3, "lift_per_change": 3}
     assert block["lines"] == [
         "Units: Step 1 (lowest unit) · 0 of 3 measured units at Step 2",
-        "Next unlock across units: a committed instruction file names the check an agent runs, and its claims "
-        "hold, once at the root, "
+        "Next unlock across units: the instruction file names a check, and its claims hold, once at the root, "
         "moves 3 units to their next Step"]
 
 
@@ -123,8 +122,7 @@ def test_a_repo_wide_change_counts_once_and_lifts_every_unit() -> None:
                                  "held": 3, "lifted": 3, "lift_per_change": 3}]
     assert block["lines"] == [
         "Units: Step 1 (lowest unit) · 0 of 3 measured units at Step 2",
-        "Next unlock across units: a committed instruction file names the check an agent runs, and its claims "
-        "hold, once at the root, "
+        "Next unlock across units: the instruction file names a check, and its claims hold, once at the root, "
         "moves 3 units to their next Step"]
 
 
