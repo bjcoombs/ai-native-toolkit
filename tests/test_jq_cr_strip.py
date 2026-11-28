@@ -103,14 +103,14 @@ def _unstripped(body: str) -> bool:
 
 
 def _logical_lines(text: str) -> list[tuple[int, str]]:
-    """Lines joined across a trailing backslash or a leading pipe."""
+    """Lines joined across a trailing backslash, a trailing pipe or a leading pipe."""
     out: list[tuple[int, str]] = []
     lines = text.splitlines()
     k = 0
     while k < len(lines):
         start, cur = k + 1, lines[k]
         while k + 1 < len(lines) and (
-            cur.rstrip().endswith("\\") or lines[k + 1].lstrip().startswith("|")
+            cur.rstrip().endswith(("\\", "|")) or lines[k + 1].lstrip().startswith("|")
         ):
             k += 1
             cur = cur.rstrip().rstrip("\\") + " " + lines[k].strip()
@@ -141,6 +141,7 @@ def find_unstripped(text: str) -> list[int]:
         "for PR in $(jq -r '.tasks[] | .pr' \"$F\"); do",
         "echo \"$R\" | jq -r '.[].id' | while read ID; do",
         "done < <(jq -r '.[]' \"$F\")",
+        "jq -r .a f |\n  while read l; do",
         "case \"$(jq -r '.op' <<<\"$w\")\" in",
         "V=$(jq --raw-output .a f)",
         "V=$(gh api x | jq '.a | .b' -r)",
@@ -158,6 +159,7 @@ def test_scan_flags_an_unstripped_capture(snippet: str) -> None:
         "SHA=$(gh pr view 1 --json headRefOid | jq -r '.headRefOid' | tr -d '\\r')",
         "X=$(gh api foo \\\n  | jq -r -s '[.[].a] | min // empty' | tr -d '\\r')",
         "echo \"$R\" | jq -r '.[].id' | tr -d '\\r' | while read ID; do",
+        "jq -r .a f | tr -d '\\r' |\n  while read l; do",
         "N=$(jq '.a | length' f)",
         "jq -r '.path' run-context.json",
         "echo $(( 1 + 2 ))",
