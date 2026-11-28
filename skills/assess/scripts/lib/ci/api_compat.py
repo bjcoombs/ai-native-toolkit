@@ -79,7 +79,7 @@ from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_job_commands import OPERATOR as _OPERATOR
 from lib.ci.ci_job_commands import commands as _commands
-from lib.ci.apidiff_reraise import SUBSHELL as _SUBSHELL, branch_reraises as _branch_reraises
+from lib.ci.apidiff_reraise import SUBSHELL as _SUBSHELL, backgrounded as _backgrounded, branch_reraises as _branch_reraises
 from lib.ci.apidiff_reraise import line_ends as _line_ends, reraises as _reraises, words as _words
 from lib.instructions.command_resolver import command_words
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
@@ -95,7 +95,6 @@ _GITLAB_BODY = frozenset({"script", "before_script"})
 _GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
 _INCLUDE = re.compile(r"^include\s*:", re.M)
 _OUTPUT_FILE = re.compile(r"(?:\d?>>?|\btee(?:\s+-a)?)\s*([\w./-]+)")
-_BACKGROUND = re.compile(r"(?<![&>|])&(?![&>])")   # ``... && exit 1 &``: the exit runs in a background job
 _STATUS_VAR = re.compile(r"(?<![\w$])(\w+)=\$\?")
 _CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?(\w+)=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
 # The japicmp settings that make a breaking change stop the build: the Maven plugin's
@@ -316,7 +315,8 @@ def _checks_output(words: list[str], unit: list[str]) -> bool:
     line (``apidiff a b | grep -q . && exit 1``), or a later command of its line or of a later line
     of the same shell that reads its captured variable or output file
     (``apidiff a b > out.txt; test ! -s out.txt || exit 1``, ``if [ -s out.txt ]; then exit 1; fi``).
-    An ``exit 1`` that reads nothing apidiff wrote, or that its read does not decide, is not its check."""
+    An ``exit 1`` that reads nothing apidiff wrote, or that its read does not decide, or on a
+    backgrounded line (``[ -s out.txt ] && exit 1 &``, #1634), is not its check."""
     if not unit:
         return False
     held = frozenset(_STATUS_VAR.findall("\n".join(unit)))   # ``rc=$?`` holds apidiff's 0
@@ -324,9 +324,10 @@ def _checks_output(words: list[str], unit: list[str]) -> bool:
     refs = _output_refs(unit[0])
     rest = _rest(first, words)
     piped = rest[:1] == ["|"]
-    if not _rescued("".join(rest[1:])) and _decides(rest[1:], refs, unit[1:], held, piped):
+    if not _rescued("".join(rest[1:])) and not _backgrounded(ci_line_text(unit[0])) and _decides(
+            rest[1:], refs, unit[1:], held, piped):
         return True
-    return any(not _rescued(ci_line_text(line)) and _decides(_OPERATOR.split(ci_line_text(line)), refs, unit[k + 1:], held)
+    return any(not _rescued(ci_line_text(line)) and not _backgrounded(ci_line_text(line)) and _decides(_OPERATOR.split(ci_line_text(line)), refs, unit[k + 1:], held)
                for k, line in enumerate(unit[1:], start=1))
 
 
@@ -354,9 +355,12 @@ def _tested_substitution(words: list[str]) -> tuple[str, list[str]] | None:
 def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
     """The commands of an ``if``'s ``then`` branch, up to ``else``, ``elif`` or ``fi``: from the
     operator-split ``parts`` after the condition, then from the ``later`` lines of the shell.
-    Empty when a later ``fi || true`` rescues a branch with no bare ``exit N`` line (lib/docs)."""
+    Empty when a later ``fi || true`` rescues a branch with no bare ``exit N`` line (lib/docs). A
+    re-raise on a backgrounded line (``exit 1 &``) or under a backgrounded ``fi &`` is dropped (#1634)."""
     cmds = [command_words(p.strip().strip("(){} ")) for p in parts[1::2]]
-    cmds += [c["words"] for line in later for c in _commands(_shell(line)) if not c["masked"]]
+    cmds += [c["words"][:1] if _backgrounded(ci_line_text(line)) else c["words"]   # a keyword alone (#1634)
+             for line in later for c in _commands(_shell(line)) if not c["masked"] and (
+                 c["words"][:1] in (["then"], ["else"], ["elif"], ["fi"]) or not _backgrounded(ci_line_text(line)))]
     if not cmds or cmds[0][:1] != ["then"]:
         return []
     out: list[list[str]] = []
@@ -365,6 +369,8 @@ def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
             break
         out.append(cmd)
     fi = _fi_line(cmds[:len(parts[1::2])], later)
+    if fi is not None and _backgrounded(ci_line_text(later[fi])):
+        return []
     if fi is None or not _rescued(later[fi]):
         return out
     span = list(takewhile(lambda t: not re.match(r"\s*(?:else|elif)\b", t), [*parts[1::2], *map(ci_line_text, later[:fi])]))
@@ -389,7 +395,7 @@ def inline_apidiff(text: str, later: list[str]) -> bool | None:
     does not, True when the test decides a re-raise (``if [ -n "$(apidiff a b)" ]; then exit 1;
     fi``, ``test -n ... && exit 1``, ``[ -z ... ] || exit 1``, the ``then`` branch read on to
     ``fi`` across ``later`` lines), else False (``-z`` with ``then exit 1`` goes red when nothing
-    changed, never on a break)."""
+    changed, never on a break; a backgrounded line, ``... && exit 1 &``, cannot fail the job)."""
     parts = _OPERATOR.split(text)
     found: bool | None = None
     for i in range(0, len(parts), 2):
@@ -403,7 +409,7 @@ def inline_apidiff(text: str, later: list[str]) -> bool | None:
             found = found or (flag == "-n" and op in (";", "") and any(_reraises(c) for c in _then_body(rest, later)))
         else:   # the chain or fallback ``_decides`` reads
             found = found or ((flag, op) in (("-n", "&&"), ("-z", "||")) and _branch_reraises(rest))
-    return found
+    return found and not _backgrounded(text)
 
 
 def can_stop(tool: str, words: list[str], unit: list[str]) -> bool:
@@ -476,7 +482,7 @@ class _Reader:
                 self.report_only.add("apidiff")
             text = ci_line_text(raw[index])   # a piped apidiff masking dropped (pipefail off), read as written
             piped = [c["words"] for c in _commands(_shell(text)) if as_written and tool_of(c["words"]) == "apidiff"]
-            if piped and not any(c["masked"] for c in commands) and not _rescued(text) and not _BACKGROUND.search(text) and any(
+            if piped and not any(c["masked"] for c in commands) and not _rescued(text) and any(
                     _checks_output(words, raw[index:]) for words in piped):
                 found.add("apidiff")
             elif piped:
