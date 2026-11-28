@@ -24,6 +24,7 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
 from lib.fleet.fleet_group_schema import type_schema
 from lib.fleet.runner import RepoCommit
 from lib.fleet.fleet_level import FleetLevels
+from lib.scoring.evidence_classes import EVIDENCE_CLASSES
 from lib.scoring.level_result_types import LevelResult
 from lib.scoring.level_tally import COUNTED_GRADES, DEMOTED, EXCLUDED_BY_OWNER, LEVEL_RESULT_VERSION, STATES
 from lib.owner_exclusions import KINDS, SOURCE_REPO
@@ -52,6 +53,16 @@ def level_result_schema() -> JsonDict:
     excluded["source"] = {"enum": [SOURCE_REPO]}
     condition["polarity"] = {"enum": ["hazard"], "description": "present only on a hazard condition, which is never counted (lib/scoring/levels_fields.py)"}
     condition["source"] = {"type": "string", "description": "the base model or practice pack the row came from; present only when a pack added rows (lib/pack_layering.py)"}
+    classes = list(EVIDENCE_CLASSES)
+    condition["evidence_classes"] = {"type": "array", "items": {"enum": classes}, "description": (
+        "the evidence classes of its criteria's input classes, once each in this order (#1642, "
+        "lib/scoring/evidence_classes.py); absent before #1642"), "uniqueItems": True}
+    coverage = props["evidence_coverage"]
+    coverage["properties"]["covered"]["items"] = {"enum": classes}
+    coverage["properties"]["not_covered"]["items"]["properties"]["evidence_class"] = {"enum": classes}
+    coverage["description"] = (
+        "the evidence classes a condition read a value of (met or unmet), and every other class with a "
+        "reason code: a not-measured reason, no_condition or not_read (#1642, lib/scoring/evidence_classes.py)")
     props["tags"]["items"]["properties"]["tag"] = {"enum": list(TRUTH_TAGS)}
     props["tags"]["description"] = (
         "one row per truth tag, every tag in this order (#940); met and measured are the headline strip's "

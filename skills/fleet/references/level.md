@@ -39,6 +39,11 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
   why. Only counted, met conditions make a row `top`: a row with a condition not measured,
   excluded, unmet or only listed (config-only, declared, demoted by the exit rule) is never
   `top`, so a blind run lists nothing it did not read.
+- `evidence_coverage` (#1642): `covered`, the evidence classes (`static`, `runtime`,
+  `practice`) at least one condition read a value of, and `not_covered[]`, `{evidence_class,
+  reason}` for every other class. Each condition carries its own `evidence_classes`, derived
+  from its criteria's input classes (`lib/scoring/evidence_classes.py`). A run without
+  `--platform` names `practice` as not covered.
 
 With `--pack` (#1276), each pack's `[[rows]]` are layered onto the model and every condition
 names its `source` (the base model or the pack). The envelope then gains `packs`: for each

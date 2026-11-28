@@ -269,6 +269,18 @@
                   "type": "string"
                 }
               },
+              "evidence_classes": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "static",
+                    "runtime",
+                    "practice"
+                  ]
+                },
+                "description": "the evidence classes of its criteria's input classes, once each in this order (#1642, lib/scoring/evidence_classes.py); absent before #1642",
+                "uniqueItems": true
+              },
               "source": {
                 "type": "string",
                 "description": "the base model or practice pack the row came from; present only when a pack added rows (lib/pack_layering.py)"
@@ -561,6 +573,50 @@
             "additionalProperties": false
           },
           "description": "one row per truth tag, every tag in this order (#940); met and measured are the headline strip's cells, and measured 0 means not measured, never a share of 0 (lib/scoring/level_tags.py)"
+        },
+        "evidence_coverage": {
+          "type": "object",
+          "properties": {
+            "covered": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "static",
+                  "runtime",
+                  "practice"
+                ]
+              }
+            },
+            "not_covered": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "evidence_class": {
+                    "enum": [
+                      "static",
+                      "runtime",
+                      "practice"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "evidence_class",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "covered",
+            "not_covered"
+          ],
+          "additionalProperties": false,
+          "description": "the evidence classes a condition read a value of (met or unmet), and every other class with a reason code: a not-measured reason, no_condition or not_read (#1642, lib/scoring/evidence_classes.py)"
         }
       },
       "required": [

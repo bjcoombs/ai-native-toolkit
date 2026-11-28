@@ -8,7 +8,8 @@ It renders:
 - the title, the repository's name from its ``origin`` remote, else the checkout
   directory's name (``lib.fleet.runner.repository_name``, #1230),
 - the header: the run date, the `/assess` version (left out when the run read none,
-  ``made_by``, #1166) and the measured commit,
+  ``made_by``, #1166) and the measured commit, then on the same line the evidence classes the
+  run read and the ones it did not (``lib/report/evidence_header.py``, #1642; left out for a context with none),
 - the top card first, before any ``## `` heading (``lib/top_card.py``, #1252): the Step, the
   gates held, the gate that blocks the next Step, what moved since the last run, and one
   Start here and Done when, each fact once, pasted from the ``headline`` block's
@@ -71,6 +72,7 @@ from lib.fleet.runner import repository_name
 from lib.assess_diagrams_review import build_all
 from lib.scoring.headline import GLOSSARY_URL, as_headline
 from lib.scoring.level_tally import default_model
+from lib.report.evidence_header import evidence_line
 from lib.top_card import in_place_section
 from lib.report.measured_appendix import measured_section
 from lib.run.scan_plan import not_run_text
@@ -126,7 +128,7 @@ TIER1_METRICS = [
 
 REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
-_Generated $run_date by $made_by.${commit_note}_
+_Generated $run_date by $made_by.${commit_note}${evidence_line}_
 
 ${summary_section}${in_place_section}## Catalogue Coverage
 
@@ -693,6 +695,7 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
         run_date=ctx.get("run_date", "unknown"),
         made_by=made_by(ctx),
         commit_note=_render_commit_note(ctx),
+        evidence_line=_evidence_header(ctx),
         summary_section=render_summary_section(ctx),
         in_place_section=in_place_section(ctx.get("level"), default_model()),
         headline=_headline_markdown(ctx),
@@ -716,6 +719,14 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
     # measured. structure_drift with no ownership map leaves a no_ownership_map marker.
     measured = measured_section([ctx], absent_code="no_block")
     return f"{report.rstrip()}\n\n{measured}\n"
+
+
+def _evidence_header(ctx: dict[str, Any]) -> str:
+    """The header's evidence sentences (``lib/report/evidence_header.py``, #1642) with a leading
+    space; ``""`` for a context with no level evidence coverage."""
+    level = ctx.get("level")
+    line = evidence_line(level.get("evidence_coverage") if isinstance(level, dict) else None)
+    return f" {line}" if line else ""
 
 
 def made_by(ctx: dict[str, Any]) -> str:

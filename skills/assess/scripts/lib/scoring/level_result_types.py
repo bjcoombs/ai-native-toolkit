@@ -5,7 +5,7 @@ import cycle (the engine reads ``lib.scoring.level_signals``, which reads the co
 shapes). String fields hold condition ids, states, grades and reason codes only.
 
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
-`NextStep`, `InPlace`, and #828's `HazardEntry`, `DeclinedCondition` and `DeclineRecord`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844) and the level's per-tag `TagRow` (#940), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+`NextStep`, `InPlace`, and #828's `HazardEntry`, `DeclinedCondition` and `DeclineRecord`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844) and the level's per-tag `TagRow` (#940) and the level's `EvidenceCoverage` with its `NotCovered` entries (#1642), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
 import cycle. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
@@ -28,6 +28,8 @@ class ConditionResult(TypedDict):
     blocks: NotRequired[str]  # a hazard only: the Step gate it holds while met (#828)
     why: NotRequired[str]  # the manifest whys of its criteria, joined by a space (#939)
     evidence: NotRequired[list[str]]  # #855: evidence-only practices on a met condition (condition_evidence.py)
+    # #1642: the evidence classes of its criteria (lib/scoring/evidence_classes.py); absent before #1642
+    evidence_classes: NotRequired[list[str]]
     # the base model or practice pack its row came from (lib/pack_layering.py, #1274); present
     # only when a pack added rows to the model
     source: NotRequired[str]
@@ -116,6 +118,20 @@ class TagRow(TypedDict):
     countable_not_measured: list[NotMeasured]  # of those, the countable ones: why the row has no share
 
 
+class NotCovered(TypedDict):
+    """An evidence class the run did not read, with its reason code (#1642)."""
+
+    evidence_class: str  # one of lib.scoring.evidence_classes.EVIDENCE_CLASSES
+    reason: str  # a not-measured reason code, "no_condition" or "not_read"
+
+
+class EvidenceCoverage(TypedDict):
+    """A level result's ``evidence_coverage`` (``lib/scoring/evidence_classes.py``, #1642)."""
+
+    covered: list[str]  # the classes a condition read a value of, in EVIDENCE_CLASSES order
+    not_covered: list[NotCovered]  # every other class, in that order
+
+
 class LevelResult(TypedDict):
     level_result_version: int
     levels_version: str
@@ -133,6 +149,7 @@ class LevelResult(TypedDict):
     declined: NotRequired[list[DeclinedCondition]]  # present only when a decline record applies (#828)
     hazards: NotRequired[list[HazardEntry]]  # present only when a hazard is met (#828); never in the tally
     tags: NotRequired[list[TagRow]]  # #940: every truth tag, in TRUTH_TAGS order; absent before #940
+    evidence_coverage: NotRequired[EvidenceCoverage]  # #1642: the evidence classes read; absent before #1642
 
 
 class OwnerExclusion(TypedDict):

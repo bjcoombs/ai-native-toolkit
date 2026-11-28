@@ -56,6 +56,11 @@ present only when a record covers a condition. Absence of a record never produce
 ``evidence`` (practice slugs) on a met condition that reads an evidence-only block's signal; it
 never changes a state, grade, tally or Step.
 
+**Evidence classes** (#1642). Each condition carries ``evidence_classes``, the ``static``,
+``runtime`` and ``practice`` classes of its criteria's input classes, and the result carries
+``evidence_coverage``, the classes the run read and the ones it did not with a reason code
+(``lib/scoring/evidence_classes.py``); neither changes a state, grade, tally or Step.
+
 **Hazards** (#828). A hazard condition (``polarity = "hazard"``) carries the model's ``blocks``
 (a Step gate id) on its result. While the hazard is ``met`` (the harm is present) that gate does
 not hold, whatever its own conditions read: the blocker is ``{kind: "gate", gate, condition:
@@ -221,6 +226,7 @@ from typing import Any
 
 from lib.counts_only.reason_codes import reason_code, reason_token
 from lib.scoring.condition_evidence import EVIDENCE_BLOCKS, attach_evidence
+from lib.scoring.evidence_classes import criteria_classes, evidence_coverage
 from lib.scoring.level_tags import tag_rows
 from lib.scoring.level_result_types import Blocker, ConditionResult, DeclinedCondition, ExcludedCondition, HazardEntry
 from lib.scoring.level_result_types import InPlace, LevelResult, NextStep
@@ -395,7 +401,7 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
             entry: ConditionResult = {"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
                                       "counted": (grade in COUNTED_GRADES and state not in ("not_applicable", "declined")
                                                   and not hazard and cid not in demoted),
-                                      "state": state}
+                                      "state": state, "evidence_classes": criteria_classes(level["criteria"])}
             if hazard:  # #828: a hazard names the gate it holds while met
                 entry.update({"polarity": "hazard", **({"blocks": level["blocks"]} if "blocks" in level else {})})
             if "source" in row:
@@ -679,6 +685,7 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
     if hazards := _hazards(model, conditions):
         result["hazards"] = hazards
     result["tags"] = tag_rows(result, model)
+    result["evidence_coverage"] = evidence_coverage(conditions)  # #1642
     return result
 
 
