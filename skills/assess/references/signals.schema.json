@@ -131,6 +131,7 @@
           "owner_exclusions",
           "pack",
           "promissory_markers",
+          "repo_guards",
           "review_automation",
           "review_evidence",
           "review_reality",
@@ -1675,6 +1676,30 @@
               "reason": {
                 "type": "string",
                 "description": "'code: sentence'. The codes name the missing piece: no_remote (the repository has no github.com remote, so there is no owner .github repository to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "repo_guards": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: ci_not_read (no guard was found, and the tree tracks a CI file of a system this reader does not parse, a .gitlab-ci.yml include: it does not follow, or a step it could not settle, such as a remote reusable workflow. Any of them may run one); trigger_unknown (a guard was found only in a workflow or GitLab job whose trigger this reader could not settle, so it cannot say the guard runs on ordinary changes); no_guard_script (every guard found is a third-party tool or an architecture test with no committed script of its own, so there is no guard script whose tests to look for); scan_failed (the reader of ratchets and repo-owned guards raised an error, so both conditions read not measured). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

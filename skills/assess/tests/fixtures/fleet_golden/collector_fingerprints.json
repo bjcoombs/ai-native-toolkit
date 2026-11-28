@@ -296,6 +296,14 @@
       },
       "revision": 1
     },
+    "core.repo_guards": {
+      "repos": {
+        "grpa/sub/deep/svc2": "27858b3f6367f7b4ef74a7ba86e66acab91536d5b323962483061e15cedd3ee4",
+        "grpa/svc1": "78cd35d318e36ae92f5c79f3e4d3d4f74f6c74ee434d251f214c02c47c351153",
+        "grpb/lib1": "27858b3f6367f7b4ef74a7ba86e66acab91536d5b323962483061e15cedd3ee4"
+      },
+      "revision": 1
+    },
     "core.review_automation": {
       "repos": {
         "grpa/sub/deep/svc2": "17f08a257a81412240ffdcd0479ddb05b3b3208668ca191714c188a878afcb1c",

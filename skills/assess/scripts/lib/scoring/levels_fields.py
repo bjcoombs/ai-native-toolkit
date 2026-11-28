@@ -13,7 +13,7 @@ and the cause.
 anywhere. The alias applies only when **no condition in the model carries
 ``truth``**: every condition then resolves its tags from its row
 (``legacy_truth``). A row id ``layer-<n>-...`` takes ``LEGACY_LAYER_TRUTH[n]``;
-the default model's twenty-one rows outside the layers take ``LEGACY_ROW_TRUTH``; any
+the default model's twenty-three rows outside the layers take ``LEGACY_ROW_TRUTH``; any
 other row (a caller's own model) resolves to no tag, ``[]``, since it names no
 layer. A model where some conditions carry ``truth`` and others do not is
 rejected with ``MixedTruthError``, whose message starts with that name and gives
@@ -39,6 +39,7 @@ Layer to truth, the documented mapping of the alias:
 | `ai-policy-enforced`, `ai-policy-declared` | `governance` |
 | `ci-instructions-unchecked` | `agent_context`, `governance` |
 | `backlog-ready` | `agent_context`, `governance` |
+| `repo-guards`, `repo-guard-tested` | `structure` |
 
 **Additive fields.** Each defaults to today's behaviour when absent:
 
@@ -94,7 +95,7 @@ calls them, and the module docstring is the reference.
   `legacy_truth(row id)`: a `layer-<n>-...` row takes `LEGACY_LAYER_TRUTH[n]` (0
   `agent_context`; 1 `agent_runtime`; 2, 3, 4 `structure`; 5, 6 `behaviour`; 7, 8
   `governance`), the default model's `skill-script-tests` takes `behaviour`, `secrets-guard`, `skill-personal-data` and `model-ci-gated` take `governance`, `doc-freshness` and `contributor-files` take `docs`; `guardrails-stated`,
-  `agent-consistency`, `skill-disclosure` and `skill-library` take `agent_context`, `agent-least-privilege` and `agent-job-write-access` take `agent_runtime` and `governance`, `agent-evals` takes `agent_runtime` and `behaviour`, `docs-kept-true` takes `docs` and `contracts`, `ci-skip-label` and `ci-test-failures-ignored` take `behaviour`, `agent-rewrites-instructions` takes `agent_context` and `agent_runtime`, `ai-policy-enforced` and `ai-policy-declared` take `governance`, `ci-instructions-unchecked` takes `agent_context` and `governance`, `backlog-ready` takes `agent_context` and `governance` (`LEGACY_ROW_TRUTH`), and any other row `[]`. A
+  `agent-consistency`, `skill-disclosure` and `skill-library` take `agent_context`, `agent-least-privilege` and `agent-job-write-access` take `agent_runtime` and `governance`, `agent-evals` takes `agent_runtime` and `behaviour`, `docs-kept-true` takes `docs` and `contracts`, `ci-skip-label` and `ci-test-failures-ignored` take `behaviour`, `agent-rewrites-instructions` takes `agent_context` and `agent_runtime`, `ai-policy-enforced` and `ai-policy-declared` take `governance`, `ci-instructions-unchecked` takes `agent_context` and `governance`, `backlog-ready` takes `agent_context` and `governance`, `repo-guards` and `repo-guard-tested` take `structure` (`LEGACY_ROW_TRUTH`), and any other row `[]`. A
   model where some conditions carry `truth` and others do not raises **`MixedTruthError`**
   (a `LevelsError`), whose message starts `MixedTruthError:` and names the model file, the
   row id and the level of the first condition without it. There is no format-marker field.
@@ -170,6 +171,8 @@ LEGACY_ROW_TRUTH: dict[str, tuple[str, ...]] = {
     "ai-policy-declared": ("governance",),
     "ci-instructions-unchecked": ("agent_context", "governance"),
     "backlog-ready": ("agent_context", "governance"),
+    "repo-guards": ("structure",),
+    "repo-guard-tested": ("structure",),
 }
 
 
