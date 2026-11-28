@@ -331,3 +331,39 @@ def test_a_python_heredoc_body_is_read_as_python() -> None:
 def test_a_heredoc_marker_inside_quotes_opens_no_heredoc() -> None:
     step = _run("echo \"see <<EOF docs\"\ngrep -qi 'Assisted-by' <<< \"$PR_BODY\" || exit 1\necho EOF")
     assert enforces_disclosure(step, ENV) is True
+
+
+# --- review round 2: compound redirects, JavaScript chains and functions -------------------
+
+
+@pytest.mark.parametrize(("code", "acts"), [
+    ("while read -r l; do echo \"$l\"; done <<< \"$PR_BODY\"\ngrep -q 'Assisted-by' <<< \"$PR_BODY\" || exit 1", {EXIT}),
+    ("while read -r l; do\n  if grep -q 'Assisted-by' <<< \"$l\"; then exit 1; fi\ndone < pr.txt", {EXIT}),
+    ("while read -r l; do grep -q 'AI' <<< \"$l\" || exit 1; done < other.txt", set()),
+    ("{ echo start; } > log.txt\nif grep -qi 'AI' pr.txt; then :; else exit 1; fi 2> err.txt", {EXIT}),
+    ("( true ) > /dev/null\ngrep -qi 'AI' pr.txt || exit 1", {EXIT}),
+    ("{ true; } >", set()),
+])
+def test_compound_commands_take_trailing_redirects(code: str, acts: set[str]) -> None:
+    assert step_acts([Unit(SHELL, code)], HELD) == acts
+
+
+@pytest.mark.parametrize(("code", "acts"), [
+    ('body.includes("Assisted-by") || core.setFailed("missing")', {EXIT}),
+    ('/Generated-by/.test(body) && await github.rest.issues.addLabels({ labels: ["ai"] })', {LABEL}),
+    ('other.includes("AI") || core.setFailed("missing")', set()),
+    ('body.includes("AI") || core.info("missing")', set()),
+    ('function check() { if (!body.includes("AI")) core.setFailed("x"); }\ncheck();', {EXIT}),
+    ('async function check() {\n  if (!body.includes("AI")) core.setFailed("x");\n}\nawait check();', {EXIT}),
+    ('function check() { if (!body.includes("AI")) core.setFailed("x"); }', set()),
+    ("function () { }", set()),
+    ("function f() core.setFailed('x')", set()),
+    ("async () => { core.setFailed('x') }", set()),
+])
+def test_javascript_chains_and_called_functions(code: str, acts: set[str]) -> None:
+    assert step_acts([Unit(JS, code)], HELD) == acts
+
+
+def test_only_a_github_script_step_has_a_javascript_script() -> None:
+    assert step_units("uses: actions/github-script@v7\nwith:\n  script: core.info(1)\n") == [Unit(JS, "core.info(1)")]
+    assert step_units("uses: example/ssh-action@v1\nwith:\n  script: exit 1\n") == []

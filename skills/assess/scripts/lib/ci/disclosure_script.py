@@ -22,11 +22,13 @@ no check: an unsettled reading never counts. Both readers answer the same two qu
   run green), or a call passing ``--add-label``; JavaScript ``core.setFailed(...)``, ``throw``,
   ``process.exit(N)`` with N non-zero, or ``addLabels(...)``. The act **follows** when it is a
   statement of the branches of the ``if`` the test is the condition of, or an unconditional
-  statement later in the same block when one of those branches leaves the flow first (a guard
+  statement later in the same block when one of those branches leaves the flow first, or in
+  JavaScript the operand right after the test in a ``||``/``&&`` chain (``body.includes('X') ||
+  core.setFailed('x')``) (a guard
   clause: Python ``sys.exit``, ``exit``, ``quit``, ``raise`` or ``return``; JavaScript
   ``return``, ``throw`` or ``process.exit``, with any code). A branch that only logs is no guard. An act nested under another statement
-  in the branch belongs to that statement. Function bodies are read only when the module calls
-  the function.
+  in the branch belongs to that statement. Function bodies (Python ``def``, JavaScript
+  ``function`` and ``async function``) are read only when the code calls the function.
 
 Inward-only imports: stdlib and ``lib.ci.disclosure_terms``. Tests:
 ``tests/test_ai_governance_condition.py``, ``tests/test_disclosure_readers.py``.
@@ -269,6 +271,7 @@ class JBlock:
     body: tuple["JStmt", ...]
     var: str | None = None  # a for...of or for...in variable
     head: tuple[Tok, ...] = ()  # what that loop iterates
+    function: str | None = None  # a function declaration's name: its body is read only when called
 
 
 @dataclass(frozen=True)
@@ -346,6 +349,15 @@ class _JsParser:
             names = [t.text for t in head if t.kind == "id"]
             var = names[1] if len(names) > 2 and names[0] in ("const", "let", "var") and names[2] in ("of", "in") else None
             return JBlock(self._body(), var, head[3:] if var else ())
+        if self._function():
+            tok = self.peek()
+            if tok is None or tok.kind != "id":
+                raise JsParseError("function without a name")
+            self.take(tok.text)
+            self.parens()
+            if not self.take("{"):
+                raise JsParseError("function without a body")
+            return JBlock(self.block(close=True), function=tok.text)
         if self.take("try"):
             parts = list(self._body())
             if self.take("catch"):
@@ -357,9 +369,25 @@ class _JsParser:
             return JBlock(tuple(parts))
         return self._simple()
 
+    def _function(self) -> bool:
+        """Take ``function`` or ``async function`` when the statement opens with it."""
+        j = self._skip_nl(self.i)
+        if j < len(self.toks) and self.toks[j].text == "async":
+            j = self._skip_nl(j + 1)
+        if j < len(self.toks) and self.toks[j].kind == "id" and self.toks[j].text == "function":
+            self.i = j + 1
+            return True
+        return False
+
+    def _skip_nl(self, j: int) -> int:
+        while j < len(self.toks) and self.toks[j].kind == "nl":
+            j += 1
+        return j
+
     def _body(self) -> tuple[JStmt, ...]:
         stmt = self.statement()
-        return stmt.body if isinstance(stmt, JBlock) and stmt.var is None and not stmt.head else (stmt,)
+        return (stmt.body if isinstance(stmt, JBlock) and stmt.var is None and not stmt.head and stmt.function is None
+                else (stmt,))
 
     def _simple(self) -> JSimple:
         out: list[Tok] = []
@@ -471,6 +499,8 @@ class _Js:
     def __init__(self, stmts: tuple[JStmt, ...], names: frozenset[str]) -> None:
         self.names = names
         self.results: set[str] = set()
+        self.called = {s.toks[k].text for s in _js_walk(stmts) if isinstance(s, JSimple)
+                       for k in range(len(s.toks) - 1) if s.toks[k].kind == "id" and s.toks[k + 1].text == "("}
         for _ in range(3):
             for stmt in _js_walk(stmts):
                 if isinstance(stmt, JSimple) and len(stmt.toks) > 2:
@@ -524,9 +554,28 @@ class _Js:
                 continue
             if armed:
                 found |= self.act(stmt)
-            if isinstance(stmt, JBlock):
+            if isinstance(stmt, JSimple):
+                found |= self._short_circuit(stmt.toks)
+            if isinstance(stmt, JBlock) and (stmt.function is None or stmt.function in self.called):
                 found |= self.block(stmt.body)
         return found
+
+    def _short_circuit(self, toks: tuple[Tok, ...]) -> set[str]:
+        """The act right after a marker test in a ``||``/``&&`` chain (``body.includes('X') ||
+        core.setFailed('x')``), as the shell reader reads one."""
+        parts: list[tuple[Tok, ...]] = []
+        depth, start = 0, 0
+        for k, tok in enumerate(toks):
+            if tok.kind == "op" and tok.text in "([{":
+                depth += 1
+            elif tok.kind == "op" and tok.text in ")]}":
+                depth -= 1
+            elif depth == 0 and tok.kind == "op" and tok.text in ("||", "&&"):
+                parts.append(toks[start:k])
+                start = k + 1
+        parts.append(toks[start:])
+        return {a for k in range(len(parts) - 1) if self.marker(parts[k]) and parts[k + 1]
+                for a in self.act(JSimple(parts[k + 1]))}
 
 
 def _js_ends(stmts: tuple[JStmt, ...]) -> bool:

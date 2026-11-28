@@ -3,8 +3,9 @@
 ``step_units(text)`` splits a GitHub Actions step into the code it runs, each a ``Unit`` with
 its language: a ``run:`` value (shell, or Python under ``shell: python``; with no ``shell:``
 it is read as shell, and as Python only when it does not parse as shell) and a
-``script:`` value (JavaScript, ``actions/github-script``). Text with neither key is read as
-shell. ``env_names(text)`` is the ``env:`` keys whose value reads the pull request body or the
+``script:`` value (JavaScript, when the step's ``uses:`` is ``actions/github-script`` or the
+text names no action; another action's ``script:``, such as an SSH action's, is not read). Text
+with neither key is read as shell. ``env_names(text)`` is the ``env:`` keys whose value reads the pull request body or the
 trailers (``lib.ci.disclosure_terms.is_read``).
 
 ``step_acts(units, names)`` parses each unit (``lib.ci.disclosure_shell``,
@@ -37,6 +38,7 @@ _MAX_ROUNDS = 8
 _KEY = re.compile(r"^(\s*(?:-\s+)?)(run|script|shell)\s*:\s*(.*)$")
 _ENV = re.compile(r"^(\s*(?:-\s+)?)env\s*:\s*$")
 _HEREDOC_PROGRAM = re.compile(r"(?:^|[\s;&|(])(python3?|node)\s+(?:-\s+)?<<")
+_USES = re.compile(r"^\s*(?:-\s+)?uses\s*:\s*(\S+)", re.MULTILINE)
 _ENTRY = re.compile(r"^\s*([A-Za-z_]\w*)\s*:\s*(.+)$")
 
 
@@ -81,7 +83,9 @@ def step_units(text: str) -> list[Unit]:
         return [Unit(SHELL, text)]
     run_languages = ([PYTHON] if runner.startswith("python") else [SHELL] if runner in ("bash", "sh")
                      else [RUN] if not runner else [])
-    return [Unit(lang, code) for key, code in found for lang in (run_languages if key == "run" else [JS])]
+    uses = _USES.search(text)
+    script_languages = [JS] if uses is None or "github-script" in uses.group(1) else []
+    return [Unit(lang, code) for key, code in found for lang in (run_languages if key == "run" else script_languages)]
 
 
 def env_names(text: str) -> frozenset[str]:

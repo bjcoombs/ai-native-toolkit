@@ -2,7 +2,9 @@
 
 ``parse(code)`` tokenizes a ``run:`` body or a script with ``shlex`` and builds a small tree:
 lists of ``&&``/``||`` chains of pipelines, each command a simple command, an ``if``/``elif``/
-``else``/``fi``, a ``{ }`` or ``( )`` group, or a ``for``/``while``/``until`` loop. Comments,
+``else``/``fi``, a ``{ }`` or ``( )`` group, or a ``for``/``while``/``until`` loop, each with
+its trailing redirects (a loop's ``done < body.txt`` or ``done <<< "$BODY"`` input joins what it
+iterates, and a ``while read -r line`` variable holds it). Comments,
 ``\\`` continuations and heredoc bodies are dropped first, and ``${{ }}`` expressions are kept
 as one word. Anything it cannot place (a ``case``, a function definition, an unclosed quote or
 ``if``) makes ``parse`` return None, and the caller reads the code as no check at all: an
@@ -242,16 +244,35 @@ class _Parser:
             self.i += 1
             body = self.seq(close=True)
             self._close(")")
-            return Group(body)
+            return self._redirected(Group(body))
         if tok[0]:
             raise ShellParseError(f"unexpected {tok[1]!r}")
         handlers: dict[str, Callable[[], Command]] = {"if": self._if, "{": self._brace, "for": self._for,
                                                       "while": self._while, "until": self._while}
         if tok[1] in handlers:
-            return handlers[tok[1]]()
+            return self._redirected(handlers[tok[1]]())
         if tok[1] in {"then", "elif", "else", "fi", "do", "done", "}", "case", "esac", "function", "select"}:
             raise ShellParseError(f"cannot place {tok[1]}")
         return self._simple()
+
+    def _redirected(self, command: Command) -> Command:
+        """A compound command with its trailing redirects (``done < body.txt``, ``} > log``) read:
+        a loop's input joins what it iterates, and a ``while read`` variable holds it."""
+        inputs: list[str] = []
+        while self.op(*_REDIRECTS):
+            op = self.toks[self.i][1]
+            self.i += 1
+            target = self.peek()
+            if target is None or target[0]:
+                raise ShellParseError("redirect without a target")
+            self.i += 1
+            if op in ("<", "<<<"):
+                inputs.append(target[1])
+        if not isinstance(command, Loop) or not inputs:
+            return command
+        var = command.var or next((_program(c.words)[2][-1] for p in _pipelines(command.head) for c in _simples(p)
+                                   if _program(c.words)[1] == "read" and _program(c.words)[2]), None)
+        return Loop(var, command.words + tuple(inputs), command.head, command.body)
 
     def _close(self, text: str) -> None:
         if not self.op(text):
