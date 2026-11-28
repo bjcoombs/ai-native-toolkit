@@ -66,7 +66,7 @@ def _state(result: lt.LevelResult, cid: str) -> tuple[str, str | None]:
 
 STEPS = [
     {"step": 1, "name": "Assisted"},
-    {"step": 2, "name": "Supervised agent PRs",
+    {"step": 2, "name": "Supervised agent changes",
      "gates": [{"id": "instructions", "row": "instr", "level": 1}]},
 ]
 
@@ -381,7 +381,7 @@ def _stepped() -> MaturityModel:
     return _model(
         _row("instr", [_eq(INSTR)]), _row("ci", [_eq(CI)]),
         _row("fresh", [{"signal": DOC, "op": "lte", "value": 50}], [{"signal": DOC, "op": "lte", "value": 20}]),
-        steps=[*STEPS, {"step": 3, "name": "Unattended agent PRs",
+        steps=[*STEPS, {"step": 3, "name": "Unattended agent changes",
                         "gates": [*STEPS[1]["gates"], {"id": "ci_runs_tests", "row": "ci", "level": 1}]}])
 
 
@@ -562,7 +562,7 @@ def test_the_default_steps_stage_their_gates():
     """I744-2: Step 2 gates on layer 0, Step 3 adds layer 5, Step 4 adds layer 6."""
     steps = load_default_levels()["steps"]
     assert [s["step"] for s in steps] == [1, 2, 3, 4]
-    assert [s["name"] for s in steps] == ["Assisted", "Supervised agent PRs", "Unattended agent PRs",
+    assert [s["name"] for s in steps] == ["Assisted", "Supervised agent changes", "Unattended agent changes",
                                            "Autonomous loops"]
     prefixes = [[g["row"].split("-")[1] for g in s["gates"]] for s in steps]
     assert prefixes == [[], ["0"], ["0", "5"], ["0", "5", "6"]]

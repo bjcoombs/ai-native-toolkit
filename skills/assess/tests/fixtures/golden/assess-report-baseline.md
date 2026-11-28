@@ -2,7 +2,7 @@
 
 _Generated <<normalized>>._
 
-**Step 3 · Unattended agent PRs · contracts in place**
+**Step 3 · Unattended agent changes · contracts in place**
 
 Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced
 

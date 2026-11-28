@@ -2,7 +2,7 @@
 
 Loaded by `/assess` when its arguments contain `--tour`. The tour never assesses the user's repository and writes nothing into it. It builds a small sample repository in a new temporary directory, assesses it, walks the newcomer through the report one section at a time, has them make one fix, and re-runs so they see the Step move.
 
-The sample is `tally`, a tiny Python expense ledger with tests, a CI workflow and an `AGENTS.md`. It has one deliberate gap: its CI runs `pytest || true`, so a failing test never fails the build. It lands on **Step 2** (an agent opens pull requests and a person reviews each one), and the one gate between it and **Step 3** is `ci_runs_tests`. The whole sample ships in this skill as one data file, `tour/sample.toml` (each file's content and the history), with its one fix in `tour/fix.patch`; the script is `scripts/assess_tour.py`. It works the same from the plugin and from the standalone skill. The same build gives the same report every time.
+The sample is `tally`, a tiny Python expense ledger with tests, a CI workflow, a lint workflow, an AI review step, a pre-commit secret scan and an `AGENTS.md` that names its check command. It has one deliberate gap: its CI runs `pytest || true`, so a failing test never fails the build. It lands on **Step 2** (an agent makes changes and a person reviews each one), and the one gate between it and **Step 3** is `ci_runs_tests`. The whole sample ships in this skill as one data file, `tour/sample.toml` (each file's content and the history), with its one fix in `tour/fix.patch`; the script is `scripts/assess_tour.py`. It works the same from the plugin and from the standalone skill. The same build gives the same report every time.
 
 ## 1. Build and assess the sample
 

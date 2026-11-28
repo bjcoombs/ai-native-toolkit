@@ -14,11 +14,11 @@ precedes every gate line.
    - at the top Step: ``Holding Step 4 of 4 · 2 advisories, none blocks the Step.``, where
      the count is ``card_facts.advisories`` (unmet conditions no Step gate waits on). One
      reads ``1 advisory, and it blocks no Step.``; none reads ``Holding Step 4 of 4.``;
-   - below it: ``Step 3 of 4: unattended agent PRs.``, the Step's name in the model, its first
+   - below it: ``Step 3 of 4: unattended agent changes.``, the Step's name in the model, its first
      letter lowered unless the name opens with an acronym (``CI-gated merges`` stays);
    - below it, when every gate of the next Step that does not hold was not measured
      (``lib/scoring/step_reading.py``, #1640): ``Step 2, Step 3 not measured · Step 2 of 4:
-     supervised agent PRs.``, never the next Step;
+     supervised agent changes.``, never the next Step;
    - below the first Step of a model whose Step 1 has a gate (#889): ``Not yet at Step 1 of 3.``;
    - a model without Steps: ``This maturity model defines no Steps.``;
 
@@ -89,6 +89,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from lib.card_facts import CardFact, advisories, blocking_gates, fully_in_place, step_gate_ids, step_name, top_step
+from lib.scoring.gate_words import GATE_GAP, GATE_TASK
 from lib.scoring.headline import (GATE_CHANGE, GATE_NOUN, GLOSSARY_URL, gate_note, one_change_ceiling, reason_word,
                                   verified_count)
 from lib.scoring.step_reading import first_measured, next_unread, step_reading, unread_gap
@@ -105,22 +106,8 @@ __all__ = ["FACT_IDS", "GATE_GAP", "GATE_TASK", "PROFILES_URL", "STEP_GATES_URL"
 # same page; importing it here would close a cycle through lib.run.signals.
 STEP_GATES_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates"
 
-# Each Step gate as a task a person can do. A gate id the table does not know reads
-# "make the <id> gate hold".
-GATE_TASK = {
-    "instructions": "commit an instruction file agents read, such as AGENTS.md or CLAUDE.md, "
-                    "with more than headings in it",
-    "ci_runs_tests": "make CI turn red when a check breaks",
-    "coverage_gate": "enforce a coverage gate in CI",
-}
-
-# Each Step gate as the gap the card's Blocks line names. A gate id the table does not know
-# reads "the <id> gate does not hold yet".
-GATE_GAP = {
-    "instructions": "no committed instruction file tells an agent how the repository works",
-    "ci_runs_tests": "CI does not turn red when a check breaks",
-    "coverage_gate": "no coverage gate is enforced",
-}
+# Each Step gate as a task a person can do (``GATE_TASK``) and as the gap the card's Blocks
+# line names (``GATE_GAP``): ``lib/scoring/gate_words.py`` (#1641).
 
 
 # Where each shipped profile lives, linked from the profile lines before the lead.

@@ -18,6 +18,7 @@ from lib.run import core_scans
 from lib.fleet.fleet_level import repo_level
 from lib.scoring.level_signals import signal_path_validator
 from lib.scoring.level_tally import LEVEL_READS, default_model
+from lib.scoring.step_reading import step_reading
 from lib.top_card import PROFILES_URL
 from lib.profiles import (PROFILES_DIR, ModelChoice, ProfileError, add_model_arguments, model_lines,
                           non_default_ids, profile_names, profile_path, resolve, single_repo_choice)
@@ -31,6 +32,14 @@ HANDOVER_MET: dict[str, Any] = {
     "review_evidence": {"present": True},
     "doc_staleness": {"summary": {"stale_pct": 10}},
     "secrets_guard": {"configured": True, "enforcement": {"available": True, "present": True, "source": "ci"}},
+    # the rows the cumulative gates read (#1641): a named check, a kept claim, the line budget,
+    # wide review, committed agent permissions and a boundary map
+    "agent_environment": {"available": True, "check": {"named_total": 1}},
+    "instruction_claims": {"total": 1, "verified": 1, "failed": 0},
+    "nested_instructions": {"available": True, "budget": {"claude_code": {"files": ["CLAUDE.md"], "lines": 40}}},
+    "review_reality": {"reviewed_share": 0.9, "approved_share": 0.7},
+    "agent_ops": {"summary": {"permissions_encoded": True}},
+    "structure_drift": {"tier_0": {"boundary_patterns": 2}},
 }
 
 CUSTOM = """version = "my-1"
@@ -63,7 +72,7 @@ name = "Assisted"
 
 [[steps]]
 step = 2
-name = "Supervised agent PRs"
+name = "Supervised agent changes"
 gates = [{ id = "instructions", row = "layer-0-instructions", level = 1 }]
 """
 
@@ -124,7 +133,8 @@ def test_without_ci_running_the_tests_the_one_gap_is_named() -> None:
 def test_a_practice_not_measured_is_missing_with_its_reason() -> None:
     lines = _summary(_blocks(review_evidence=None), resolve("handover", None))
     assert lines[1] == ("Not ready for handover (profile: handover). "
-                        "Missing: Review on merged pull requests (not measured: scan did not run).")
+                        "Missing: Review on merged pull requests (not measured: scan did not run). "
+                        "Missing: Review on merged pull requests, level 2 (waits on layer-7-review.1).")
 
 
 def test_an_owner_exclusion_does_not_read_ready() -> None:
@@ -158,7 +168,8 @@ def test_a_custom_model_marks_the_practices_the_default_does_not_define(tmp_path
 def test_a_level_above_one_is_named() -> None:
     model = default_model()
     choice = ModelChoice(model, "file", "copy.toml")
-    lines = model_lines(core_scans.level(*(_blocks().get(k) for k in LEVEL_READS), choice), choice)
+    failed = _blocks(instruction_claims={"total": 1, "verified": 0, "failed": 1})
+    lines = model_lines(core_scans.level(*(failed.get(k) for k in LEVEL_READS), choice), choice)
     assert "Agent instructions, level 2 (" in lines[1]
 
 
@@ -328,7 +339,7 @@ def test_an_unmeasured_hazard_is_missing() -> None:
 
 def test_a_custom_steps_own_name_words_the_summary(tmp_path: Path) -> None:
     path = tmp_path / "named.toml"
-    path.write_text(CUSTOM.replace('name = "Supervised agent PRs"', 'name = "Handover ready"'), encoding="utf-8")
+    path.write_text(CUSTOM.replace('name = "Supervised agent changes"', 'name = "Handover ready"'), encoding="utf-8")
     # at the top Step the card holds the Step (below it, tests/test_top_card.py pins the name)
     lines = _summary(_blocks(), resolve(None, path))
     assert any(line.startswith("Holding Step 2 of 2") for line in lines)
@@ -340,7 +351,7 @@ def test_each_missing_practice_is_its_own_short_sentence() -> None:
     lines = _summary({}, resolve("handover", None))
     sentences = [x for x in lines[1].split(". ") if x]
     assert sentences[0] == "Not ready for handover (profile: handover)"
-    assert len(sentences) == 1 + 6 and all(x.startswith("Missing: ") for x in sentences[1:])
+    assert len(sentences) == 1 + 11 and all(x.startswith("Missing: ") for x in sentences[1:])
     assert max(len(x.split()) for x in sentences) <= 25
 
 
@@ -353,7 +364,9 @@ def test_a_profile_run_never_writes_an_unlabelled_badge(name: str, ci2: Path) ->
     choice = single_repo_choice(name, None, signal_path_validator())
     ctx = build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=choice)
     summary = ctx["headline"]["summary"]
-    assert summary.startswith(f"Step {ctx['level']['step']} · ") and summary.endswith(f" (profile: {name})")
+    # a next Step not measured leads with "Step N, Step N+1 not measured" (#1640)
+    lead = step_reading(ctx["level"]) or f"Step {ctx['level']['step']} · "
+    assert summary.startswith(lead) and summary.endswith(f" (profile: {name})")
     badge = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
     assert badge["message"] == summary
     assert f"- **Readiness:** {summary}\n" in (ci2 / ".assess" / "log.md").read_text(encoding="utf-8")

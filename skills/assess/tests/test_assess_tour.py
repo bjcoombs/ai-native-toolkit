@@ -28,6 +28,9 @@ def walked(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
             "how": how, "after": after, "after_report": after_report}
 
 
+# The Step 4 gates the sample does not hold after its fix (#1641): its next Step's blockers.
+STEP_4_GATES = ["coverage_gate", "wide_review", "agent_permissions", "boundaries"]
+
 def test_sample_lands_on_step_2_with_one_gate_next(walked: dict[str, object]) -> None:
     before = walked["before"]
     assert isinstance(before, dict)
@@ -44,7 +47,7 @@ def test_the_fix_moves_the_step_by_exactly_one(walked: dict[str, object]) -> Non
     assert walked["how"] == "applied"
     after = walked["after"]
     assert isinstance(after, dict)
-    assert (after["step"], after["next_step"], after["next_gates"]) == (3, 4, ["coverage_gate"])
+    assert (after["step"], after["next_step"], after["next_gates"]) == (3, 4, STEP_4_GATES)
     report = walked["after_report"]
     assert isinstance(report, str)
     assert "#step) 3 of 4:" in report
@@ -73,7 +76,7 @@ def test_a_fix_made_by_hand_is_committed(tmp_path: Path) -> None:
     ci.write_bytes(ci.read_bytes().replace(b"pytest || true", b"pytest"))
     assert assess_tour.fix(repo) == "edited"
     after = assess_tour.run(repo)
-    assert (after["step"], after["next_gates"]) == (3, ["coverage_gate"])
+    assert (after["step"], after["next_gates"]) == (3, STEP_4_GATES)
 
 
 def test_a_fix_that_cannot_apply_is_refused(tmp_path: Path) -> None:
@@ -160,7 +163,7 @@ def test_a_wrong_hand_edit_is_refused_with_its_diff(tmp_path: Path) -> None:
         assess_tour.fix(repo)
     assert "+      - run: pytest || echo failed" in str(caught.value)
     env = assess_tour._git_env("A <a@example.com>", "2026-10-01T00:00:00+00:00")
-    assert assess_tour._git(repo, env, "rev-list", "--count", "HEAD").strip() == "4"
+    assert assess_tour._git(repo, env, "rev-list", "--count", "HEAD").strip() == "5"
 
 
 def test_a_hand_edit_matching_the_patch_exactly_is_committed(tmp_path: Path) -> None:

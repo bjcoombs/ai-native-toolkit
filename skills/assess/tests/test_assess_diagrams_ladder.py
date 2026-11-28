@@ -88,8 +88,8 @@ def test_gate_words_come_from_gate_change_and_say_whether_they_hold(step: int) -
 
 
 @pytest.mark.parametrize("step, caption", [
-    (1, "Step 2, Supervised agent PRs, opens when an instruction file an agent reads is committed."),
-    (2, "Step 3, Unattended agent PRs, opens when CI turns red on a broken check."),
+    (1, "Step 2, Supervised agent changes, opens when an instruction file an agent reads is committed."),
+    (2, "Step 3, Unattended agent changes, opens when CI turns red on a broken check."),
     (3, "Step 4, Autonomous loops, opens when a coverage gate is enforced."),
     (4, "This is the top Step; it holds while its gates hold."),
 ])
@@ -139,7 +139,7 @@ def test_the_caption_says_why_a_next_gate_is_open_as_the_headline_does() -> None
     assert level["next_step"] is not None
     level["next_step"]["blockers"] = [{"kind": "gate", "gate": "ci_runs_tests", "state": "not_measured",
                                        "reason": "needs_platform"}]
-    assert ladder.ladder_caption(level, STEPS) == ("Step 3, Unattended agent PRs, opens when CI turns red on a broken check "
+    assert ladder.ladder_caption(level, STEPS) == ("Step 3, Unattended agent changes, opens when CI turns red on a broken check "
                                                    "(not measured here: needs GitHub or GitLab access).")
 
 

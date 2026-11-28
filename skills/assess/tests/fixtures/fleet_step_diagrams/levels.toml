@@ -38,7 +38,7 @@ name = "Assisted"
 
 [[steps]]
 step = 2
-name = "Supervised agent PRs"
+name = "Supervised agent changes"
 gates = [
   { id = "instructions", row = "instructions", level = 1 },
   { id = "agent_use", row = "agent-use", level = 1 },
@@ -46,7 +46,7 @@ gates = [
 
 [[steps]]
 step = 3
-name = "Unattended agent PRs"
+name = "Unattended agent changes"
 gates = [
   { id = "instructions", row = "instructions", level = 1 },
   { id = "agent_use", row = "agent-use", level = 1 },

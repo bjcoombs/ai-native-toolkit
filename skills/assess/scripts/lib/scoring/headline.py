@@ -78,6 +78,7 @@ from lib.card_facts import blocking_gates, fully_in_place
 from lib.run.decline_markers import decline_badge
 from lib.scoring.level_result_types import Blocker, ConditionResult, DeclineRecord, Headline, LevelResult, TagCell
 from lib.scoring.level_tags import tag_cells
+from lib.scoring.gate_words import GATE_CHANGE, GATE_NOUN
 from lib.scoring.level_tally import NOT_APPLICABLE_REASONS, default_model, scan_not_applicable
 from lib.scoring.levels import MaturityModel, StepDef, condition_id
 from lib.scoring.step_reading import first_measured, next_unread, step_reading
@@ -99,21 +100,8 @@ __all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline"
 # heading anchor; exec_summary.py and assess_report.py read it from here.
 GLOSSARY_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md"
 
-# The change that holds each Step gate, as the Next line words it. A gate id the
-# table does not know (a caller's own model) reads "the <id> gate holds".
-GATE_CHANGE = {
-    "instructions": "an instruction file an agent reads is committed",
-    "ci_runs_tests": "CI turns red on a broken check",
-    "coverage_gate": "a coverage gate is enforced",
-}
-
-# Each Step gate as the one-line summary names it: the badge and the log.md entry.
-# A gate id the table does not know reads as itself.
-GATE_NOUN = {
-    "instructions": "instruction file",
-    "ci_runs_tests": "CI runs tests",
-    "coverage_gate": "coverage gate",
-}
+# The change that holds each Step gate (``GATE_CHANGE``, the Next line) and the gate as the
+# one-line summary names it (``GATE_NOUN``) live in ``lib/scoring/gate_words.py`` (#1641).
 
 # Reason codes as the coverage line words them; an unlisted code is shown with its
 # underscores as spaces.

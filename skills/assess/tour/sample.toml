@@ -29,6 +29,11 @@ message = "Run the tests in CI"
 paths = [".github/workflows/ci.yml"]
 
 [[commits]]
+date = "2026-09-18T10:00:00+00:00"
+message = "Lint, review and scan for secrets on every pull request"
+paths = [".github/workflows/lint.yml", ".github/workflows/review.yml", ".pre-commit-config.yaml"]
+
+[[commits]]
 date = "2026-09-22T10:00:00+00:00"
 message = "Add agent instructions"
 paths = ["AGENTS.md"]
@@ -264,6 +269,55 @@ jobs:
 '''
 
 [[file]]
+path = ".github/workflows/lint.yml"
+content = '''
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+'''
+
+[[file]]
+path = ".github/workflows/review.yml"
+content = '''
+name: Review
+
+on:
+  pull_request:
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          prompt: Review this pull request.
+'''
+
+[[file]]
+path = ".pre-commit-config.yaml"
+content = '''
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks
+'''
+
+[[file]]
 path = "AGENTS.md"
 content = '''
 # AGENTS.md
@@ -275,5 +329,5 @@ tally is a small command-line expense ledger. The code is in `src/tally/`, the t
 - Install: `pip install -e . pytest`
 - Test: `pytest`
 
-Run the tests before you open a pull request. Amounts are stored in pence as integers; never store a float.
+Run `python -m pytest` before you open a pull request. Python 3.11 is pinned in `pyproject.toml`. Amounts are stored in pence as integers; never store a float.
 '''

@@ -319,12 +319,14 @@ There is no layered score, no fraction and no band name anywhere in the report. 
 
 Each Step names the agent **autonomy** this repo's contracts support, in the vocabulary of the adoption ladder ([Steps of AI Adoption](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-), B. Cherny, 2026). Gates accumulate: each Step keeps the gates of the one below. A Step needs its gates and nothing else: no count of conditions moves it. The Step definitions live with the maturity model (`skills/assess/levels/default.toml`), so they are versioned.
 
-| Step | Contracts in place for | Gate added at this Step |
+| Step | Contracts in place for | Gates added at this Step |
 |------|------------------------|-------------------------|
 | 1 | Assisted: one supervised agent | none |
-| 2 | Supervised agent PRs | `instructions`: an instruction file an agent reads |
-| 3 | Unattended agent PRs | `ci_runs_tests`: CI runs the tests, unmasked |
-| 4 | Autonomous loops | `coverage_gate`: an enforced coverage gate |
+| 2 | Supervised agent changes | `instructions`: an instruction file that names the check an agent runs, with no failed claim, within 200 lines |
+| 3 | Unattended agent changes | `ci_runs_tests`: CI runs the tests, unmasked; `review`: review evidence; `linters`: CI runs a linter; `secrets_guard`: a configured secrets guard |
+| 4 | Autonomous loops | `coverage_gate`: an enforced coverage gate; `wide_review`: most merged changes reviewed and approved; `agent_permissions`: committed agent permissions; `boundaries`: a boundary or ownership map |
+
+A gate whose evidence the run could not read is not measured, never unmet: a run without `--platform` and with no committed AI review step reads "Step 2, Step 3 not measured".
 
 **This is a bound, not a claim about how the team actually works** - a Step 3 repo whose team reviews every diff by hand is operating below its bound; a Step 1 repo running unattended agents is operating beyond it (the risk the top card names). A Step is a capability unlocked, never a grade of the team.
 

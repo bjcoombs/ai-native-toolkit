@@ -1094,7 +1094,9 @@
           "guarded_by": null,
           "predicted": null,
           "review": null,
-          "step_gates": [],
+          "step_gates": [
+            "instructions"
+          ],
           "blocks": null,
           "grade": "declared",
           "counts": false,
@@ -1362,7 +1364,9 @@
           "guarded_by": null,
           "predicted": null,
           "review": null,
-          "step_gates": [],
+          "step_gates": [
+            "linters"
+          ],
           "blocks": null,
           "grade": "verified",
           "counts": true,
@@ -1465,7 +1469,9 @@
           "guarded_by": null,
           "predicted": null,
           "review": null,
-          "step_gates": [],
+          "step_gates": [
+            "boundaries"
+          ],
           "blocks": null,
           "grade": "config_only",
           "counts": false,
@@ -1720,7 +1726,10 @@
           "guarded_by": null,
           "predicted": null,
           "review": null,
-          "step_gates": [],
+          "step_gates": [
+            "review",
+            "wide_review"
+          ],
           "blocks": null,
           "grade": "declared",
           "counts": false,
@@ -1759,7 +1768,9 @@
           "guarded_by": null,
           "predicted": null,
           "review": null,
-          "step_gates": [],
+          "step_gates": [
+            "wide_review"
+          ],
           "blocks": null,
           "grade": "verified",
           "counts": true,
@@ -1823,7 +1834,9 @@
           "guarded_by": null,
           "predicted": null,
           "review": null,
-          "step_gates": [],
+          "step_gates": [
+            "agent_permissions"
+          ],
           "blocks": null,
           "grade": "config_only",
           "counts": false,
@@ -2061,7 +2074,9 @@
           "guarded_by": null,
           "predicted": null,
           "review": null,
-          "step_gates": [],
+          "step_gates": [
+            "secrets_guard"
+          ],
           "blocks": null,
           "grade": "config_only",
           "counts": false,
@@ -2617,16 +2632,18 @@
     },
     {
       "step": 2,
-      "name": "Supervised agent PRs",
+      "name": "Supervised agent changes",
       "gates": [
         {
           "id": "instructions",
           "row": "layer-0-instructions",
-          "level": 1,
+          "level": 2,
           "conditions": [
-            "layer-0-instructions.1"
+            "layer-0-instructions.1",
+            "layer-0-instructions.2"
           ],
           "tags": [
+            "docs",
             "agent_context"
           ]
         }
@@ -2637,16 +2654,18 @@
     },
     {
       "step": 3,
-      "name": "Unattended agent PRs",
+      "name": "Unattended agent changes",
       "gates": [
         {
           "id": "instructions",
           "row": "layer-0-instructions",
-          "level": 1,
+          "level": 2,
           "conditions": [
-            "layer-0-instructions.1"
+            "layer-0-instructions.1",
+            "layer-0-instructions.2"
           ],
           "tags": [
+            "docs",
             "agent_context"
           ]
         },
@@ -2660,10 +2679,46 @@
           "tags": [
             "behaviour"
           ]
+        },
+        {
+          "id": "review",
+          "row": "layer-7-review",
+          "level": 1,
+          "conditions": [
+            "layer-7-review.1"
+          ],
+          "tags": [
+            "governance"
+          ]
+        },
+        {
+          "id": "linters",
+          "row": "layer-3-linters",
+          "level": 1,
+          "conditions": [
+            "layer-3-linters.1"
+          ],
+          "tags": [
+            "structure"
+          ]
+        },
+        {
+          "id": "secrets_guard",
+          "row": "secrets-guard",
+          "level": 1,
+          "conditions": [
+            "secrets-guard.1"
+          ],
+          "tags": [
+            "governance"
+          ]
         }
       ],
       "added_gates": [
-        "ci_runs_tests"
+        "ci_runs_tests",
+        "review",
+        "linters",
+        "secrets_guard"
       ]
     },
     {
@@ -2673,11 +2728,13 @@
         {
           "id": "instructions",
           "row": "layer-0-instructions",
-          "level": 1,
+          "level": 2,
           "conditions": [
-            "layer-0-instructions.1"
+            "layer-0-instructions.1",
+            "layer-0-instructions.2"
           ],
           "tags": [
+            "docs",
             "agent_context"
           ]
         },
@@ -2690,6 +2747,39 @@
           ],
           "tags": [
             "behaviour"
+          ]
+        },
+        {
+          "id": "review",
+          "row": "layer-7-review",
+          "level": 1,
+          "conditions": [
+            "layer-7-review.1"
+          ],
+          "tags": [
+            "governance"
+          ]
+        },
+        {
+          "id": "linters",
+          "row": "layer-3-linters",
+          "level": 1,
+          "conditions": [
+            "layer-3-linters.1"
+          ],
+          "tags": [
+            "structure"
+          ]
+        },
+        {
+          "id": "secrets_guard",
+          "row": "secrets-guard",
+          "level": 1,
+          "conditions": [
+            "secrets-guard.1"
+          ],
+          "tags": [
+            "governance"
           ]
         },
         {
@@ -2702,10 +2792,47 @@
           "tags": [
             "behaviour"
           ]
+        },
+        {
+          "id": "wide_review",
+          "row": "layer-7-review",
+          "level": 2,
+          "conditions": [
+            "layer-7-review.1",
+            "layer-7-review.2"
+          ],
+          "tags": [
+            "governance"
+          ]
+        },
+        {
+          "id": "agent_permissions",
+          "row": "layer-8-agent-ops",
+          "level": 1,
+          "conditions": [
+            "layer-8-agent-ops.1"
+          ],
+          "tags": [
+            "governance"
+          ]
+        },
+        {
+          "id": "boundaries",
+          "row": "layer-4-architecture",
+          "level": 1,
+          "conditions": [
+            "layer-4-architecture.1"
+          ],
+          "tags": [
+            "structure"
+          ]
         }
       ],
       "added_gates": [
-        "coverage_gate"
+        "coverage_gate",
+        "wide_review",
+        "agent_permissions",
+        "boundaries"
       ]
     }
   ],

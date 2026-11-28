@@ -17,7 +17,7 @@ name = "Assisted"
 
 [[steps]]
 step = 2
-name = "Supervised agent PRs"
+name = "Supervised agent changes"
 gates = [{ id = "instructions", row = "instructions", level = 1 }]
 """
 

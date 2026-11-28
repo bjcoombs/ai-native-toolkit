@@ -46,8 +46,8 @@ ONE_CHANGE = "One change away"
 # What an agent can do at each Step, in one plain sentence: the one table of them.
 STEP_MEANING: dict[int, str] = {
     1: "an agent can read and help with your code",
-    2: "an agent opens pull requests, a person reviews each one",
-    3: "agents open pull requests nobody has to watch",
+    2: "an agent makes changes, and a person reviews each one",
+    3: "agents make changes nobody has to watch",
     4: "agents run longer loops on their own",
 }
 

@@ -1,6 +1,6 @@
 ## Where you are on the Steps
 
-In place: Step 3 of 4, Unattended agent PRs: agents open pull requests nobody has to watch.
+In place: Step 3 of 4, Unattended agent changes: agents make changes nobody has to watch.
 
 [![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
 

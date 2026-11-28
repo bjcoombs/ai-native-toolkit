@@ -108,7 +108,7 @@ unit = "acme/payments"  # a unit id in that view, or a repository id for "repo"
 step = 3                # a [[steps]] entry of the maturity model above Step 1
 ```
 
-A target names a Step (the default model's 2 Supervised agent PRs, 3 Unattended agent PRs
+A target names a Step (the default model's 2 Supervised agent changes, 3 Unattended agent changes
 and 4 Autonomous loops), one per unit and view. It needs `--levels` with `[[steps]]`. The
 run exits 2 before any scan on an unknown key or view, a `step` that is not a whole
 number from 2 to the top Step, a second target on one unit, a unit that is not in this

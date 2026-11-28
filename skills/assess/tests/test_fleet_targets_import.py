@@ -172,7 +172,7 @@ def test_cli_writes_the_one_valid_fixture_row_and_names_the_four_refusals(tmp_pa
     gate = '{{ id = "{0}", row = "{0}", level = 1 }}'.format
     three = f'gates = [{gate("instructions")}, {gate("ci")}]'
     four = STEP_LEVELS + row.format("ci") + row.format("cov") \
-        + f'\n[[steps]]\nstep = 3\nname = "Unattended agent PRs"\n{three}\n' \
+        + f'\n[[steps]]\nstep = 3\nname = "Unattended agent changes"\n{three}\n' \
         + f'\n[[steps]]\nstep = 4\nname = "Autonomous loops"\n{three[:-1]}, {gate("cov")}]\n'
     (tmp_path / "levels.toml").write_text(four, encoding="utf-8")
     assert cli.main(args) == 0

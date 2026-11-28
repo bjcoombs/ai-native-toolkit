@@ -24,6 +24,7 @@ Each file is built from what the repository already has, read by the existing de
 | `ci_runs_tests` | `.github/workflows/tests.yml`, or a `tests` job in `.gitlab-ci.yml` |
 | `coverage_gate` | `.github/workflows/coverage.yml`, or a `coverage` job, at 50 percent (pytest-cov, cargo-llvm-cov, c8) |
 | guardrail | `.claude/settings.json` with the deny rule, when no permission rule is committed |
+| any other gate (`review`, `linters`, `secrets_guard`, `wide_review`, `agent_permissions`, `boundaries`) | no file: the report names the gate's task as a manual step |
 
 It never overwrites a file. An existing one is reported as a conflict, with the text to add by hand. An existing `.gitlab-ci.yml` is left as it is: the job goes in `.gitlab/ci/<name>.yml` and the manual step is the `include:` line.
 
