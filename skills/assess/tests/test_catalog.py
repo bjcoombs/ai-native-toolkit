@@ -249,7 +249,8 @@ def test_every_condition_carries_its_frame_fields() -> None:
             assert level["id"] == f"{row['id']}.{level['level']}"
             assert level["truth"] == mlevel["truth"]
             hazard = level["id"] in HAZARDS
-            assert level["polarity"] == ("hazard" if hazard else "positive") and level["guarded_by"] is None
+            assert level["polarity"] == ("hazard" if hazard else "positive")
+            assert level["guarded_by"] == mlevel.get("guarded_by")  # repo-guards.1 is the first (#854)
             assert level["requires"] == mlevel.get("requires", [])
             assert level["grade"] == min((c["grade"] for c in level["criteria"]), key=GRADE_ORDER.index)
             assert level["counts"] is (counts(level["grade"]) and not hazard)
@@ -340,12 +341,14 @@ def test_markdown_tag_section_opens_on_its_own_line_and_degrades_honestly() -> N
     assert contracts[0] == "### Contracts" and contracts[1] == ""
     assert contracts[2].startswith("That generated output and its source agree")  # the tag's why
     assert contracts[4] == "Tag `contracts`. No condition carries this tag yet."
-    assert "No condition is guarded yet. No criterion compares two signals yet." in text
+    assert "- `repo-guards.1` is guarded by `repo-guard-tested.1`." in text  # #854
+    assert "No criterion compares two signals yet." in text
     model = load_default_levels()
     model.pop("steps")
     for row in model["rows"]:
         for lv in row["levels"]:
             lv.pop("requires", None)
+            lv.pop("guarded_by", None)
             lv["truth"] = lv["truth"][:1]
     bare = render_markdown(build_catalog(model=model))
     assert "The model defines no Steps" in bare and "No two tags share a condition yet." in bare
