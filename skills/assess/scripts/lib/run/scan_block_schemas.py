@@ -450,7 +450,8 @@ DELIVERY: JsonDict = {
         "approved_share": _share("changes approved by someone other than the author (copied "
                                  "from review_reality)"),
         "self_merged_share": _share("changes merged by their author (copied from "
-                                    "review_reality)"),
+                                    "review_reality); null also when a change has no author "
+                                    "or merger login"),
         "agent_authored_share": _share("changes an agent identity authored"),
         "sample_page_size": _field(
             {"type": ["integer", "null"]},
@@ -492,7 +493,8 @@ REVIEW_REALITY: JsonDict = {
         "approved_share": _share("changes approved by an account other than the author"),
         "bot_review_share": _share("changes with review-bot output (a GitHub comment by a bot "
                                    "other than github-actions, a GitLab AI-review note)"),
-        "self_merged_share": _share("changes merged by their author"),
+        "self_merged_share": _share("changes merged by their author; null also when a "
+                                    "change has no author or merger login (#1684)"),
         "review_required": _field({"type": ["boolean", "null"]},
                                   "Whether the default branch requires an approving review; "
                                   "null when the rules could not be read."),
@@ -530,7 +532,8 @@ REVIEW_REALITY: JsonDict = {
             "whose earliest approval by a person came after the merge (null on GitLab where no "
             "approval time is given)"),
         "self_merged_unapproved_count": _approvals(
-            "merged by their author without an approval by a person"),
+            "merged by their author without an approval by a person (unknown, so null, "
+            "when an unapproved change has no author or merger login, #1684)"),
         "bot_authored_count": _approvals("authored by a bot"),
     },
 }

@@ -347,3 +347,42 @@ def test_gitlab_approval_time_missing_reads_null() -> None:
     out = gitlab_counts([_mr()], [_approvals(("ben", None))], classifier)
     assert out["approved_after_merge_count"] is None
     assert out["independent_approval_count"] == 1
+
+
+# ---- a missing merger or author login is unknown, never "not self-merged" (#1684) ----
+
+def _without(pr: dict[str, Any], field: str) -> dict[str, Any]:
+    out = dict(pr)
+    out[field] = None
+    return out
+
+
+def test_missing_merger_reads_unknown_in_both_figures() -> None:
+    prs = [_pr(merger="ben"), _without(_pr(), "mergedBy")]
+    assert _counts(prs)["self_merged_unapproved_count"] is None
+    block = summarize(prs, True, FixedBots(), matcher=AuthorMatcher())
+    assert block["self_merged_share"] is None
+    assert block["self_merged_unapproved_count"] is None
+
+
+def test_missing_author_reads_unknown_in_both_figures() -> None:
+    prs = [_pr(merger="ann"), _without(_pr(), "author")]
+    assert _counts(prs)["self_merged_unapproved_count"] is None
+    block = summarize(prs, True, FixedBots(), matcher=AuthorMatcher())
+    assert block["self_merged_share"] is None
+
+
+def test_missing_merger_with_a_persons_approval_is_not_unapproved() -> None:
+    """Whoever merged it, a person approved it: the unapproved count stays known."""
+    prs = [_without(_pr(_review("cat")), "mergedBy"), _pr(merger="ann")]
+    assert _counts(prs)["self_merged_unapproved_count"] == 1
+    assert summarize(prs, True, FixedBots(), matcher=AuthorMatcher())["self_merged_share"] is None
+
+
+def test_gitlab_missing_merger_reads_unknown() -> None:
+    classifier = classifier_from_config(None)
+    mr = {"iid": 1, "author": {"username": "ann"}, "merged_at": MERGED}
+    out = gitlab_counts([mr, _mr(merger="ann")], [_approvals(), _approvals()], classifier)
+    assert out["self_merged_unapproved_count"] is None
+    approved = gitlab_counts([mr], [_approvals(("ben", BEFORE))], classifier)
+    assert approved["self_merged_unapproved_count"] == 0
