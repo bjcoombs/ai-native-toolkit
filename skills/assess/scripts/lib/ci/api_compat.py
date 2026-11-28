@@ -249,22 +249,48 @@ def _test_words(words: list[str]) -> list[str] | None:
     return words[1:] if words[:1] == ["test"] else None
 
 
+_COUNT_TEST = {("-ne", "0"): "pos", ("-eq", "0"): "neg", ("-lt", "1"): "neg", ("-le", "0"): "neg"}
+
+
+def _count_test(op: str, limit: str) -> str | None:
+    """The polarity of a line or byte count compared with a literal: ``-gt N`` and ``-ge N``
+    (N at least 1) succeed only on a non-empty report, even when a threshold lets a small one
+    pass (``-gt 5`` still goes red on a large break)."""
+    if limit.isdigit() and (op == "-gt" or (op == "-ge" and int(limit) >= 1)):
+        return "pos"
+    return _COUNT_TEST.get((op, limit))
+
+
 def _polarity(words: list[str]) -> str | None:
     """``"pos"`` when a command that reads apidiff's output succeeds on a non-empty report
-    (``[ -s out.txt ]``, ``[ -n "$out" ]``, ``grep -q . out.txt``), ``"neg"`` when it fails on one
-    (``[ ! -s out.txt ]``, ``[ -z "$out" ]``, ``diff``, ``cmp``), else None (``cat``: decides nothing)."""
+    (``[ -s out.txt ]``, ``[ -n "$out" ]``, ``[ $(wc -l < out.txt) -gt 0 ]``, ``grep -q . out.txt``),
+    ``"neg"`` when it fails on one (``[ ! -s out.txt ]``, ``[ -z "$out" ]``, ``diff``, ``cmp``), else
+    None (``cat``: decides nothing). A leading ``if`` is dropped, and each ``!`` (before the command
+    or inside the test) turns the polarity over: ``if ! [ -z "$(cat out.txt)" ]`` is ``"pos"``."""
+    words = words[1:] if words[:1] == ["if"] else words
+    negated = False
+    while words[:1] == ["!"]:
+        negated, words = not negated, words[1:]
     operands = _test_words(words)
     if operands is None:
         head = _name(words[0]) if words else ""
         flags = "".join(w[1:] for w in words[1:] if w.startswith("-") and not w.startswith("--"))
         if head == "grep" and "v" not in flags and "--invert-match" not in words:
-            return "pos"
-        return "neg" if head in ("diff", "cmp") else None
-    negated = operands[:1] == ["!"]
-    operands = operands[1:] if negated else operands
-    if len(operands) != 2 or operands[0] not in ("-s", "-n", "-z"):
-        return None
-    return "pos" if (operands[0] != "-z") != negated else "neg"
+            found: str | None = "pos"
+        else:
+            found = "neg" if head in ("diff", "cmp") else None
+    else:
+        while operands[:1] == ["!"]:
+            negated, operands = not negated, operands[1:]
+        if len(operands) == 2 and operands[0] in ("-s", "-n", "-z"):
+            found = "pos" if operands[0] != "-z" else "neg"
+        elif len(operands) >= 3:   # ``$(wc -l < f) -gt 0``: the redirect is not a word
+            found = _count_test(operands[-2], operands[-1])
+        else:
+            found = None
+    if found is None or not negated:
+        return found
+    return "neg" if found == "pos" else "pos"
 
 
 def _words(part: str) -> list[str]:
