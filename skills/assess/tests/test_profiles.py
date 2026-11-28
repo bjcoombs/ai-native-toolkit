@@ -162,6 +162,15 @@ def test_a_profile_row_reading_a_block_no_collector_produces_is_refused(tmp_path
         resolve("extra", None)
 
 
+def test_the_second_path_of_an_eq_signal_row_is_checked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    text = _extra().replace('criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "lte", value = 5 }]',
+                            'criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "eq", '
+                            'eq_signal = "change_ledger.stale_pct" }]')
+    _profiles_dir(tmp_path, monkeypatch, text)
+    with pytest.raises(ProfileError, match="row fresh-docs reads change_ledger, which no collector produces"):
+        resolve("extra", None)
+
+
 def test_the_collector_blocks_are_the_scan_names() -> None:
     from lib.profiles import collector_blocks
     from lib.scoring.level_signals import scan_names

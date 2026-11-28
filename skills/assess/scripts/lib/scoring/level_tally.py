@@ -690,10 +690,16 @@ def default_model() -> MaturityModel:
     return load_levels(DEFAULT_LEVELS)
 
 
+def row_blocks(row: Row) -> tuple[str, ...]:
+    """The blocks a row's criteria read (each signal's first segment, an ``eq_signal``
+    criterion's second path too), sorted."""
+    return tuple(sorted({path.split(".")[0] for level in row["levels"] for c in level["criteria"]
+                         for path in (c["signal"], *([c["eq_signal"]] if "eq_signal" in c else []))}))
+
+
 def model_blocks(model: MaturityModel) -> tuple[str, ...]:
-    """The blocks a model's criteria read (each signal's first segment), sorted."""
-    return tuple(sorted({c["signal"].split(".")[0] for row in model["rows"]
-                         for level in row["levels"] for c in level["criteria"]}))
+    """The blocks a model's criteria read (``row_blocks`` over every row), sorted."""
+    return tuple(sorted({block for row in model["rows"] for block in row_blocks(row)}))
 
 
 # The run-context blocks the default model's criteria read.

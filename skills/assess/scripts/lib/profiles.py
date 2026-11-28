@@ -13,8 +13,8 @@ A profile may hold rows the default model lacks (#1667); ``resolve`` checks two 
 every profile it loads (``check_profile``) and raises ``ProfileError`` naming what breaks
 one: each of its Steps is the default model's Step of the same number, unchanged, so a Step
 means the same under every profile; and each row reads only blocks some collector produces
-(``collector_blocks``, the names ``level_signals.scan_names`` reads), so a row is never not
-measured by construction. A row
+(``collector_blocks``, the names ``level_signals.scan_names`` reads; an ``eq_signal``
+criterion's second path too), so a row never reads a block that cannot exist. A row
 sharing a default row's id keeps that row's title and criteria, cut to fewer levels, so a
 profile never redefines a default practice (``tests/test_profiles.py``). The corpus rule
 (``references/scoring-model.md``) governs entry to the default model only; profile rows are
@@ -84,7 +84,7 @@ from lib.card_facts import CardFact
 from lib.scoring.headline import reason_word
 from lib.scoring.level_result_types import ConditionResult, LevelResult
 from lib.scoring.level_tally import DEFAULT_BLOCKS, PROFILE_BLOCKS, default_model, level_result, model_blocks, run_context_level
-from lib.scoring.level_tally import run_exclusions
+from lib.scoring.level_tally import row_blocks, run_exclusions
 from lib.scoring.levels import LevelsError, MaturityModel, PathValidator, Row, load_levels
 from lib.pack_layering import layer_packs, pack_sources, row_source
 from lib.packs import SIGNAL_PREFIX as PACK_BLOCK
@@ -214,7 +214,7 @@ def check_profile(name: str, model: MaturityModel) -> None:
                                f"{step['step']}; a profile keeps the default Steps unchanged")
     produced = collector_blocks()
     for row in model["rows"]:
-        unknown = sorted({c["signal"].split(".")[0] for level in row["levels"] for c in level["criteria"]} - produced)
+        unknown = sorted(set(row_blocks(row)) - produced)
         if unknown:
             raise ProfileError(f"profile {name}: row {row['id']} reads {', '.join(unknown)}, which no "
                                "collector produces")
