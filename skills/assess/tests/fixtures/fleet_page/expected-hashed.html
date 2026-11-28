@@ -58,6 +58,18 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
     return v ? v.units : [];
   }
   function unitOf(bundle, view, key) { return units(bundle, view).filter(function (u) { return u.key === key; })[0]; }
+  function outLink(url, text) {
+    // A link to another artifact of a sharded fleet (#950): the plan writes only claude.ai URLs.
+    if (!url || url.indexOf("https://claude.ai/") !== 0) { return esc(text) + " <span class=\"muted\">(not published yet)</span>"; }
+    return "<a href=\"" + esc(url) + "\" target=\"_blank\" rel=\"noopener\">" + esc(text) + "</a>";
+  }
+  function elsewhere(bundle, state) {
+    var sh = bundle.shard, mine = sh && state.view === "system" ? sh.elsewhere[state.unit] : null;
+    if (!mine || !mine.length) { return ""; }
+    return "<p>This page shows only this shard's repositories of the system. In other shards: " + mine.map(function (e) {
+      return outLink(e.url, e.unit) + " " + esc("(" + repos(e.repos) + ")");
+    }).join(", ") + ".</p>";
+  }
   function root(bundle, view) { return units(bundle, view).filter(function (u) { return !u.parent; })[0]; }
   function byKey(a, b) { return a.key < b.key ? -1 : a.key > b.key ? 1 : 0; }
   function children(bundle, view, key) {
@@ -217,9 +229,11 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
   function drill(bundle, state) {
     var trail = [], key = state.unit;
     while (key) { trail.unshift(key); var u = unitOf(bundle, state.view, key); key = u ? u.parent : null; }
-    var out = "<h2>Drill-down</h2><nav class=\"crumbs\">" + trail.map(function (k) {
+    var first = bundle.shard ? outLink(bundle.shard.index_url, "Fleet index") + "<span class=\"sep\">›</span>" : "";
+    var out = "<h2>Drill-down</h2><nav class=\"crumbs\">" + first + trail.map(function (k) {
       return "<button class=\"link\" data-unit=\"" + esc(k) + "\">" + esc(k) + "</button>";
     }).join("<span class=\"sep\">›</span>") + (state.repo ? "<span class=\"sep\">›</span>" + esc(state.repo) : "") + "</nav>";
+    out += elsewhere(bundle, state);
     var kids = children(bundle, state.view, state.unit);
     if (kids.length) {
       out += "<p>Units below:</p><ul>" + kids.map(function (u) {
@@ -411,7 +425,9 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
     var u = unitOf(bundle, state.view, state.unit);
     var head = "<h1>Fleet view</h1><p class=\"muted\">Run of " + esc(bundle.scan_date) + ". Every number here comes "
       + "from the run's own files; nothing is worked out in the page.</p><p>Showing <strong>" + esc(u.key)
-      + "</strong> (" + esc(u.kind) + ") <button class=\"pin\" data-act=\"pin\">Open on this unit next time</button></p>";
+      + "</strong> (" + esc(u.kind) + ") <button class=\"pin\" data-act=\"pin\">Open on this unit next time</button></p>"
+      + (bundle.shard ? "<p class=\"muted\">One page of a sharded fleet: " + esc(bundle.shard.label) + ". "
+        + outLink(bundle.shard.index_url, "Fleet index") + " lists every page.</p>" : "");
     return head + SECTIONS.map(function (f) { return f(bundle, state, targets, canSet, extra); }).join("");
   }
   function readPin(bundle) {
@@ -429,7 +445,8 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
   }
   function start(app, source) {
     source.load().then(function (bundle) {
-      var r = root(bundle, "ownership") || bundle.views[0].units[0];
+      var top = bundle.shard && bundle.shard.unit ? unitOf(bundle, "ownership", bundle.shard.unit) : null;
+      var r = top || root(bundle, "ownership") || bundle.views[0].units[0];
       var state = readPin(bundle) || {view: "ownership", unit: r.key, repo: null};
       var targets = bundle.targets;
       var canSet = false, extra = {history: {}};

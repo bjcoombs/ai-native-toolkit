@@ -345,11 +345,22 @@ step runs in a signed-in session with the `Artifact` and `ArtifactData` tools. D
    with `ArtifactData` `list`, paging with `cursor`. Save each as a JSON list of
    `{doc_id, version, data}` in one folder, named `<collection>.json`. Save any other collection
    you find too: the planner reports its documents as strays.
-4. **Plan.** Run the planner. It refuses a mode the user did not ask for, a run that does not fit
-   one artifact (#950 shards it) and a changed republish of a run id.
+4. **Plan.** Run the planner with `--org-dir`. It refuses a mode the user did not ask for and a
+   changed republish of a run id. A run over one artifact's limits is planned as one artifact per
+   top-level unit plus an index; then follow [Sharded fleets](references/publish.md#sharded-fleets)
+   instead of steps 5 to 7. Without `--org-dir` such a run is refused.
 
    ```bash
-   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" plan out --exports exports [--allow-names]
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" plan out --exports exports --org-dir "<history>/<org>" [--allow-names]
+   ```
+
+   For a sharded fleet, first list its artifacts, export each recorded shard's collections into
+   `exports/<folder>/`, and after publishing record each new URL. Before replanning to relink the
+   pages, export every shard `shards` now lists with a URL, the ones just published included:
+
+   ```bash
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" shards out "<history>/<org>"
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" record-shard "<history>/<org>" out --url URL (--index | --shard FOLDER)
    ```
 
 5. **Publish the page.** Load the `artifact-capabilities` skill first. Publish
@@ -366,7 +377,7 @@ step runs in a signed-in session with the `Artifact` and `ArtifactData` tools. D
    ```
 
 8. **Before the next run,** if the page allows targets: list the `targets` collection to a JSON
-   file, run `fleet_targets_import.py` ([publish.md](references/publish.md#targets-read-back)),
+   file (one file per shard for a sharded fleet, all passed to one call), run `fleet_targets_import.py` ([publish.md](references/publish.md#targets-read-back)),
    and pass the file to `fleet.py --targets`.
 <!-- chat-skip:end -->
 

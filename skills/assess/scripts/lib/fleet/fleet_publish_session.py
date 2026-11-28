@@ -41,7 +41,8 @@ which needs no ``user`` declaration, and it records no viewer id.
 ``plan.json`` (the run id, mode, contract, size report and batch files) and ``page.html``
 (``fleet-view.html`` with the live data source, ``fleet_page_live.py``). The same inputs give
 the same bytes. A plan that does not fit one artifact writes no batch and removes an earlier
-plan's batches, so nothing oversized is left to send. ``record_url`` keeps the artifact's URL in the fleet's history directory
+plan's batches, so nothing oversized is left to send. ``write_plan_to`` writes the same files into any folder: a sharded
+fleet writes one set per shard (#950, ``lib/fleet/fleet_publish_shards.py``). ``record_url`` keeps the artifact's URL in the fleet's history directory
 (``<history>/<org>/publish.json``) so a later run publishes to the same artifact;
 ``recorded_url`` reads it back. A ``publish.json`` that is not ``{url, runs}`` is refused, never
 overwritten.
@@ -247,7 +248,11 @@ def dumps(value: object) -> str:
 
 def write_plan(out: Path, summary: PlanSummary, batches: Sequence[Sequence[PinnedWrite]], page: str) -> Path:
     """Write ``<out>/publish/`` (see the module docstring), replacing an earlier plan's files."""
-    folder = out / PUBLISH_DIR
+    return write_plan_to(out / PUBLISH_DIR, summary, batches, page)
+
+
+def write_plan_to(folder: Path, summary: PlanSummary, batches: Sequence[Sequence[PinnedWrite]], page: str) -> Path:
+    """Write one artifact's plan files into ``folder`` (a sharded plan writes one per shard, #950)."""
     folder.mkdir(parents=True, exist_ok=True)
     for stale in folder.glob("batch-*.json"):
         stale.unlink()

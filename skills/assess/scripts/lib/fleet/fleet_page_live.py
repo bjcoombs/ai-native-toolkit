@@ -35,8 +35,15 @@ contract 0.2.96 (``claude.use``; ``null`` means absent):
   so every id the bundle carries is one the page writes), so page input cannot widen what is written.
 - ``history(docId)`` reads ``units/<docId>`` once and returns each published run's lowest Step.
 
+**A shard's page** (#950, ``shard``, a ``fleet_shard.ShardView``): the bundle is cut to the units
+and repositories the shard shows, by page label (``shard_bundle``), with the achievements, targets
+and Recount lines about them; the fleet-wide front screen and pictures are left out, since they
+describe every shard. It gains ``shard``: the shard's label and top-level unit, the index URL
+(the breadcrumb's first link) and, per system unit it shows, the system's repositories in other
+shards with each shard's URL. A URL that is not ``https://claude.ai/`` is written as null.
+
 Deterministic: the same page, bundle and mode give the same bytes. `live_page(page, data, mode,
-run_id)` -> str. Tests: `tests/test_fleet_publish_session.py`.
+run_id, shard=None)` -> str. Tests: `tests/test_fleet_publish_session.py`.
 """
 from __future__ import annotations
 
@@ -48,6 +55,8 @@ from typing import Any, Final, cast
 from lib.fleet.fleet_page import embed
 from lib.fleet.fleet_page_data import COUNTS_ONLY, PageBundle, labels
 from lib.fleet.fleet_publish import PublishError, doc_id
+from lib.fleet.fleet_shard import ShardView
+from lib.fleet.fleet_shard_index import URL_PREFIX
 from lib.fleet.fleet_targets_import import target_doc_id
 
 TARGET_VIEWS: Final = ("ownership", "system")
@@ -174,12 +183,37 @@ def live_bundle(bundle: dict[str, Any], data: Mapping[str, Any], mode: str, run_
     return out
 
 
-def live_page(page: str, data: Mapping[str, Any], mode: str, run_id: str) -> str:
-    """The published page: ``page`` (``fleet-view.html``) with the live bundle and source."""
+def shard_bundle(bundle: dict[str, Any], shard: ShardView) -> dict[str, Any]:
+    """The page bundle cut to one shard (see the module docstring)."""
+    out: dict[str, Any] = json.loads(json.dumps(bundle))
+    units = {v: set(labels) for v, labels in shard["units"].items()}
+    repos = set(shard["repos"])
+    for view in out["views"]:
+        view["units"] = [u for u in view["units"] if u["key"] in units.get(view["view"], set())]
+    out["repos"] = [r for r in out["repos"] if r["key"] in repos]
+    shown = repos | {k for keys in units.values() for k in keys}
+    out["achievements"] = [a for a in out["achievements"] if a["unit"] in shown]
+    out["targets"] = [t for t in out["targets"] if t["unit"] in units.get(t["view"], set())]
+    if out.get("recount"):
+        out["recount"]["lines"] = [line for line in out["recount"]["lines"] if line["repo"] in repos]
+    out["front"], out["pictures"] = None, []  # fleet-wide: the shard page shows its own unit only
+    index = shard["index_url"]
+    out["shard"] = {"unit": shard["unit"], "label": shard["label"],
+                    "index_url": index if index and index.startswith(URL_PREFIX) else None,
+                    "elsewhere": {k: [{**e, "url": e["url"] if e["url"] and e["url"].startswith(URL_PREFIX) else None}
+                                      for e in v] for k, v in shard["elsewhere"].items()}}
+    return out
+
+
+def live_page(page: str, data: Mapping[str, Any], mode: str, run_id: str, shard: ShardView | None = None) -> str:
+    """The published page: ``page`` (``fleet-view.html``) with the live bundle and source, cut to
+    ``shard`` when the fleet is sharded."""
     found = _BUNDLE.search(page)
     if found is None:
         raise PublishError("fleet-view.html holds no embedded bundle: rerun /fleet with --levels")
     bundle = json.loads(found.group(2))
+    if shard is not None:
+        bundle = shard_bundle(bundle, shard)
     script = LIVE_SCRIPT % {"re": json.dumps(TARGET_ID_RE)}
     body = found.group(1) + embed(cast(PageBundle, live_bundle(bundle, data, mode, run_id))) + found.group(3)
     return page[:found.start()] + body + f"\n<script>{script}</script>" + page[found.end():]

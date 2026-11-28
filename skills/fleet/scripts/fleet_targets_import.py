@@ -5,9 +5,11 @@ The ``/fleet`` session exports the artifact database's ``targets`` collection to
 writes is what ``fleet.py --targets`` reads. No network call and no model call: the rows are
 viewer-written, so each is validated as untrusted input and refused with a named reason.
 
-    fleet_targets_import.py EXPORT --fleet-data FILE --levels FILE --out FILE
+    fleet_targets_import.py EXPORT [EXPORT ...] --fleet-data FILE --levels FILE --out FILE
 
-EXPORT is the JSON list of ``targets`` rows; ``--fleet-data`` the ``fleet-data.json`` of the
+EXPORT is the JSON list of ``targets`` rows. A sharded fleet (#950) passes one export per shard;
+their rows are read as one list, in the order given, so the rows are numbered across the
+exports and a unit targeted in two shards is refused as a duplicate; ``--fleet-data`` the ``fleet-data.json`` of the
 run the page shows (it names the units a row may target); ``--levels`` the maturity model
 with ``[[steps]]`` the next run uses. The targets file is always rewritten, sorted and
 byte-stable. Each refusal goes to stderr as ``row N: <reason>``; the reasons and the row
@@ -47,7 +49,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Turn an export of the fleet artifact's targets rows into a fleet.py --targets file.",
     )
-    parser.add_argument("export", help="The exported targets rows (a JSON list).")
+    parser.add_argument("export", nargs="+", help="The exported targets rows (a JSON list), one per shard.")
     parser.add_argument("--fleet-data", required=True, metavar="FILE",
                         help="fleet-data.json of the run the page shows.")
     parser.add_argument("--levels", required=True, metavar="FILE",
@@ -68,7 +70,13 @@ def main(argv: list[str] | None = None) -> int:
     result: ImportResult | None = None
     try:
         model = load_levels(Path(args.levels))
-        rows = _json(args.export, "the export")
+        rows: object = []
+        for export in args.export:
+            found = _json(export, "the export")
+            if not isinstance(found, list):
+                rows = found  # import_rows refuses it
+                break
+            rows = [*rows, *found]  # type: ignore[misc]
         bundle = _json(args.fleet_data, "--fleet-data")
         if not isinstance(bundle, dict) or not isinstance(bundle.get("views"), list) \
                 or not isinstance(bundle.get("repos"), list):
