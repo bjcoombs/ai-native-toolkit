@@ -56,6 +56,14 @@
       },
       "revision": 1
     },
+    "core.ai_governance": {
+      "repos": {
+        "grpa/sub/deep/svc2": "32c077ec246cb21e3f568f26a8c7d52e94d5f4014b2fada02bac3b72d1b982b5",
+        "grpa/svc1": "32c077ec246cb21e3f568f26a8c7d52e94d5f4014b2fada02bac3b72d1b982b5",
+        "grpb/lib1": "32c077ec246cb21e3f568f26a8c7d52e94d5f4014b2fada02bac3b72d1b982b5"
+      },
+      "revision": 1
+    },
     "core.ai_usage": {
       "repos": {
         "grpa/sub/deep/svc2": "b36398377443b45c820830d521ecfb788ef83e372cdedcfddde2cb43497bcd12",
@@ -278,7 +286,7 @@
         "grpa/svc1": "8f9c4ede431563c5cdfa00c7920746ec2c4153391782f4abf8f260d37dcf488b",
         "grpb/lib1": "8f9c4ede431563c5cdfa00c7920746ec2c4153391782f4abf8f260d37dcf488b"
       },
-      "revision": 2
+      "revision": 3
     },
     "core.promissory_markers": {
       "repos": {

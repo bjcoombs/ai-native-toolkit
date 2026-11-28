@@ -372,6 +372,17 @@
 #   .mvn/maven.config, a reactor pom, or a script, recipe, action or pom a CI step leads to,
 #   through the shared CI-step follower). With no CI file and no root pom it is unknown
 #   (no_ci_files). Both graded measured (head_structure), read from the committed files.
+# - AI governance (lib/ai_governance.py, #851). ai-policy-enforced reads ai_governance.enforced:
+#   a GitHub Actions workflow on pull_request or pull_request_target reads the pull request
+#   body or the commit trailers, names an AI disclosure or attribution marker, and fails the
+#   run or labels the pull request (in its own text, a local action, or a script one of its
+#   lines runs). With no workflow on pull requests it is unknown (no_pr_workflows). Graded
+#   measured (head_structure). ai-policy-declared reads ai_governance.policy_declared: an
+#   AI_POLICY.md at the root, in .github/ or in docs/, or a pull request template checkbox whose
+#   own line names AI and disclosure wording. Graded declared (head_text): listed, never
+#   counted. A Copilot instruction file that declines Copilot review for the whole repository
+#   is not a row: it is a decline record (owner_exclusions.declines, source copilot_opt_out)
+#   shown as a DECLINED badge that sets no condition aside. Neither row gates a Step.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does
@@ -788,6 +799,28 @@ aggregation = "min"
     { signal = "contributor_files.guide.present", op = "eq", value = true },
     { signal = "contributor_files.policy.present", op = "eq", value = true },
   ]
+
+[[rows]]
+id = "ai-policy-enforced"
+title = "AI policy enforced on pull requests"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["governance"]
+  criteria = [{ signal = "ai_governance.enforced", op = "eq", value = true }]
+
+[[rows]]
+id = "ai-policy-declared"
+title = "AI policy declared"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["governance"]
+  criteria = [{ signal = "ai_governance.policy_declared", op = "eq", value = true }]
 
 [[rows]]
 id = "skill-library"

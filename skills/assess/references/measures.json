@@ -311,6 +311,96 @@
       ]
     },
     {
+      "id": "ai-policy-declared",
+      "title": "AI policy declared",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "ai-policy-declared.1",
+          "truth": [
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "declared",
+          "counts": false,
+          "criteria": [
+            {
+              "key": "ai-policy-declared.1:ai_governance.policy_declared",
+              "signal": "ai_governance.policy_declared",
+              "producer": {
+                "scan": "ai_governance",
+                "collector": "core.ai_governance"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "An AI policy file or disclosure checkbox is committed: is true",
+              "title": "AI policy declared",
+              "fix": "Commit an AI_POLICY.md at the root, in .github/ or in docs/. Or add a template checkbox that asks the author to disclose AI assistance. Then enforce it with a workflow that reads the disclosure.",
+              "why": "A written policy tells contributors and agents what the project expects of AI-assisted work. It is listed, not counted: a file or a checkbox asks for the practice, and only a check that reads it shows the practice holds.",
+              "why_source": "",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ai-policy-enforced",
+      "title": "AI policy enforced on pull requests",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "ai-policy-enforced.1",
+          "truth": [
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "ai-policy-enforced.1:ai_governance.enforced",
+              "signal": "ai_governance.enforced",
+              "producer": {
+                "scan": "ai_governance",
+                "collector": "core.ai_governance"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A pull request workflow enforces AI disclosure: is true",
+              "title": "AI policy enforced on pull requests",
+              "fix": "Add a workflow on pull_request that reads the pull request body or the commit trailers for the disclosure your policy asks for. Have it turn the check red or add a label when the disclosure is absent or a banned marker is present.",
+              "why": "An agent follows the rules a check holds it to. A workflow that reads each pull request for AI disclosure or attribution, and turns the check red or labels on it, applies the policy to every change, an agent's included, without a reviewer having to remember it.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "ci-skip-label",
       "title": "A label skips every CI check",
       "scope": "team",
@@ -2010,6 +2100,8 @@
       "conditions": [
         "agent-job-write-access.1",
         "agent-least-privilege.1",
+        "ai-policy-declared.1",
+        "ai-policy-enforced.1",
         "layer-7-review.1",
         "layer-7-review.2",
         "layer-8-agent-ops.1",
@@ -2019,6 +2111,8 @@
         "skill-personal-data.1"
       ],
       "listed": [
+        "ai-policy-declared.1",
+        "ai-policy-enforced.1",
         "layer-7-review.1",
         "layer-7-review.2",
         "layer-8-agent-ops.1",
@@ -2678,6 +2772,65 @@
         "unclassified"
       ],
       "why": "No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.",
+      "why_source": ""
+    },
+    {
+      "name": "ai_governance",
+      "title": "AI governance",
+      "summary": "Whether a workflow on pull requests reads the body or commit trailers for AI disclosure, then turns the check red or adds a label. It also lists an AI_POLICY.md at a fixed path and template checkboxes that ask for AI disclosure. It lists Copilot instruction files that decline Copilot review for the whole repository.",
+      "collector": "core.ai_governance",
+      "reads": [
+        "repo_root"
+      ],
+      "headless_reads": null,
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "ai_governance.enforced_reason": "token",
+          "ai_governance.enforcing_workflows": "path",
+          "ai_governance.opt_out_files": "path",
+          "ai_governance.policy_files": "path",
+          "ai_governance.template_files": "path"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "ai-policy-declared",
+          "ai-policy-enforced"
+        ],
+        "conditions": [
+          "ai-policy-declared.1:ai_governance.policy_declared",
+          "ai-policy-enforced.1:ai_governance.enforced"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "no_pr_workflows",
+          "means": "No GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it.",
+          "next_step": "Nothing to change: this reads as not measured until a workflow runs on pull requests."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "ai_governance.enforced",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
+        {
+          "signal": "ai_governance.policy_declared",
+          "input_class": "head_text",
+          "grade": "declared"
+        }
+      ],
+      "grades": [
+        "declared",
+        "measured"
+      ],
+      "why": "A policy on AI contributions holds only when something checks it. A workflow that reads each pull request for disclosure turns the policy into a rule an agent meets on every change; a policy file or a checkbox alone asks for it and checks nothing.",
       "why_source": ""
     },
     {
@@ -4502,7 +4655,7 @@
     {
       "name": "owner_exclusions",
       "title": "Owner exclusions",
-      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined.",
+      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which is shown and declines no condition.",
       "collector": "core.owner_exclusions",
       "reads": [
         "repo_root"
@@ -5707,6 +5860,18 @@
       "private": false
     },
     {
+      "name": "ai_governance",
+      "title": "AI governance",
+      "publishes": [
+        "ai_governance"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "ai_usage",
       "title": "AI-assisted change share",
       "publishes": [
@@ -6404,6 +6569,7 @@
         "agent_consistency",
         "agent_environment",
         "agent_ops",
+        "ai_governance",
         "ci_checks",
         "ci_hazards",
         "ci_model_jobs",
@@ -6995,6 +7161,7 @@
         "agent_consistency",
         "agent_environment",
         "agent_ops",
+        "ai_governance",
         "ci_checks",
         "ci_hazards",
         "ci_model_jobs",
@@ -7188,6 +7355,24 @@
       "input_class": "config_text",
       "grade": "config_only",
       "null_means": "the repository lists no permission entry and a managed settings source on the machine running the check could not be read (managed_settings_unreadable)"
+    },
+    {
+      "path": "ai_governance.enforced",
+      "title": "A pull request workflow enforces AI disclosure",
+      "type": "bool",
+      "collector": "core.ai_governance",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_pr_workflows: no GitHub Actions workflow runs on pull requests"
+    },
+    {
+      "path": "ai_governance.policy_declared",
+      "title": "An AI policy file or disclosure checkbox is committed",
+      "type": "bool",
+      "collector": "core.ai_governance",
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": ""
     },
     {
       "path": "backlog_ready.close_open_met",
