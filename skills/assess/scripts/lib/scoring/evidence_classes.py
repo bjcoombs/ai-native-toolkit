@@ -6,8 +6,8 @@ Three evidence classes (issue #1344, requirement 1) say what kind of evidence a 
   ``config_text``, ``head_text``, ``head_structure``, ``git_history`` and ``ci_executed``.
   ``ci_executed`` reads a CI file that CI runs on every change; the scan reads the file, not a
   run's outcome, so it is static evidence however strong its grade;
-- ``runtime``: the output of running the code (CI and build outcomes): ``execution_artifact``,
-  such as the opt-in mutation run;
+- ``runtime``: the output of running the code: today only ``execution_artifact``, such as the
+  opt-in mutation run, since no input class reads a CI outcome;
 - ``practice``: how the team works, read from GitHub or GitLab: ``platform`` (review and
   issue data).
 
