@@ -5,7 +5,7 @@
 id = "core.agent_ops"
 kind = "collector"
 title = "Agent-operations guardrails"
-summary = "Committed permission allowlists, hooks, sandbox rules and routines, read from the settings and hook files of Claude Code, Gemini CLI, Cursor, Copilot (.github/hooks) and VS Code auto-approve as one set. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job. Whether an agent job that can write files can rewrite an instruction file or its own workflow with no CODEOWNERS owner on it."
+summary = "Committed permission allowlists, hooks, sandbox rules and routines. Claude Code, Gemini CLI, Cursor, Copilot and VS Code settings and hook files count as one set. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job. Whether an agent job that can write files can rewrite an instruction file or its own workflow with no CODEOWNERS owner on it."
 issues = [815, 847, 849, 858, 846]
 callable = "lib.agents.agent_ops:scan_agent_ops"
 publishes = ["agent_ops"]

@@ -2952,7 +2952,7 @@
     {
       "name": "agent_ops",
       "title": "Agent-operations guardrails",
-      "summary": "Committed permission allowlists, hooks, sandbox rules and routines, read from the settings and hook files of Claude Code, Gemini CLI, Cursor, Copilot (.github/hooks) and VS Code auto-approve as one set. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job. Whether an agent job that can write files can rewrite an instruction file or its own workflow with no CODEOWNERS owner on it.",
+      "summary": "Committed permission allowlists, hooks, sandbox rules and routines. Claude Code, Gemini CLI, Cursor, Copilot and VS Code settings and hook files count as one set. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job. Whether an agent job that can write files can rewrite an instruction file or its own workflow with no CODEOWNERS owner on it.",
       "collector": "core.agent_ops",
       "reads": [
         "repo_root",
@@ -5031,7 +5031,7 @@
     {
       "name": "owner_exclusions",
       "title": "Owner exclusions",
-      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which is shown and declines no condition, and a record of tracked hook files with a .disabled suffix, which declines the hook condition while no live hook counts.",
+      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which is shown and declines no condition. A tracked hook file with a .disabled suffix declines the hook condition while no live hook counts.",
       "collector": "core.owner_exclusions",
       "reads": [
         "repo_root"
