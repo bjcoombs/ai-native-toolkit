@@ -526,7 +526,7 @@ SCRIPT = r"""
   function packs(bundle) {
     if (!bundle.packs || !bundle.packs.length) { return ""; }
     return "<h2>Practice packs</h2><p class=\"muted\">Each pack applied to every repository. A repository where a "
-      + "pack check could not be read counts as not measured, never as not met.</p>" + bundle.packs.map(function (p) {
+      + "pack check could not be read is left out of the measured count, never counted as not met.</p>" + bundle.packs.map(function (p) {
         var head = "<h3>Pack " + esc(p.name) + " (version " + esc(p.version) + ")</h3>";
         if (!p.practices.length) { return head + "<p>This pack adds checks only, no practice to score.</p>"; }
         return head + "<ul>" + p.practices.map(function (q) {

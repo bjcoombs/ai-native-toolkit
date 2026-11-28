@@ -17,6 +17,7 @@ import pytest
 
 import fleet_page_fixture as fx
 from lib.fleet import fleet_step_movement as movement
+from lib.fleet.fleet_page_data import page_bundle
 from test_fleet_page import NODE, RUNNER, _parts, _text
 
 # An issue or pull request number: ``#`` and digits, not part of a word or an entity (``&#160;``)
@@ -96,3 +97,22 @@ def test_every_not_measured_reading_names_how_to_confirm_it(name: str) -> None:
     assert sections and titles  # the fixture fleet has a not-measured cell and a failed scan
     for title in titles:
         assert CONFIRM in title, title
+
+
+@pytest.mark.parametrize("unread", [0, 1])
+def test_the_packs_section_carries_the_note_only_when_a_pack_check_was_not_measured(unread: int) -> None:
+    """A fully read pack run shows no not-measured reading, so its section carries no note."""
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    script, bundle = _parts(fx.goldens()["expected-counts-only.html"])
+    roll = [{"name": "team", "version": "1", "sha256": "a" * 64, "repos": 3, "practices": [
+        {"condition": "team-adrs.1", "row": "team-adrs", "title": "Decision records", "level": 1,
+         "met": 1, "measured": 3 - unread, "not_measured": unread}]}]
+    bundle["packs"] = page_bundle({"run": {}, "views": [], "repos": [], "packs": roll}, None,
+                                  {"version": "x", "rows": []})["packs"]
+    runner = (RUNNER.split("const out")[0] + "process.stdout.write(api.renderPage(b, {view: b.views[0].view, "
+              "unit: b.views[0].units[0].key, repo: null}, b.targets, false));")
+    page = subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
+    packs = page.split("<h2>Practice packs</h2>")[1].split("<h2>")[0]
+    assert (CONFIRM in packs) == bool(unread)
