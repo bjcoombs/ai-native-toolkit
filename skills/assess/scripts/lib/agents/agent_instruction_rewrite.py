@@ -25,8 +25,8 @@ next run follows text no reviewer approved (#826, hazard H2). The hazard reads t
   that does not parse raises the hazard for that job (fail closed, #1602): its imports are
   unknown, so they are never read as owned. Each such file is named (#1608), so a repository
   that owns every path learns why it is still held. An imported file that opens with a ``---``
-  rule and never closes it has no frontmatter, as GitHub reads it; the job's own source does
-  not get that reading.
+  rule and never closes it reads as one with no frontmatter (``import_frontmatter``); it is
+  still a path at risk. The job's own source does not get that reading.
 - **Guard.** A committed CODEOWNERS (``.github/``, then the root, then ``docs/``: the first
   GitHub finds, ``CODEOWNERS_ORDER``)
   whose last matching line names an owner (``lib.docs.ownership_parser.codeowned``). The job
@@ -81,8 +81,10 @@ def frontmatter(text: str) -> str | None:
 def import_frontmatter(text: str) -> str | None:
     """``frontmatter`` for the agent job's own gh-aw source: an opening ``---`` with no closing
     one raises ``YamlError``, so ``local_reach`` fails closed where the other readers skip the
-    file. An imported file reads through ``frontmatter``: GitHub reads a shared ``.md`` that
-    opens with a ``---`` rule and never closes it as one with no frontmatter (#1608)."""
+    file. An imported file reads through ``frontmatter``, so a ``---`` rule that never closes
+    is no frontmatter (#1608). That is safe whichever way gh-aw reads such a file: the file
+    itself stays a path at risk that must be owned, and only imports gh-aw would not follow
+    (or a file it would reject) go unread."""
     front = frontmatter(text)
     if front is None and [line.strip() for line in text.lstrip("\ufeff").splitlines()[:1]] == ["---"]:
         raise YamlError(UNPARSABLE)
