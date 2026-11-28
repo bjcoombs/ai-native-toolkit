@@ -26,13 +26,20 @@ A command invokes a tool when, past a launcher (`uv run`, `npx --yes`, `pnpm exe
 
 | Token | Command |
 |---|---|
-| `apidiff` | `apidiff ...`, or `go run <path>/apidiff[@v]` |
+| `apidiff` | `apidiff ...`, or `go run <path>/apidiff[@v]`, in a job, script or recipe that re-raises (below) |
 | `api-extractor` | `api-extractor run` without `--local` / `-l` (which rewrites the report instead of stopping) |
 | `griffe` | `griffe check` |
-| `cargo-semver-checks` | `cargo semver-checks`, `cargo-semver-checks` |
-| `buf-breaking` | `buf breaking` |
-| `japicmp` | `japicmp`, `java -jar <...japicmp...>.jar`, a Maven `japicmp-maven-plugin` goal or a Gradle `japicmp` plugin the asked task reaches |
+| `cargo-semver-checks` | `cargo semver-checks`, `cargo-semver-checks`, a step that `uses: obi1kenobi/cargo-semver-checks-action` |
+| `buf-breaking` | `buf breaking`, a step that `uses: bufbuild/buf-breaking-action` |
+| `japicmp` | `japicmp` or `java -jar <...japicmp...>.jar` with an `--error-on-*` flag; a Maven `japicmp-maven-plugin` goal or a Gradle `japicmp` plugin the asked task reaches, with a stop setting (below) |
 | `revapi` | `revapi`, a Maven `revapi-maven-plugin` goal or a Gradle `revapi` plugin the asked task reaches |
+
+**A run counts only when it can turn the job red.** Two tools report without stopping by default:
+
+- `apidiff` (`golang.org/x/exp/cmd/apidiff`) exits 0 on an incompatible change; it only prints the report. It counts when the job's lines, or the followed script or recipe that runs it, hold a command that re-raises: `exit` or `return` with a non-zero literal or a variable, or `false` (`if [ -s out.txt ]; then exit 1; fi`). A whole-line capture (`out=$(apidiff a b)`) is read as the command it runs.
+- `japicmp` exits 0 unless the CLI gets an `--error-on-*` flag. The Maven plugin's `breakBuildOn*` and `breakBuildBasedOnSemanticVersioning`, and the Gradle task's `failOnModification`, `failOnSourceIncompatibility` and `failOnBinaryIncompatibility`, default to false: one of them set true in a build file the follower read, or a `-Djapicmp.<setting>=true` on the command, is needed.
+
+A run that cannot stop its job is listed under `declared` with the CI file as its path, never counted.
 
 The command is read from a CI shell body, or from what the shared CI-step follower (`lib.ci.ci_step_follower`) returns for it: a committed script, a `make` recipe, local composite actions and reusable workflows, and the Maven and Gradle plugin bindings (`lib.ci.ci_build_follower`). Up to three levels are followed. A root `package.json` script is followed for `npm run <t>`, `pnpm run <t>`, `yarn <t>` and `bun run <t>`.
 
@@ -40,7 +47,7 @@ Not an invocation: an install (`go install`, `npm i -D`, `cargo install`, `pip i
 
 ## Pinning-test arm
 
-- Python: a file named `test_*.py` or `*_test.py`, parsed with `ast` (never imported), holding an `==` comparison with `__all__` (a name or an attribute) on exactly one side. `assert set(__all__) == set(EXPECTED_ALL)` pins; `len(__all__) > 0` and `a.__all__ == b.__all__` do not.
+- Python: a file named `test_*.py` or `*_test.py`, parsed with `ast` (never imported), holding an `==` comparison with `__all__` (a name or an attribute) on exactly one side and, on the other, a list, tuple or set literal of names or a name assigned one in the file. `assert set(__all__) == set(EXPECTED_ALL)` pins. `len(__all__) > 0`, `a.__all__ == b.__all__` and a comparison with `dir(mod)` or `inspect.getmembers(mod)` do not: those check `__all__` against the module, so a removed name passes when `__all__` drops it too.
 - JavaScript and TypeScript: a `*.test.*` or `*.spec.*` file with `expect(Object.keys(<module>))` compared by `toMatchSnapshot`, `toMatchInlineSnapshot`, `toEqual` or `toStrictEqual`; a `//` comment line is skipped.
 - Files under `fixtures/`, `testdata/`, `vendor/`, `node_modules/` or `third_party/` are set aside.
 
@@ -48,7 +55,7 @@ The arm counts when CI runs tests: `ci_checks.enforced_check_runs` is true, the 
 
 ## Declared only
 
-A tool token named in a build file (`pom.xml`, Gradle build and settings files, `package.json`, Makefiles, `justfile`, `pyproject.toml`, `Cargo.toml`, `buf.yaml` (a `breaking:` section counts), `api-extractor.json`, `noxfile.py`, `tox.ini`) or in a file under `hack/`, `scripts/`, `build/` or `.github/` is declared. A declared tool that a CI run reaches is not listed again. Docs (`.md`, `.rst`, `.txt`, `.adoc`, `.html`) never declare. Declared tools are listed and never counted.
+A CI run that cannot stop its job (above) is declared. So is a tool token named in a build file (`pom.xml`, Gradle build and settings files, `package.json`, Makefiles, `justfile`, `pyproject.toml`, `Cargo.toml`, `buf.yaml` (a `breaking:` section counts), `api-extractor.json`, `noxfile.py`, `tox.ini`) or in a file under `hack/`, `scripts/`, `build/` or `.github/` (a workflow is read as CI, never as a declaration). A declared tool that a CI run reaches is not listed again. Docs (`.md`, `.rst`, `.txt`, `.adoc`, `.html`) never declare. Declared tools are listed and never counted.
 
 ## Masking
 

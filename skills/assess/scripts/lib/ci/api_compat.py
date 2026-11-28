@@ -8,21 +8,27 @@ as text, and Python test files are parsed with ``ast``, never imported.
   actions inlined, or ``.gitlab-ci.yml``) invokes a compatibility tool, on its own line or through
   the shared CI-step follower (``lib.ci.ci_step_follower``: a committed script, a ``make`` recipe,
   a Maven or Gradle build, up to ``_MAX_FOLLOW`` levels) or one root ``package.json`` script
-  (``npm run <t>``, ``pnpm``, ``yarn``, ``bun``). The tools (``TOOLS``): ``apidiff`` (or ``go run
-  .../apidiff``), ``api-extractor run`` (not ``--local``, which rewrites the report), ``griffe
-  check``, ``cargo semver-checks``, ``buf breaking``, ``japicmp`` and ``revapi`` (their Maven goals
-  and Gradle plugins, read from the follower's ``tasks`` and ``plugins``). An install (``go install
-  .../apidiff``, ``npm i -D @microsoft/api-extractor``), a ``--help`` or ``--version`` call and an
-  ``echo`` invoke nothing.
+  (``npm run <t>``, ``pnpm``, ``yarn``, ``bun``), or a GitHub step ``uses:`` one of ``ACTIONS``
+  (``obi1kenobi/cargo-semver-checks-action``, ``bufbuild/buf-breaking-action``). The tools
+  (``TOOLS``): ``apidiff`` (or ``go run .../apidiff``), ``api-extractor run`` (not ``--local``, which
+  rewrites the report), ``griffe check``, ``cargo semver-checks``, ``buf breaking``, ``japicmp`` and
+  ``revapi`` (their Maven goals and Gradle plugins, read from the follower's ``tasks`` and
+  ``plugins``). An install (``go install .../apidiff``, ``npm i -D @microsoft/api-extractor``), a
+  ``--help`` or ``--version`` call and an ``echo`` invoke nothing. A run counts only when it can
+  turn the job red (``can_stop``): ``apidiff`` exits 0 on an incompatible change, so it needs a
+  re-raise (``exit 1``) in the job, script or recipe that runs it; the japicmp CLI needs an
+  ``--error-on-*`` flag, and its Maven or Gradle plugin a ``breakBuild*`` or ``failOn*`` setting
+  true. A run that cannot stop the job is listed under ``declared``, never counted.
 - **Pinning test (``pins``).** A tracked test file pins the public exports: a Python test whose
-  ``ast`` holds an ``==`` comparison with ``__all__`` on one side (``assert set(__all__) ==
-  set(EXPECTED_ALL)``), or a JavaScript or TypeScript test that compares ``Object.keys`` of a
+  ``ast`` holds an ``==`` comparison with ``__all__`` on one side and a literal list of names, or a
+  name bound to one, on the other (``assert set(__all__) == set(EXPECTED_ALL)``; never ``dir(mod)``), or a JavaScript or TypeScript test that compares ``Object.keys`` of a
   module to a snapshot or a literal (``expect(Object.keys(api)).toMatchSnapshot()``). It counts when
   CI runs tests: ``ci_checks.enforced_check_runs`` is true (the layer-5 reading).
 - **Declared only (``declared``, listed, never counted).** A tool named in a build file
   (``pom.xml``, a Gradle build, ``package.json``, a Makefile, ``pyproject.toml``, ``Cargo.toml``,
   ``buf.yaml``, ``api-extractor.json``) or a file under ``hack/``, ``scripts/``, ``build/`` or
-  ``.github/`` that no CI run reaches. Docs never declare.
+  ``.github/`` (not a workflow, which is read as CI) that no CI run reaches, and a CI run that
+  cannot stop its job (the CI file is the path). Docs never declare.
 
 Masking follows the #775 rule (``lib.ci.ci_masking.mask_lines``): ``|| true``, ``continue-on-error``,
 ``allow_failure`` and a never-true ``if:`` do not count, and a form whose failure the step may hide
@@ -72,6 +78,15 @@ _GITHUB_BODY = frozenset({"run"})
 _GITLAB_BODY = frozenset({"script", "before_script"})
 _GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
 _INCLUDE = re.compile(r"^include\s*:", re.M)
+_CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?\w+=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
+# The japicmp settings that make a breaking change stop the build: the Maven plugin's
+# ``breakBuildOn*`` / ``breakBuildBasedOnSemanticVersioning`` and the Gradle task's ``failOn*``.
+_JAPICMP_SETTING = r"(?:breakBuild(?:On|Based)\w*|failOn(?:Modification|SourceIncompatibility|BinaryIncompatibility))"
+_JAPICMP_FLAG = re.compile(r"^-Djapicmp\." + _JAPICMP_SETTING + r"=true$")
+_JAPICMP_BREAK = re.compile(_JAPICMP_SETTING + r"\s*(?:>|=|\()\s*true")
+# Remote GitHub actions that run a compatibility check and stop the job on a breaking change.
+ACTIONS = {"obi1kenobi/cargo-semver-checks-action": "cargo-semver-checks",
+           "bufbuild/buf-breaking-action": "buf-breaking"}
 _ALIASING = re.compile(r"!reference|<<\s*:|(?:^|[\s\[,])\*[\w.-]+", re.M)
 # Words a launcher puts before the program it runs (``uv run``, ``npx --yes``, ``pnpm exec``).
 _LAUNCHERS = frozenset({"uv", "uvx", "pipx", "poetry", "pdm", "hatch", "rye", "pipenv", "npx", "bunx",
@@ -143,14 +158,52 @@ def tool_of(words: list[str]) -> str | None:
     return None
 
 
-def build_tools(followed: Followed) -> tuple[set[str], bool]:
-    """The tools a Maven or Gradle step reaches through its bound plugins and tasks, and whether
-    the reading left one of them unsettled (a ``-Djapicmp.skip``, an unread ``apply from:``)."""
+def _shell(line: str) -> str:
+    """A CI or script line as shell text, a whole-line capture (``out=$(apidiff a b)``) read as
+    the command it runs."""
+    text = ci_line_text(line)
+    capture = _CAPTURE.match(text)
+    return capture.group(1) if capture else text
+
+
+def _reraises(words: list[str]) -> bool:
+    """A command that ends its script red: ``exit`` or ``return`` with a non-zero literal or a
+    variable, or ``false`` (``then exit 1`` inside an ``if`` too)."""
+    for i, word in enumerate(words):
+        if word in ("exit", "return") and i + 1 < len(words) and (words[i + 1].lstrip('"').startswith("$")
+                                                                  or words[i + 1].strip('"') not in ("", "0")):
+            return True
+        if word == "false" and i in (0, 1):
+            return True
+    return False
+
+
+def can_stop(tool: str, words: list[str], unit: list[str]) -> bool:
+    """Whether a run of ``tool`` can turn its job red. ``apidiff`` exits 0 on an incompatible
+    change, so it counts only when ``unit`` (the job, script or recipe that runs it) re-raises
+    (``exit 1``, ``exit $rc``, ``false``). The japicmp CLI exits 0 unless an ``--error-on-*``
+    flag is passed. Every other tool exits non-zero on a breaking change by default."""
+    if tool == "apidiff":
+        return any(_reraises(c["words"]) for line in unit for c in _commands(_shell(line)))
+    if tool == "japicmp":
+        return any(w.startswith("--error-on-") for w in words)
+    return True
+
+
+def build_tools(followed: Followed, read_local: ReadLocal, words: list[str]) -> tuple[set[str], set[str], bool]:
+    """``(run, report_only, unsettled)`` for a Maven or Gradle step: the tools its bound plugins
+    and tasks reach, those that cannot stop the build (japicmp with no ``breakBuild*`` or
+    ``failOn*`` setting true in a build file read, nor a ``-Djapicmp.breakBuild*=true``), and
+    whether the reading left a part unsettled (a ``-Djapicmp.skip``, an unread ``apply from:``)."""
     names = [n.lower() for n in (*followed.plugins, *followed.tasks)]
     found = {tool for tool in ("japicmp", "revapi") if any(tool in n for n in names)}
     if any(t in u.lower() for u in followed.unknown for t in found):
-        return set(), True   # a property may skip the goal: not credit
-    return found, bool(followed.unknown)
+        return set(), set(), True   # a property may skip the goal: not credit
+    quiet: set[str] = set()
+    if "japicmp" in found and not (any(_JAPICMP_FLAG.match(w) for w in words)
+                                   or any(_JAPICMP_BREAK.search(read_local(p) or "") for p in followed.paths)):
+        quiet.add("japicmp")
+    return found - quiet, quiet, bool(followed.unknown)
 
 
 def _package_scripts(read_local: ReadLocal, cwd: str) -> Mapping[str, object]:
@@ -169,25 +222,30 @@ class _Reader:
         self.read_local = read_local
         self.follower = StepFollower(read_local, tracked)
         self.unsettled = False
+        self.report_only: set[str] = set()   # tools run in a form that cannot stop the job
 
     def lines(self, lines: list[str], depth: int = 0, path: tuple[str, ...] = ()) -> set[str]:
         """The tools the shell ``lines`` run, followed into the repository."""
         found: set[str] = set()
         for line in lines:
-            commands = list(_commands(ci_line_text(line)))
+            commands = list(_commands(_shell(line)))
             for cmd in commands:
                 tool = tool_of(cmd["words"]) if not cmd["masked"] else None
-                if tool is not None:
+                if tool is not None and can_stop(tool, cmd["words"], lines):
                     found.add(tool)
+                elif tool is not None:
+                    self.report_only.add(tool)
                 if not cmd["masked"] and depth < _MAX_FOLLOW:
                     found |= self._npm(cmd["words"], depth, path)
             if depth >= _MAX_FOLLOW or any(c["masked"] for c in commands):
                 continue   # a fallback that can pass: what the line runs cannot fail the job
+            words = [w for c in commands for w in c["words"]]
             for followed in self.follower.step(line):
                 if any(p in path for p in followed.paths):
                     continue
-                tools, unsettled = build_tools(followed)
+                tools, quiet, unsettled = build_tools(followed, self.read_local, words)
                 found |= tools
+                self.report_only |= quiet
                 self.unsettled |= unsettled or (followed.kind == "workflow" and bool(followed.unknown))
                 found |= self.lines(list(followed.commands), depth + 1, (*path, *followed.paths))
         return found
@@ -240,9 +298,10 @@ def _gitlab_jobs(tree: IndentTree) -> tuple[set[int], set[int]]:
     return running, untaken
 
 
-def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], list[str]]:
-    """``(jobs, untaken, unsure)``: each running job's unmasked shell lines, the lines of GitLab
-    hidden jobs nothing extends, and the lines whose failure the step may hide (``ci_unsure``)."""
+def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], list[str], set[str]]:
+    """``(jobs, untaken, unsure, actions)``: each running job's unmasked shell lines, the lines of
+    GitLab hidden jobs nothing extends, the lines whose exit status the step may hide
+    (``ci_unsure``), and the tools of the ``ACTIONS`` an unmasked GitHub step ``uses:``."""
     keys = _GITLAB_BODY if gitlab else _GITHUB_BODY
     lines = text.splitlines()
     unmasked, unsure = mask_lines(text)
@@ -251,7 +310,11 @@ def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], lis
     spans: dict[int, list[str]] = {}
     hidden: list[str] = []
     doubt: list[str] = []
+    actions: set[str] = set()
     for i, line in enumerate(unmasked):
+        ref = tree.lines[i].value.strip("'\" ").split("@", 1)[0].lower()
+        if not gitlab and tree.lines[i].key == "uses" and line.strip() and ref in ACTIONS:
+            actions.add(ACTIONS[ref])
         if tree.lines[tree.body(i)].key not in keys:
             continue
         start = tree.job(i).start
@@ -262,18 +325,19 @@ def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], lis
                 spans.setdefault(start, []).append(line)
             if unsure[i].strip():
                 doubt.append(unsure[i])
-    return list(spans.values()), hidden, doubt
+    return list(spans.values()), hidden, doubt, actions
 
 
-def _declared(tracked: frozenset[str], read_local: ReadLocal) -> dict[str, list[str]]:
+def _declared(tracked: frozenset[str], read_local: ReadLocal, ci_files: frozenset[str]) -> dict[str, list[str]]:
     """Tool token to the build files that name it (module docstring), sorted."""
     out: dict[str, list[str]] = {}
     for rel in sorted(tracked):
         base = posixpath.basename(rel)
         if rel.endswith(_DOC_SUFFIXES) or any(s in f"/{rel}" for s in ("/" + d for d in _SET_ASIDE)):
             continue
-        if base not in _BUILD_FILES and not rel.startswith(_BUILD_DIRS) and not base.startswith("build.gradle"):
-            continue
+        if rel in ci_files or (base not in _BUILD_FILES and not rel.startswith(_BUILD_DIRS)
+                               and not base.startswith("build.gradle")):
+            continue   # a CI file is read as CI, never as a declaration
         text = read_local(rel) or ""
         for tool, pattern in _DECLARED:
             if pattern.search(text) or (tool == "buf-breaking" and base.startswith("buf") and _BUF_BREAKING.search(text)):
@@ -281,21 +345,36 @@ def _declared(tracked: frozenset[str], read_local: ReadLocal) -> dict[str, list[
     return out
 
 
+def _literal_strs(node: ast.AST) -> bool:
+    """A list, tuple or set literal of one or more string constants."""
+    return (isinstance(node, (ast.List, ast.Tuple, ast.Set)) and bool(node.elts)
+            and all(isinstance(e, ast.Constant) and isinstance(e.value, str) for e in node.elts))
+
+
 def _python_pins(text: str) -> bool:
-    """An ``==`` comparison in a Python test with ``__all__`` on one side and not the other."""
+    """An ``==`` comparison in a Python test with ``__all__`` on one side and, on the other, a
+    literal of names or a name bound to one (``EXPECTED_ALL``). A comparison with ``dir(mod)`` or
+    ``inspect.getmembers`` checks ``__all__`` against the module, not against a fixed list."""
     try:
         tree = ast.parse(text)
     except (SyntaxError, ValueError):
         return False
+    fixed = {t.id for n in ast.walk(tree) if isinstance(n, (ast.Assign, ast.AnnAssign)) and n.value is not None
+             and _literal_strs(n.value) for t in (n.targets if isinstance(n, ast.Assign) else [n.target])
+             if isinstance(t, ast.Name)}
 
     def names_all(node: ast.AST) -> bool:
         return any((isinstance(n, ast.Name) and n.id == "__all__")
                    or (isinstance(n, ast.Attribute) and n.attr == "__all__") for n in ast.walk(node))
 
+    def pinned(node: ast.AST) -> bool:
+        return any(_literal_strs(n) or (isinstance(n, ast.Name) and n.id in fixed) for n in ast.walk(node))
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Compare) and len(node.ops) == 1 and isinstance(node.ops[0], ast.Eq):
             left, right = node.left, node.comparators[0]
-            if names_all(left) != names_all(right):
+            if (names_all(left) and not names_all(right) and pinned(right)) or (
+                    names_all(right) and not names_all(left) and pinned(left)):
                 return True
     return False
 
@@ -326,20 +405,29 @@ def scan_api_compat(repo_root: Path, ci_checks: Mapping[str, object] | None = No
     files = ci_config_files(tracked)
     reader = _Reader(read_local, tracked)
     runs: dict[tuple[str, str], None] = {}
+    quiet: dict[tuple[str, str], None] = {}   # run in a form that cannot stop the job: declared
     unsure_hit = False
     for rel in files:
         gitlab = rel in CI_CONFIG_FILES
         raw = read_config(repo, rel)
         text = raw if gitlab else follow_workflow(raw, read_local).text
-        jobs, hidden, doubt = _job_lines(text, gitlab)
+        jobs, hidden, doubt, actions = _job_lines(text, gitlab)
+        reader.report_only = set()
+        tools = set(actions)
         for lines in jobs:
-            for tool in sorted(reader.lines(lines)):
-                runs[(rel, tool)] = None
+            tools |= reader.lines(lines)
+        for tool in sorted(tools):
+            runs[(rel, tool)] = None
+        for tool in sorted(reader.report_only - tools):
+            quiet[(rel, tool)] = None
         unsure_hit |= bool(_Reader(read_local, tracked).lines(doubt))
         unsure_hit |= bool(_ALIASING.search(raw)) and bool(_Reader(read_local, tracked).lines(hidden))
     run_rows = [ApiCompatRun(path=rel, tool=tool) for rel, tool in runs]
     reached = {tool for _, tool in runs}
-    declared = {t: paths for t, paths in _declared(tracked, read_local).items() if t not in reached}
+    declared = {t: paths for t, paths in _declared(tracked, read_local, frozenset(files)).items() if t not in reached}
+    for rel, tool in quiet:
+        if tool not in reached:
+            declared.setdefault(tool, []).append(rel)
     pins = _pins(tracked, read_local)
     tests_run = ci_checks.get("enforced_check_runs") if isinstance(ci_checks, Mapping) else None
     block = ApiCompatBlock(

@@ -41,7 +41,8 @@ def _state(root: Path, ci_checks: dict[str, Any] | None = None) -> str:
 
 APIDIFF_SH = ("#!/usr/bin/env bash\nset -euo pipefail\n"
               "go install golang.org/x/exp/cmd/apidiff@v0.0.0\n"
-              "apidiff -m -incompatible \"$BASE\" ./pkg/widget\n")
+              "out=$(apidiff -m -incompatible \"$BASE\" ./pkg/widget)\n"
+              "if [ -n \"$out\" ]; then echo \"$out\"; exit 1; fi\n")
 
 
 # --- named-tool arm ------------------------------------------------------------------------
@@ -55,7 +56,8 @@ def test_an_apidiff_script_run_from_a_workflow_step_meets(tmp_path: Path) -> Non
 
 
 def test_a_make_target_that_runs_apidiff_is_followed(tmp_path: Path) -> None:
-    root = _repo(tmp_path, {"Makefile": "api-check:\n\tgo run golang.org/x/exp/cmd/apidiff@v0.0.0 old new\n",
+    root = _repo(tmp_path, {"Makefile": "api-check:\n\tgo run golang.org/x/exp/cmd/apidiff@v0.0.0 old new > out.txt\n"
+                                        "\ttest ! -s out.txt || exit 1\n",
                             WF: _workflow("make api-check")})
     assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
 
@@ -66,7 +68,7 @@ def test_a_make_target_that_runs_apidiff_is_followed(tmp_path: Path) -> None:
     ("uv run --locked griffe check widgets -a v1.0.0", "griffe"),
     ("cargo semver-checks check-release", "cargo-semver-checks"),
     ("buf breaking --against '.git#branch=main'", "buf-breaking"),
-    ("java -jar tools/japicmp-0.18.jar -o old.jar -n new.jar", "japicmp"),
+    ("java -jar tools/japicmp-0.18.jar -o old.jar -n new.jar --error-on-binary-incompatibility", "japicmp"),
 ])
 def test_each_named_tool_on_a_ci_line_meets(tmp_path: Path, line: str, tool: str) -> None:
     root = _repo(tmp_path, {WF: _workflow(line)})
@@ -89,6 +91,34 @@ def test_installs_help_echo_local_and_masked_runs_do_not_count(tmp_path: Path, l
     assert _block(root)["runs"] == []
 
 
+@pytest.mark.parametrize(("line", "tool"), [
+    ("apidiff -incompatible old new", "apidiff"),                      # exits 0 on an incompatible change
+    ("java -jar tools/japicmp-0.18.jar -o old.jar -n new.jar", "japicmp"),  # no --error-on-* flag
+])
+def test_a_run_that_cannot_stop_the_job_is_declared_not_counted(tmp_path: Path, line: str, tool: str) -> None:
+    root = _repo(tmp_path, {WF: _workflow(line)})
+    block = _block(root)
+    assert (block["runs"], block["declared"], block["present"]) == ([], [{"path": WF, "tool": tool}], False)
+
+
+def test_an_apidiff_run_checked_by_its_job_counts(tmp_path: Path) -> None:
+    wf = _workflow(extra="      - run: |\n          apidiff -incompatible old new > out.txt\n"
+                         "          if [ -s out.txt ]; then exit 1; fi\n")
+    assert _block(_repo(tmp_path, {WF: wf}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+@pytest.mark.parametrize(("uses", "tool"), [
+    ("obi1kenobi/cargo-semver-checks-action@v2", "cargo-semver-checks"),
+    ("bufbuild/buf-breaking-action@v1", "buf-breaking"),
+])
+def test_a_compatibility_action_step_meets(tmp_path: Path, uses: str, tool: str) -> None:
+    root = _repo(tmp_path, {WF: _workflow(extra=f"      - uses: {uses}\n")})
+    block = _block(root)
+    assert (block["runs"], block["declared"], block["present"]) == ([{"path": WF, "tool": tool}], [], True)
+    masked = _repo(tmp_path / "m", {WF: _workflow(extra=f"      - uses: {uses}\n        continue-on-error: true\n")})
+    assert _block(masked)["runs"] == []
+
+
 def test_continue_on_error_masks_the_step(tmp_path: Path) -> None:
     wf = ("on: [pull_request]\njobs:\n  api:\n    runs-on: ubuntu-latest\n    steps:\n"
           "      - continue-on-error: true\n        run: apidiff old new\n")
@@ -103,15 +133,28 @@ def test_a_masked_script_line_is_not_followed(tmp_path: Path) -> None:
     assert _block(root)["runs"] == []
 
 
-def test_a_maven_japicmp_goal_bound_to_verify_meets(tmp_path: Path) -> None:
-    pom = ("<project><modelVersion>4.0.0</modelVersion><artifactId>widget</artifactId><build><plugins>"
-           "<plugin><groupId>com.github.siom79.japicmp</groupId><artifactId>japicmp-maven-plugin</artifactId>"
-           "<executions><execution><goals><goal>cmp</goal></goals></execution></executions></plugin>"
-           "</plugins></build></project>")
-    root = _repo(tmp_path, {"pom.xml": pom, WF: _workflow("mvn -B verify")})
+POM = ("<project><modelVersion>4.0.0</modelVersion><artifactId>widget</artifactId><build><plugins>"
+       "<plugin><groupId>com.github.siom79.japicmp</groupId><artifactId>japicmp-maven-plugin</artifactId>"
+       "{config}<executions><execution><goals><goal>cmp</goal></goals></execution></executions></plugin>"
+       "</plugins></build></project>")
+BREAK = ("<configuration><parameter><breakBuildOnBinaryIncompatibleModifications>true"
+         "</breakBuildOnBinaryIncompatibleModifications></parameter></configuration>")
+
+
+def test_a_maven_japicmp_goal_set_to_break_the_build_meets(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"pom.xml": POM.format(config=BREAK), WF: _workflow("mvn -B verify")})
     assert _block(root)["runs"] == [{"path": WF, "tool": "japicmp"}]
-    early = _repo(tmp_path / "early", {"pom.xml": pom, WF: _workflow("mvn -B test")})
+    early = _repo(tmp_path / "early", {"pom.xml": POM.format(config=BREAK), WF: _workflow("mvn -B test")})
     assert _block(early)["runs"] == []
+
+
+def test_a_maven_japicmp_goal_with_its_defaults_only_reports(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"pom.xml": POM.format(config=""), WF: _workflow("mvn -B verify")})
+    block = _block(root)
+    assert block["runs"] == [] and {"path": WF, "tool": "japicmp"} in block["declared"]
+    flagged = _repo(tmp_path / "f", {"pom.xml": POM.format(config=""), WF: _workflow(
+        "mvn -B verify -Djapicmp.breakBuildOnBinaryIncompatibleModifications=true")})
+    assert _block(flagged)["runs"] == [{"path": WF, "tool": "japicmp"}]
 
 
 def test_an_npm_script_is_followed_one_level(tmp_path: Path) -> None:
@@ -174,6 +217,8 @@ def test_a_pinning_test_with_the_test_run_unsettled_reads_not_measured(tmp_path:
     "def test_x() -> None:\n    assert len(__all__) > 0\n",            # no == pin
     "def test_x() -> None:\n    assert mod.__all__ == other.__all__\n",  # both sides the surface
     "def test_x() -> None:\n    assert 'EXPECTED_ALL' == 'x'  # __all__ ==\n",  # text only
+    "def test_x() -> None:\n    assert set(mod.__all__) == {n for n in dir(mod) if not n.startswith('_')}\n",
+    "def test_x() -> None:\n    assert sorted(mod.__all__) == sorted(n for n, _ in inspect.getmembers(mod))\n",
 ])
 def test_a_test_that_names_all_without_pinning_it_does_not_count(tmp_path: Path, body: str) -> None:
     root = _repo(tmp_path, {"tests/test_imports.py": body})
@@ -222,10 +267,10 @@ def test_a_gitlab_job_script_meets_and_after_script_does_not(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize("job", [
-    "api:\n  when: never\n  script:\n    - apidiff old new\n",
-    "api:\n  rules:\n    - when: never\n  script:\n    - apidiff old new\n",
-    "api:\n  allow_failure: true\n  script:\n    - apidiff old new\n",
-    ".api:\n  script:\n    - apidiff old new\n",
+    "api:\n  when: never\n  script:\n    - buf breaking --against main\n",
+    "api:\n  rules:\n    - when: never\n  script:\n    - buf breaking --against main\n",
+    "api:\n  allow_failure: true\n  script:\n    - buf breaking --against main\n",
+    ".api:\n  script:\n    - buf breaking --against main\n",
 ])
 def test_gitlab_jobs_that_never_run_or_cannot_fail_do_not_count(tmp_path: Path, job: str) -> None:
     root = _repo(tmp_path, {".gitlab-ci.yml": job})
@@ -233,13 +278,13 @@ def test_gitlab_jobs_that_never_run_or_cannot_fail_do_not_count(tmp_path: Path, 
 
 
 def test_a_gitlab_hidden_job_counts_through_extends(tmp_path: Path) -> None:
-    ci = ".api:\n  script:\n    - apidiff old new\napi:\n  extends: .api\n"
+    ci = ".api:\n  script:\n    - buf breaking --against main\napi:\n  extends: .api\n"
     root = _repo(tmp_path, {".gitlab-ci.yml": ci})
-    assert _block(root)["runs"] == [{"path": ".gitlab-ci.yml", "tool": "apidiff"}]
+    assert _block(root)["runs"] == [{"path": ".gitlab-ci.yml", "tool": "buf-breaking"}]
 
 
 def test_a_gitlab_hidden_job_taken_by_reference_reads_not_measured(tmp_path: Path) -> None:
-    ci = ".api:\n  script:\n    - apidiff old new\napi:\n  script: !reference [.api, script]\n"
+    ci = ".api:\n  script:\n    - buf breaking --against main\napi:\n  script: !reference [.api, script]\n"
     block = _block(_repo(tmp_path, {".gitlab-ci.yml": ci}))
     assert (block["runs"], block["present"], block.get("present_reason")) == ([], None, "ci_not_read")
 
@@ -254,7 +299,7 @@ def test_counts_only_keeps_every_field(tmp_path: Path) -> None:
     assert out == block
     assert set(out) == {"files_read", "tools_run", "pinning_tests", "declared_only", "present", "runs",
                         "pins", "declared"}
-    assert out["declared"] == [{"path": "buf.yaml", "tool": "buf-breaking"}]
+    assert out["declared"] == [{"path": "buf.yaml", "tool": "buf-breaking"}]   # hack/apidiff.sh runs, so not listed
 
 
 def test_counts_only_keeps_the_present_reason(tmp_path: Path) -> None:
@@ -265,3 +310,14 @@ def test_counts_only_keeps_the_present_reason(tmp_path: Path) -> None:
 
 def test_tool_of_reads_nothing_from_an_empty_command() -> None:
     assert tool_of([]) is None and tool_of(["go", "run", "./cmd/server"]) is None
+
+
+def test_a_gradle_japicmp_task_counts_only_when_it_fails_on_modification(tmp_path: Path) -> None:
+    build = ("plugins {{\n    id 'java'\n    id 'me.champeau.gradle.japicmp' version '0.4.2'\n}}\n"
+             "tasks.register('japicmp', me.champeau.gradle.japicmp.JapicmpTask) {{\n{body}}}\n"
+             "check.dependsOn japicmp\nkotlin {{ failOnWarning = true }}\n")
+    files = {"settings.gradle": "rootProject.name = 'widget'\n", WF: _workflow("./gradlew check")}
+    quiet = _repo(tmp_path / "q", {**files, "build.gradle": build.format(body="    onlyModified = true\n")})
+    assert _block(quiet)["runs"] == [] and {"path": WF, "tool": "japicmp"} in _block(quiet)["declared"]
+    strict = _repo(tmp_path / "s", {**files, "build.gradle": build.format(body="    failOnModification = true\n")})
+    assert _block(strict)["runs"] == [{"path": WF, "tool": "japicmp"}]

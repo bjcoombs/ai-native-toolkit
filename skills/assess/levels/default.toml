@@ -335,8 +335,10 @@
 #   through the shared CI-step follower (a committed script, a make recipe, a Maven goal or
 #   Gradle plugin bound to the asked task) or one root package.json script, invokes a
 #   compatibility tool: apidiff, api-extractor run (not --local), griffe check, cargo
-#   semver-checks, buf breaking, japicmp or revapi. Or a tracked test pins the public exports
-#   (a Python == comparison with __all__ on one side, read with ast; Object.keys of a module
+#   semver-checks, buf breaking, japicmp or revapi, in a form that can turn the job red
+#   (apidiff needs an exit check, japicmp a fail flag or setting), or a step uses
+#   cargo-semver-checks-action or buf-breaking-action. Or a tracked test pins the public exports
+#   (a Python == comparison of __all__ with a literal list of names, read with ast; Object.keys of a module
 #   against a snapshot or literal in a JS or TS test) and CI runs tests
 #   (ci_checks.enforced_check_runs). An install, --help, a masked line (|| true,
 #   continue-on-error, allow_failure), a GitLab after_script, an idle job (when: never or
