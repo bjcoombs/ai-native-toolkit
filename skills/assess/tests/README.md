@@ -46,6 +46,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_complexity_treemap_exclusions.py` | `scripts/complexity-treemap.py` - `.assess` self-exclusion, `--exclude` and `config.toml` merging, generated-file sniffing and generated test reports |
 | `test_complexity_treemap_render.py` | `scripts/complexity-treemap.py` + `lib/complexity/treemap_render.py` - survivor-density hatch overlay, SVG legend, a11y title, tooltips and the size-by tree build |
 | `test_complexity_treemap_backends.py` | `scripts/complexity-treemap.py` - per-function backends per language (lizard, the approximate Dart scanner), `backend_by_language` and the worst function's name |
+| `test_complexity_treemap_dominance.py` | `scripts/complexity-treemap.py` - the dominant-file warning calls a file a likely build artifact only on content evidence (`fixtures/browser_extension/`) |
 | `test_complexity_treemap_ordering.py` | `scripts/complexity-treemap.py` - the scc-only hint and the tie-break by path across the top lists, the dominant-file warning and largest-first |
 
 ### lib/ suites
@@ -127,7 +128,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_scorer_evidence.py` | `lib/report/evidence_check.py` - the layer scorer's structured evidence contract |
 | `test_gap_actions.py` | `lib/report/gap_actions.py` - the deterministic Top 3 gap candidates |
 | `test_gate_cost.py` | `lib/report/gate_cost.py` - the CI gate's Actions cost estimate |
-| `test_generated_files.py` | `lib/complexity/generated_files.py` - generated-file header sniff and long-line detector |
+| `test_generated_files.py` | `lib/complexity/generated_files.py` - generated-file header sniff, long-line detector and the build-artifact content evidence (`artifact_evidence`) |
 | `test_git_churn.py` | `lib/history/git_churn.py` - churn-degeneracy detector |
 | `test_instruction_claims.py` | `lib/instructions/instruction_claims.py` - verifying claims in agent instruction files |
 | `test_instruction_budget.py` | `lib/instructions/instruction_budget.py` - `@import` resolution and the always-loaded budget per tool |
@@ -262,6 +263,7 @@ numpy, lizard, matplotlib or squarify in `sys.modules` (#831); install stand-ins
 | `maven_project/` | `test_jvm_capabilities.py` |
 | `claude_config_plugin/` | `test_claude_config.py` - a plugin repo whose manifest overrides the skills, commands and agents paths |
 | `structure_drift/` | `test_structure_drift_tier1.py` |
+| `browser_extension/` | `test_complexity_treemap_dominance.py`, `test_generated_files.py` - a small extension whose 388-line hand-written content script dominates the LOC without any build-output signal |
 
 ## Markers
 
