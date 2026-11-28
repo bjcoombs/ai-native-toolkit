@@ -296,11 +296,9 @@ def test_every_default_signal_is_emitted_by_some_real_output(
     # is unavailable without it unless an AI review step is committed (test_review_automation).
     # contributor_files.policy.present needs a SECURITY file in the tree or the GitHub read of
     # the owner's .github repository (#1045); tests/test_contributor_files.py emits it.
-    # No fixture here runs an agent job (#849, #858); test_agent_workflows / _instruction_rewrite emit them.
-    # backlog-ready level 2 reads the issue tracker (#1323, #1324); tests/test_backlog_ready_platform.py emits it.
+    # No fixture runs an agent job (#849, #858) or reads an issue tracker (#1324); their own tests emit them.
     offline = {"review_reality.reviewed_share", "review_reality.approved_share", "review_evidence.present",
-               "contributor_files.policy.present", *(f"agent_ops.summary.{k}" for k in ("agent_jobs_least_privilege", "agent_job_write_access", "agent_instruction_rewrite")),
-               *(f"backlog_ready.{k}" for k in ("first_response_met", "untriaged_met", "close_open_met"))}
+               "contributor_files.policy.present", *(f"agent_ops.summary.{k}" for k in ("agent_jobs_least_privilege", "agent_job_write_access", "agent_instruction_rewrite")), *(f"backlog_ready.{k}" for k in ("first_response_met", "untriaged_met", "close_open_met"))}
     signals = {c["signal"] for row in load_default_levels()["rows"]
                for level in row["levels"] for c in level["criteria"]}
     never = sorted(
@@ -346,8 +344,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "model-ci-gated": None,      # no model-calling CI job detected: no_model_jobs
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
             "secrets-guard": 0, "agent-evals": 0, "docs-kept-true": 0,  # no secrets guard; no eval suite or docs check
-            "skill-library": 0, "agent-least-privilege": None, "agent-job-write-access": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "agent-rewrites-instructions": None,  # no SKILL.md; no_agent_jobs; no CI file
-            "backlog-ready": 0,          # no issue form or triage workflow; level 2 reads the tracker (#1324)
+            "skill-library": 0, "agent-least-privilege": None, "agent-job-write-access": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "agent-rewrites-instructions": None, "backlog-ready": 0,  # no SKILL.md; no_agent_jobs; no CI file; no issue form
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -384,8 +381,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "skill-script-tests": None,  # the capture predates skill_script_tests
         "skill-personal-data": None, "contributor-files": None,  # the capture predates both blocks
         "secrets-guard": None, "model-ci-gated": None,  # the capture predates both blocks
-        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None, "agent-evals": None, "docs-kept-true": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "agent-rewrites-instructions": None,  # predate all eight
-        "backlog-ready": None,  # the capture predates backlog_ready (#1324)
+        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None, "agent-evals": None, "docs-kept-true": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "agent-rewrites-instructions": None, "backlog-ready": None,  # predate all nine
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]
