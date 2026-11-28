@@ -678,6 +678,10 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.conditions.source` | token |
 | `level.conditions.why` | dropped |
 | `level.conditions.evidence` | token |
+| `level.conditions.evidence_classes` | token |
+| `level.evidence_coverage.covered` | token |
+| `level.evidence_coverage.not_covered.evidence_class` | token |
+| `level.evidence_coverage.not_covered.reason` | token |
 | `level.next_step.blockers.kind` | token |
 | `level.next_step.blockers.gate` | token |
 | `level.next_step.blockers.condition` | token |
