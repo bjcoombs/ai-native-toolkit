@@ -118,7 +118,7 @@
     },
     {
       "id": "core.coverage_gate",
-      "revision": 6
+      "revision": 7
     },
     {
       "id": "core.coverage_report",
@@ -362,7 +362,7 @@
     },
     {
       "id": "core.secrets_guard",
-      "revision": 5
+      "revision": 6
     },
     {
       "id": "core.sensitive_instruction_content",

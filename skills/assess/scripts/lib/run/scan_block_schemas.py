@@ -411,14 +411,16 @@ COVERAGE_GATE: JsonDict = {
         "enforced_basis": _field(
             {"enum": ["ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read",
                       "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs",
-                      "unread_ci_system", "status_check_unconfirmed", "not_run_in_ci", "no_ci"]},
+                      "unread_ci_system", "status_check_unconfirmed", "not_run_in_ci", "no_ci",
+                      "ci_includes_unresolved"]},
             "The reason for enforced_meets_minimum: ci_run (true); no_gate, "
             "threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, "
             "unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest "
             "--cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run "
             "it), included_jobs, unread_ci_system and status_check_unconfirmed (a Codecov "
             "status target, which no CI line runs and which gates a merge only when branch "
-            "protection requires it; issue #882) (null)."),
+            "protection requires it; issue #882) and ci_includes_unresolved (no gate in the checkout, "
+            "and a GitLab include that could hold one was not read; issue #1350) (null)."),
         "not_detected": _STRINGS,
     },
 }

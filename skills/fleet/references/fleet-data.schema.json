@@ -1000,11 +1000,35 @@
                   },
                   "measured": {
                     "type": "integer"
+                  },
+                  "not_measured": {
+                    "type": "integer"
+                  },
+                  "not_measured_reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [
                   "at_top",
                   "measured",
+                  "not_measured",
+                  "not_measured_reasons",
                   "row"
                 ],
                 "additionalProperties": false
