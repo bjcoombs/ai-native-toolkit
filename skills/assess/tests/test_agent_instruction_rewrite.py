@@ -233,3 +233,60 @@ def test_gh_aw_imports_reads_each_list_form_and_skips_remote_imports() -> None:
     assert gh_aw_imports(rel, "engine: claude\n") == []
     mapped = "imports:\n  - path: shared/a.md\n    inputs: {tone: plain}\n  - uses: shared/b.md\n    with:\n      x: 1\n"
     assert gh_aw_imports(rel, mapped) == shared
+
+
+SOURCE = ".github/workflows/guide.md"
+SOURCE_ONLY = f"/AGENTS.md @o\n/CLAUDE.md @o\n/{SOURCE} @o\n/.github/CODEOWNERS @o\n"
+
+
+def _imports_case(git_repo, imports: str, shared: str) -> tuple[int | None, int | None]:
+    """(hazard count with only the source owned, with the shared file owned too)."""
+    source = GH_AW_PR.replace("engine: claude\n", f"engine: claude\n{imports}")
+    repo = _repo(git_repo, {SOURCE: source, f".github/workflows/{shared}": "Write plainly.\n",
+                            ".github/CODEOWNERS": SOURCE_ONLY})
+    bare = scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"]
+    repo = _repo(git_repo, {".github/CODEOWNERS": SOURCE_ONLY + f"/.github/workflows/{shared} @o\n"})
+    return bare, scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"]
+
+
+def test_a_mapping_import_whose_path_is_not_the_first_key_is_at_risk(git_repo) -> None:
+    imports = "imports:\n  - inputs: {tone: plain}\n    path: shared/a.md\n"
+    assert _imports_case(git_repo, imports, "shared/a.md") == (1, 0)
+
+
+def test_a_flow_list_opening_on_the_next_line_is_at_risk(git_repo) -> None:
+    assert _imports_case(git_repo, "imports:\n  [shared/a.md]\n", "shared/a.md") == (1, 0)
+
+
+def test_a_local_import_holding_an_at_sign_is_at_risk(git_repo) -> None:
+    assert _imports_case(git_repo, "imports: [shared/a@2.md]\n", "shared/a@2.md") == (1, 0)
+
+
+def test_a_quoted_flow_path_holding_a_comma_is_one_import(git_repo) -> None:
+    assert _imports_case(git_repo, "imports: ['shared/a,b.md']\n", "shared/a,b.md") == (1, 0)
+
+
+def test_a_frontmatter_that_does_not_parse_raises_it_even_when_all_is_owned(git_repo) -> None:
+    for bad in ("imports: [shared/a.md\n", "imports:\n  - shared/a.md\n   - shared/b.md\n",
+                "imports: *shared\n"):
+        source = GH_AW_PR.replace("engine: claude\n", f"engine: claude\n{bad}")
+        repo = _repo(git_repo, {SOURCE: source, ".github/CODEOWNERS": OWNERS})
+        assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1, bad
+
+
+def test_an_imported_file_whose_frontmatter_does_not_parse_raises_it(git_repo) -> None:
+    source = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports: [shared/a.md]\n")
+    files = {SOURCE: source, ".github/workflows/shared/a.md": "---\nimports: [b.md\n---\nText.\n",
+             ".github/CODEOWNERS": OWNERS}
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 1
+    files[".github/workflows/shared/a.md"] = "---\nimports: [b.md]\nText with no closing marker.\n"
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 1
+    files[".github/workflows/shared/a.md"] = "---\nimports: [b.md]\n---\nText.\n"
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 0
+
+
+def test_a_workflow_folder_note_with_an_unclosed_rule_does_not_break_the_scan(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/notes.md": "---\nSome notes.\n"})
+    summary = scan_agent_ops(repo)["summary"]
+    assert summary["agent_instruction_rewrite"] is None
+    assert summary["agent_instruction_rewrite_reason"] == "no_agent_jobs"
