@@ -22,14 +22,26 @@ A module imported while the stand-ins are in place, such as
 ``lib.complexity.treemap_render``, stays cached in ``sys.modules`` with its
 ``np`` still bound to the stub after the scope ends. That is harmless: the tests
 that call into it hold the stand-ins while they do.
+
+Toolkit-root tests (#1649). A test that reads the ai-native-toolkit repository
+itself (workflows, ``action.yml``, root docs, the plugin manifest) reaches it
+through ``TOOLKIT_ROOT`` and carries the ``toolkit_repo`` marker. The root is
+confirmed by ``.claude-plugin/plugin.json`` naming this plugin, so in a vendored
+copy of the skill tree, where that directory is another repository, the conftest
+skips the marked tests with a reason (``gate_toolkit_repo_tests``). It is a root
+probe, not a parking marker: in this repository's CI (``GITHUB_REPOSITORY``
+names it) a missing root fails the session, so the tests never skip there.
 """
 from __future__ import annotations
 
 import datetime as _dt
 import importlib
+import json
 import sys
 import types
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from pathlib import Path
+from typing import Literal, Protocol
 
 import pytest
 
@@ -42,6 +54,56 @@ WINDOWS_SKIP_MARKERS = {
     "needs_posix_perms": "chmod/getuid permission semantics are POSIX-only",
     "needs_posix_shell": "runs a #!/bin/sh stub or sh -c, which Windows cannot execute",
 }
+
+
+# The toolkit root (#1649): the directory that holds skills/, confirmed by its plugin manifest.
+TOOLKIT_PLUGIN_NAME = "ai-native-toolkit"
+TOOLKIT_REPOSITORY = "bjcoombs/ai-native-toolkit"
+TOOLKIT_REPO_MARKER = "toolkit_repo"
+TOOLKIT_ROOT = Path(__file__).resolve().parents[3]
+
+
+def is_toolkit_root(root: Path) -> bool:
+    """Whether ``root/.claude-plugin/plugin.json`` names this plugin."""
+    try:
+        manifest = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(manifest, dict) and manifest.get("name") == TOOLKIT_PLUGIN_NAME
+
+
+TOOLKIT_ROOT_PRESENT = is_toolkit_root(TOOLKIT_ROOT)
+
+
+def toolkit_root_verdict(present: bool, github_repository: str | None) -> Literal["run", "skip", "fail"]:
+    """Run the marked tests at the root; skip them elsewhere, except in this repository's CI."""
+    if present:
+        return "run"
+    if (github_repository or "").lower() == TOOLKIT_REPOSITORY:
+        return "fail"
+    return "skip"
+
+
+class _MarkableItem(Protocol):
+    def get_closest_marker(self, name: str) -> object | None: ...
+    def add_marker(self, marker: pytest.MarkDecorator) -> None: ...
+
+
+def gate_toolkit_repo_tests(items: Iterable[_MarkableItem], *, root: Path, present: bool,
+                            github_repository: str | None) -> None:
+    """Skip the ``toolkit_repo`` tests outside the toolkit root, or fail the session in its CI."""
+    verdict = toolkit_root_verdict(present, github_repository)
+    if verdict == "run":
+        return
+    where = root.as_posix()
+    if verdict == "fail":
+        raise pytest.UsageError(
+            f"GITHUB_REPOSITORY is {github_repository}, but {where} is not the {TOOLKIT_PLUGIN_NAME} "
+            "root (no .claude-plugin/plugin.json naming it), so the toolkit_repo tests would skip (#1649)")
+    reason = f"reads the {TOOLKIT_PLUGIN_NAME} repository, and {where} is not its root (#1649)"
+    for item in items:
+        if item.get_closest_marker(TOOLKIT_REPO_MARKER):
+            item.add_marker(pytest.mark.skip(reason=reason))
 
 
 def skip_without_posix_shell() -> None:

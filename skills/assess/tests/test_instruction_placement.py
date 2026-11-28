@@ -21,8 +21,9 @@ from lib.instructions.instruction_placement import (
     split_sections,
 )
 from lib.run.scan_registry import SCANS
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 
 
 def _write(root: Path, rel: str, text: str) -> Path:

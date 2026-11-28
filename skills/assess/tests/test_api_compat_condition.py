@@ -9,6 +9,7 @@ import pytest
 import lib.scoring.level_tally as lt
 from lib.ci.api_compat import scan_api_compat, tool_of
 from lib.counts_only.content_free import counts_only
+from assess_test_support import TOOLKIT_ROOT
 
 CID = "api-compat.1"
 WF = ".github/workflows/ci.yml"
@@ -553,7 +554,7 @@ def test_bun_test_runs_buns_own_runner_not_the_script(tmp_path: Path) -> None:
 
 def test_the_scorer_cites_a_pin_only_when_ci_runs_tests() -> None:
     """``present`` can be true from ``runs`` alone, so the pin citation carries its own gate."""
-    scorer = Path(__file__).resolve().parents[3] / "agents" / "assess-layer-scorer.md"
+    scorer = TOOLKIT_ROOT / "agents" / "assess-layer-scorer.md"
     para = next(p for p in scorer.read_text(encoding="utf-8").split("\n\n")
                 if p.startswith("**API and contract compatibility checks.**"))
     assert "Cite a test in `pins` only when `ci_checks.enforced_check_runs` is true" in para

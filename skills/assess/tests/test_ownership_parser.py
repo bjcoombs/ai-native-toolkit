@@ -26,6 +26,7 @@ from lib.docs.ownership_parser import (
     parse_codeowners,
     parse_ownership,
 )
+from assess_test_support import TOOLKIT_ROOT
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -416,7 +417,7 @@ def test_integration_parses_lib_readme_seam_declaration() -> None:
     the real tracked file. This is the dogfood guard that the parser reads a
     genuine, human-written ownership declaration on real data.
     """
-    repo_root = Path(__file__).resolve().parents[3]  # repo top
+    repo_root = TOOLKIT_ROOT  # repo top
     modules = parse_architecture_md(repo_root)
 
     lib_readme = "skills/assess/scripts/lib/README.md"

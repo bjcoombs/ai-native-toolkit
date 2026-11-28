@@ -34,6 +34,7 @@ from test_fleet_heatmap import FIXTURES as HEATMAP_FIXTURES
 from test_fleet_heatmap import cli as heatmap_cli
 from test_fleet_next_steps import _pages as next_steps_pages
 from test_fleet_next_steps import cli as next_steps_cli
+from assess_test_support import TOOLKIT_ROOT
 
 _SVG_TEXT = re.compile(r"<(text|title)\b[^>]*>(.*?)</\1>", re.S)
 
@@ -118,8 +119,8 @@ def test_fleet_pages_name_steps_and_gates_not_rows(outputs: dict[str, str], flee
 _TEMPLATE = Path(__file__).resolve().parents[2] / "assess-findings" / "SKILL.md"
 
 
-_SCORER = Path(__file__).resolve().parents[3] / "agents" / "assess-layer-scorer.md"
-_README = Path(__file__).resolve().parents[3] / "README.md"
+_SCORER = TOOLKIT_ROOT / "agents" / "assess-layer-scorer.md"
+_README = TOOLKIT_ROOT / "README.md"
 
 
 # The template's folds and rules moved into these references (#1408).

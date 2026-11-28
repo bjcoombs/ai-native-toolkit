@@ -17,8 +17,9 @@ from lib.counts_only.content_free import counts_only
 from lib.unit_components import KINDS, discover_components
 from lib.unit_discovery import scan_units
 from test_unit_discovery import _paths, _skipped, _write
+from assess_test_support import TOOLKIT_ROOT
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = TOOLKIT_ROOT
 
 PLUGIN = {
     ".claude-plugin/plugin.json": '{"name": "p"}\n',

@@ -34,9 +34,10 @@ from assess_report import render_report
 from golden import normalize_report
 from lib.class_sizes import loc_by_class
 from lib.skill_disclosure import _frontmatter_end
+from assess_test_support import TOOLKIT_ROOT
 
 # skills/assess/tests/ -> repo root is three parents up from this file's dir.
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 ASSESS_SKILL = REPO_ROOT / "skills" / "assess" / "SKILL.md"
 GOLDEN = Path(__file__).parent / "fixtures" / "golden" / "decomposition-parity-report.md"
 

@@ -28,6 +28,7 @@ from lib.keyhole.structure_drift import (
     human_grouping_relation,
     static_grouping_relation,
 )
+from assess_test_support import TOOLKIT_ROOT
 
 FIXTURES = Path(__file__).parent / "fixtures" / "structure_drift"
 
@@ -283,7 +284,7 @@ def test_tier1_integration_no_false_positives_after_allowlist() -> None:
     allowlist, never reported as ``human_split_but_cochange``. This is the dogfood
     guard that the allowlist matches the README's stated seams.
     """
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = TOOLKIT_ROOT
     result = detect_grouping_disagreement(repo_root)
     assert result["available"] in (True, False)
     if not result["available"]:
@@ -628,7 +629,7 @@ def test_build_module_path_map_resolves_real_package_modules() -> None:
     graph: every mapped module's value is a repo-relative ``.py`` source file
     under the package, the exact paths the human and co-change relations speak.
     """
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = TOOLKIT_ROOT
     mapping = structure_drift._build_module_path_map(repo_root)
     assert mapping  # the assess package resolves
     for module, rel in mapping.items():

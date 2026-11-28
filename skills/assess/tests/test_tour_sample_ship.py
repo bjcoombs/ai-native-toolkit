@@ -27,8 +27,9 @@ import pytest
 import assess_tour
 from assess_core import build_and_publish_run
 from golden import normalize_run_context
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 SHIPPED = "skills/assess/tour"
 # The sample's HEAD before and after the fix, as the #1144 fixture tree built them.
 SAMPLE_HEAD = "f2dee5aa81be46cd8787b0d89be85acfc4426896"

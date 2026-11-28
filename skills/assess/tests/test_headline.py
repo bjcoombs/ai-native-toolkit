@@ -25,9 +25,10 @@ from lib.scoring.headline import lone_condition, one_change_ceiling
 from lib.scoring.level_tally import default_model
 from lib.top_card import card_facts
 from test_level_tally import _fresh, _laddered, _plus_met_row
+from assess_test_support import TOOLKIT_ROOT
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = TOOLKIT_ROOT
 BANDS = ("Not Ready", "Basic", "Solid", "AI-Native")
 FRACTION = re.compile(r"\d(\.\d+)? ?/ ?8\b|X ?/ ?8")
 

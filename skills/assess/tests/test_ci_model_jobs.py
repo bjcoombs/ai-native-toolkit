@@ -10,9 +10,10 @@ import lib.scoring.level_tally as lt
 from lib.counts_only.content_free import counts_only
 from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_model_jobs import GATES, scan_ci_model_jobs, signs_in, without_changes
+from assess_test_support import TOOLKIT_ROOT
 
 CID = "model-ci-gated.1"
-REPO = Path(__file__).resolve().parents[3]
+REPO = TOOLKIT_ROOT
 
 EVAL_STEPS = """jobs:
   evals:

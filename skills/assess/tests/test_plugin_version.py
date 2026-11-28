@@ -15,8 +15,9 @@ import assess_emit_workflow
 from assess_report import made_by
 from lib import plugin_version
 from lib.run import run_setup, signals
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 
 

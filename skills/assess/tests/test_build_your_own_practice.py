@@ -34,8 +34,9 @@ from lib.scoring.level_tally import LEVEL_READS
 from lib.plain_english import lint
 from lib.profiles import ProfileError, single_repo_choice
 from lib.vocabulary import banned_hits
+from assess_test_support import TOOLKIT_ROOT
 
-GUIDE = Path(__file__).resolve().parents[3] / "docs" / "build-your-own-practice.md"
+GUIDE = TOOLKIT_ROOT / "docs" / "build-your-own-practice.md"
 _EXAMPLE = re.compile(r"<!-- guide-example: ([\w-]+) -->\n```\w*\n(.*?)```", re.S)
 
 # Run-context blocks that meet every handover practice, with the coverage threshold left to the test.

@@ -21,8 +21,9 @@ from lib.scoring.headline import GLOSSARY_URL
 from lib.scoring.levels import load_levels
 from lib.scoring.signal_grades import DEFAULT_LEVELS, INPUT_GRADES
 from lib.vocabulary import banned_hits
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 GLOSSARY = REPO_ROOT / "docs" / "glossary.md"
 FINDINGS_SKILL = REPO_ROOT / "skills" / "assess-findings" / "SKILL.md"
 README = REPO_ROOT / "README.md"

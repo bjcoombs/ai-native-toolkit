@@ -12,8 +12,9 @@ from pathlib import Path
 
 import assess_actions_render
 from skill_text import read_skill
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 PR_SKILL = REPO_ROOT / "skills" / "assess-pr" / "SKILL.md"
 FINDINGS_SKILL = REPO_ROOT / "skills" / "assess-findings" / "SKILL.md"
 GOLDEN_REPORT = Path(__file__).resolve().parent / "fixtures" / "golden" / "assess-report-baseline.md"

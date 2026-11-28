@@ -15,11 +15,11 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 from lib.report.evidence_check import KINDS, check_evidence
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 SCORER = REPO_ROOT / "agents" / "assess-layer-scorer.md"
 ASSESS_SKILL = REPO_ROOT / "skills" / "assess" / "SKILL.md"
 FINDINGS_SKILL = REPO_ROOT / "skills" / "assess-findings" / "SKILL.md"

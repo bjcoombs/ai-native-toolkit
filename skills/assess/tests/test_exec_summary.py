@@ -21,8 +21,9 @@ from lib.top_card import card_lines
 from test_headline import SCRIPTS, _level, _run, ci2  # noqa: F401 - ci2 is a fixture
 from test_top_card import _cond
 from test_top_card import _level as _card_level
+from assess_test_support import TOOLKIT_ROOT
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = TOOLKIT_ROOT
 KNOWN = {"available": True, "first_run": False, "closed_count": 1, "closed": [], "closed_reason": None,
          "gates_gained": [], "gates_lost": [], "next_blocker": "ci_runs_tests"}
 

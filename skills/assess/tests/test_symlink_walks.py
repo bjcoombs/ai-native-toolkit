@@ -12,8 +12,9 @@ import pytest
 
 from lib.test_pressure.common import _iter_files
 from test_complexity_treemap import stubbed_treemap
+from assess_test_support import TOOLKIT_ROOT
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = TOOLKIT_ROOT
 
 
 @pytest.fixture(scope="module")

@@ -15,8 +15,9 @@ import pytest
 from lib.ci.ci_checks import scan_ci_checks
 from lib.ci.ci_includes import TOOLKIT_GATE_JOBS, include_items, merged_config, resolve_includes
 from lib.ci.ci_merged_view import merged_view, rendered_job
+from assess_test_support import TOOLKIT_ROOT
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = TOOLKIT_ROOT
 LINT = "lint:\n  script:\n    - ruff check .\n"
 
 

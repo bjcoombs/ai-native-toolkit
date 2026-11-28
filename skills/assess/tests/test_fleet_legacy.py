@@ -17,6 +17,7 @@ from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 from test_fleet_heatmap import cli as heatmap_cli
 from test_fleet_next_steps import cli as next_steps_cli
+from assess_test_support import TOOLKIT_ROOT
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LEGACY_ORG = FIXTURES / "fleet_legacy" / "acme"
@@ -88,7 +89,7 @@ def test_trend_history_counts_a_pre_rename_entry(plugin_version):
     assert ft.trend_run(raw, [], None) is None
 
 
-PLUGIN_VERSION = json.loads((Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json")
+PLUGIN_VERSION = json.loads((TOOLKIT_ROOT / ".claude-plugin" / "plugin.json")
                             .read_text(encoding="utf-8"))["version"]
 
 
