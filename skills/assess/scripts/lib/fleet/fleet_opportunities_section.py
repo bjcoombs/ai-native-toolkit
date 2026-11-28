@@ -11,7 +11,9 @@ Deterministic; no date.
 
 `opportunities_section` renders `report.md`'s "What's working across the fleet" section (#1334: each
 practice at the top level in every measured repository, then up to `MOST_HELD` held most widely, from
-`opportunities.in_place`, so the counts are stated once, there) and its "Opportunities" section from a built
+`opportunities.in_place`, so the counts are stated once, there; then each practice no measured repository
+holds, with `fleet_not_measured.absence_line`: "not found at its top level in N; M not measured" by reason while any repository
+reads it unknown, #1350) and its "Opportunities" section from a built
 `FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
 an `In place:` line first (pointing at "What's working", or, when no practice is at the top level in
 any measured repository, saying so in its own words, #1470), then the biggest lift, the shared templates and the display-only
@@ -31,6 +33,7 @@ from collections.abc import Sequence
 from lib.fleet.fleet_achievements import BASELINE_NOTE, LEVEL_UP, Achievements
 from lib.fleet.fleet_data import FleetData
 from lib.fleet.fleet_next_steps import code, text
+from lib.fleet.fleet_not_measured import absence_line
 from lib.fleet.fleet_opportunities import PER_LIST, TITLE, InPlace, Opportunities
 from lib.fleet.fleet_tooling_map import KINDS
 from lib.scoring.headline import GATE_CHANGE
@@ -67,11 +70,21 @@ def whats_working(opps: Opportunities, titles: dict[str, str]) -> list[str]:
     lines = [f"## {WORKING_TITLE}", ""]
     if not every and not rest:
         return lines + [f"{IN_PLACE} 0 of {len(rows)} practices at the top level in any measured repository "
-                        "yet; the opportunities below say where to start.", ""]
+                        "yet; the opportunities below say where to start.", "", *_absent(rows, titles)]
     head = f"{IN_PLACE} {len(every)} of {len(rows)} practices at the top level in every measured repository"
     if rest:
         head += f", and {len(rest)} more held most widely" if every else f"; {len(rest)} held most widely"
-    return lines + [f"{head}.", "", *(_held(p, titles) for p in [*every, *rest]), ""]
+    return lines + [f"{head}.", "", *(_held(p, titles) for p in [*every, *rest]), "", *_absent(rows, titles)]
+
+
+def _absent(rows: Sequence[InPlace], titles: dict[str, str]) -> list[str]:
+    """The practices no measured repository holds, each "not found" with its not-measured count by
+    reason while any repository reads it unknown (#1350): never "in place nowhere" on data unread."""
+    none = [p for p in rows if p["at_top"] == 0 and (p["measured"] or p["not_measured"])]
+    if not none:
+        return []
+    return ["Not held by any measured repository yet:", "",
+            *(absence_line(p, text(titles.get(p["row"], p["row"]))) for p in none), ""]
 
 
 def _in_place(opps: Opportunities) -> str:

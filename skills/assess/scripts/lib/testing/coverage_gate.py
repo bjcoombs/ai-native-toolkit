@@ -39,7 +39,8 @@ runs*. ``enforced_meets_minimum`` (#921) is ``threshold_meets_minimum`` with
 that run required: an enforced CI line (unmasked, on ordinary triggers) runs the
 coverage tool that reads the threshold, or carries the threshold flag itself.
 Layer 6 level 1, and so the Step 4 ``coverage_gate`` gate, reads it; the rules
-and ``enforced_basis`` tokens are in ``lib.testing.coverage_ci``. A JaCoCo
+and ``enforced_basis`` tokens are in ``lib.testing.coverage_ci``; no gate beside an unread
+GitLab include reads null (``lib.testing.coverage_includes``, #1350). A JaCoCo
 ``<maximum>`` on a ``MISSEDCOUNT`` / ``MISSEDRATIO`` counter is a gate whose
 percentage is not read (unit ``uncovered_count`` / ``missed_ratio``), so it
 reads unknown, never 0.
@@ -55,9 +56,8 @@ Codecov status targets in ``codecov.yml`` (#882, ``lib.testing.coverage_codecov`
 What switches coverage on for a plain ``pytest`` or ``jest`` run (``addopts``,
 ``collectCoverage``), read per config directory, is ``lib.testing.coverage_activation``'s.
 
-Inward-only imports: stdlib plus ``lib.docs.doc_graph``'s path-exclusion rule,
-``lib.assess_config.is_user_excluded``, ``lib.testing.coverage_activation``,
-``lib.testing.coverage_ci`` and ``lib.testing.coverage_codecov``; never an orchestrator.
+Inward-only imports: stdlib, ``lib.docs.doc_graph``'s path-exclusion rule, ``lib.assess_config``
+and the ``lib.testing.coverage_*`` readers; never an orchestrator.
 
 Full reference: lib/docs/coverage_gate.md.
 """
@@ -73,6 +73,7 @@ from lib.run.run_scope import Scope
 from lib.assess_config import is_user_excluded
 from lib.testing.coverage_activation import read_activation
 from lib.testing.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_meets_minimum, read_ci_runs
+from lib.testing.coverage_includes import include_hold
 from lib.testing.coverage_codecov import codecov_reason, codecov_statuses, is_patch, meets_percent
 from lib.testing.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
 from lib.docs.doc_graph import is_excluded_path
@@ -781,10 +782,10 @@ def detect_coverage_gate(repo_root: Path | str, scope: Scope | None = None,
         unmeasured = codecov_reason(gates, gates_something)   # #882: Codecov decides it
     # Root gates that may not govern the scope are reported, never counted or credited.
     known = gates if applies is not None else gates[:len(gates) - len(root_gates)]
-    enforced, basis = enforced_meets_minimum(
+    enforced, basis = include_hold(enforced_meets_minimum(  # #1350: no gate beside an unread include
         known, meets, (ci or read_ci_runs(root)) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
-        minimum=MINIMUM_THRESHOLD_PERCENT, activation=read_activation(read))
+        minimum=MINIMUM_THRESHOLD_PERCENT, activation=read_activation(read)), root, bool(known))
     return {
         "available": True,
         "configured": any(gates_something(g) for g in known),

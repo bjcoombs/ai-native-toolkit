@@ -965,6 +965,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `secrets_guard.ci.files` | path (hashed when hashing is on) |
 | `secrets_guard.ci.rules_unevaluated` | token |
 | `secrets_guard.ci.tools` | token |
+| `secrets_guard.configured_reason` | token |
 | `secrets_guard.enforcement.reason` | reason code |
 | `secrets_guard.enforcement.source` | token |
 | `secrets_guard.sources.source` | token |

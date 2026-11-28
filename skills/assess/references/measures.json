@@ -4251,6 +4251,12 @@
           "carried_in": "enforced_basis"
         },
         {
+          "code": "ci_includes_unresolved",
+          "means": "No coverage gate was found in the checkout, and the GitLab CI includes a local, project, remote or component file. The coverage scan does not read included files, so the gate may run there.",
+          "next_step": "Run the coverage threshold in the repository's own CI (pytest --cov --cov-fail-under=80). The coverage scan reads no included file.",
+          "carried_in": "enforced_basis"
+        },
+        {
           "code": "root_coverage_config_unresolved",
           "means": "A scoped run found a fail_under in the root coverage.py config for a Python package with none of its own, not where CI runs coverage. coverage.py reads the config of the directory it runs in. So the root floor counts only when CI runs coverage from the root or names that config.",
           "next_step": "Run coverage in CI from the repository root (pytest --cov, coverage report), or pass the root config with --cov-config or --rcfile; or give the package its own fail_under and run coverage from its directory or with --cov-config naming that config.",
@@ -5619,6 +5625,7 @@
           "secrets_guard.ci.files": "path",
           "secrets_guard.ci.rules_unevaluated": "token",
           "secrets_guard.ci.tools": "token",
+          "secrets_guard.configured_reason": "token",
           "secrets_guard.enforcement.reason": "reason",
           "secrets_guard.enforcement.source": "token",
           "secrets_guard.pre_commit.file": "path",
@@ -8240,7 +8247,7 @@
       "collector": "core.coverage_gate",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "threshold_not_read: threshold unknown; unknown_trigger: triggers unsettled; check_may_pass: may not fail its job; indirect_run: make test or tox may run it; included_jobs: in an included file; unread_ci_system: unparsed CI may run it; status_check_unconfirmed: a Codecov status that may be optional"
+      "null_means": "threshold_not_read: threshold unknown; unknown_trigger: triggers unsettled; check_may_pass: may pass; indirect_run: a target may run it; included_jobs: in an included file; unread_ci_system: unparsed CI; status_check_unconfirmed: optional Codecov status; ci_includes_unresolved: unread include"
     },
     {
       "path": "doc_staleness.kept_true.present",
@@ -8375,7 +8382,7 @@
       "collector": "core.secrets_guard",
       "input_class": "config_text",
       "grade": "config_only",
-      "null_means": ""
+      "null_means": "No secrets guard was found in the files read, and a GitLab include that could hold a scan was not read (configured_reason ci_includes_unresolved)."
     },
     {
       "path": "secrets_guard.enforcement.present",

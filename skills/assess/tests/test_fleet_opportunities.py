@@ -100,8 +100,9 @@ def test_shared_template_names_the_source_and_the_repositories_it_would_lift() -
 
 def test_in_place_counts_repositories_at_each_rows_top_level() -> None:
     # #1470: instr reads a declared signal, so d and e are not at its top level; ci is counted
-    assert _opps(fleet())["in_place"] == [{"row": "instr", "at_top": 0, "measured": 6},
-                                          {"row": "ci", "at_top": 1, "measured": 6}]
+    none = {"not_measured": 0, "not_measured_reasons": []}  # every repository measured (#1350)
+    assert _opps(fleet())["in_place"] == [{"row": "instr", "at_top": 0, "measured": 6, **none},
+                                          {"row": "ci", "at_top": 1, "measured": 6, **none}]
 
 
 def test_a_declared_practice_reads_the_same_in_the_badge_and_the_fleet() -> None:
@@ -119,7 +120,8 @@ def test_a_declared_practice_reads_the_same_in_the_badge_and_the_fleet() -> None
     section = opportunities_section(_data([repo]), None)
     assert section is not None
     assert "- CI: 1 of 1 measured repository at the top level." in section
-    assert "- Instructions:" not in section
+    assert "- Instructions: 1 of" not in section
+    assert "- Instructions: not in place at its top level in the 1 measured repository." in section  # #1350
 
 
 def test_a_declared_practice_reads_the_same_on_the_radar_and_in_whats_working() -> None:

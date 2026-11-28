@@ -281,6 +281,8 @@ FLEET_DATA_KEPT: Final = frozenset({
     "repos.rows.row", "repos.rows.signal", "views.units.levels.row",
     # #746: maturity-model ids and the run's own wording (counts and model titles only)
     "opportunities.in_place.row", "opportunities.biggest_lift.row", "opportunities.biggest_lift.signal",
+    # #1350: the level result's reason codes for a practice not measured (lib/fleet/fleet_not_measured.py)
+    "opportunities.in_place.not_measured_reasons.reason",
     "opportunities.biggest_lift.gate", "opportunities.biggest_lift.change",
     "opportunities.biggest_lift.done_when", "opportunities.biggest_lift.text",
     "opportunities.shared_templates.row", "opportunities.shared_templates.signal",
