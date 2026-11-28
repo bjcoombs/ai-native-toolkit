@@ -16,7 +16,9 @@ hook conditions count them and no harness adds a condition of its own:
 - ``.vscode/settings.json`` (``vscode``): listed only when it sets
   ``chat.tools.terminal.autoApprove``; each rule approved counts as an ``allow`` entry and each
   rule refused (``false``) as a ``deny`` entry. A ``.vscode/settings.json`` with no such key is
-  editor state and is not listed.
+  editor state and is not listed. One that does not parse but whose text names the setting is
+  listed with ``parse_ok: false`` and no counts, so an unreadable configuration never looks like
+  none; ``broad_in_text`` reads its broad rules from the raw text for ``agent_harness``.
 
 These files are read as JSON with comments and trailing commas, as their tools read them.
 ``settings_files`` returns one ``AgentOpsSettingsFile`` per file found, each with its ``tool``. A
@@ -167,6 +169,66 @@ def auto_approve(data: dict[str, Any]) -> AutoApprove | None:
     return AutoApprove(allow, deny, broad)
 
 
+_KEY_TRUE = re.compile(r'"((?:[^"\\]|\\.)*)"\s*:\s*(?:true\b|\{[^{}]*"approve"\s*:\s*true\b)')
+
+
+def _decoded(key: str) -> str:
+    try:
+        value = json.loads(f'"{key}"')
+    except ValueError:
+        return key
+    return value if isinstance(value, str) else key
+
+
+def _rules_text(text: str) -> str:
+    """The text of the ``chat.tools.terminal.autoApprove`` value: from the key to the brace that
+    closes its object, or to the end of a file that never closes it."""
+    start = text.find(f'"{TERMINAL_AUTO_APPROVE}"')
+    if start < 0:
+        return ""
+    open_at = text.find("{", start)
+    if open_at < 0:
+        return text[start:]
+    depth, quoted, i = 0, False, open_at
+    while i < len(text):
+        c = text[i]
+        if quoted:
+            i += 2 if c == "\\" else 1
+            quoted = quoted and c != '"'
+            continue
+        if c == '"':
+            quoted = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+        i += 1
+    return text[start:]
+
+
+def names_auto_approve(text: str) -> bool:
+    """Whether a settings file's raw text names a terminal or all-tools auto-approve setting."""
+    return any(f'"{name}"' in text for name in (TERMINAL_AUTO_APPROVE, *_ALL_TOOLS))
+
+
+def broad_in_text(text: str) -> list[str]:
+    """The broad auto-approves in a settings file that does not parse (#846), read from its raw
+    text so an unreadable file never reads as clean: an all-tools setting set to true, the
+    terminal setting set to true, or a broad rule key approved inside the terminal setting's
+    object. Other settings' keys (``files.exclude``) are never read."""
+    found = [name for name in _ALL_TOOLS
+             if re.search(rf'"{re.escape(name)}"\s*:\s*true\b', text)]
+    if re.search(rf'"{re.escape(TERMINAL_AUTO_APPROVE)}"\s*:\s*true\b', text):
+        found.append(TERMINAL_AUTO_APPROVE)
+    for m in _KEY_TRUE.finditer(_rules_text(text)):
+        key = _decoded(m.group(1))
+        if key != TERMINAL_AUTO_APPROVE and is_broad_rule(key):
+            found.append(key)
+    return found
+
+
 def load(path: Path, jsonc: bool) -> dict[str, Any] | None:
     """A settings or hook file as a JSON object, or None when absent, unreadable or not an object."""
     if not path.is_file():
@@ -188,7 +250,7 @@ def _entry(repo_root: Path, rel: str, tool: str, tracked: frozenset[Path] | None
         return None
     data = load(path, tool in _JSONC)
     approve = auto_approve(data) if tool == "vscode" and data is not None else None
-    if tool == "vscode" and approve is None:
+    if tool == "vscode" and approve is None and not (data is None and names_auto_approve(_raw(path))):
         return None  # editor settings only: no agent configuration to report
     entry: AgentOpsSettingsFile = {
         "path": rel, "tool": tool, "tracked": is_tracked(path, tracked), "parse_ok": data is not None,
@@ -212,6 +274,13 @@ def _entry(repo_root: Path, rel: str, tool: str, tracked: frozenset[Path] | None
     if tool != "vscode":
         entry["hook_events"] = hook_events(data.get("hooks"), flat=tool in _FLAT)
     return entry
+
+
+def _raw(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 def _copilot_hook_files(repo_root: Path, suffix: str = "") -> list[str]:

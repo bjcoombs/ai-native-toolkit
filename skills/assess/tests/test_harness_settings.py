@@ -14,7 +14,7 @@ import pytest
 import lib.scoring.level_tally as lt
 from lib.agents.agent_harness import scan_agent_harness
 from lib.agents.agent_ops import scan_agent_ops
-from lib.agents.harness_settings import (HOOK_CONDITIONS, HOOKS_DISABLED, auto_approve, hook_acts,
+from lib.agents.harness_settings import (HOOK_CONDITIONS, HOOKS_DISABLED, auto_approve, broad_in_text, hook_acts,
                                          is_broad_rule, read_hooks_disabled)
 from lib.counts_only.content_free import counts_only
 from lib.instructions.instruction_files import grade_instruction_files, nested_instruction_surface
@@ -219,6 +219,28 @@ def test_an_untracked_vscode_settings_file_raises_nothing(tmp_path: Path) -> Non
     (repo / ".vscode/settings.json").write_text('{"chat.tools.terminal.autoApprove": {"*": true}}', encoding="utf-8")
     assert scan_agent_harness(repo)["findings"] == []
     assert scan_agent_ops(repo)["summary"]["permissions_encoded"] is False
+
+
+@pytest.mark.parametrize("text, broad", [
+    ('{"chat.tools.terminal.autoApprove": {"*": true, "rm": false}', ["*"]),  # no closing brace
+    ('{"chat.tools.terminal.autoApprove": {"/^.+$/": {"approve": true}},, }', ["/^.+$/"]),
+    ('{"chat.tools.global.autoApprove": true,, "x": }', ["chat.tools.global.autoApprove"]),
+    ('{"files.exclude": {"*": true}, "chat.tools.terminal.autoApprove": {"npm test": true}', []),
+])
+def test_an_unparseable_auto_approve_file_is_listed_and_never_reads_clean(
+        tmp_path: Path, text: str, broad: list[str]) -> None:
+    repo = _vscode(tmp_path, text)
+    entries = scan_agent_ops(repo)["settings"]
+    assert [(e["tool"], e["parse_ok"], e["allow_count"]) for e in entries] == [("vscode", False, 0)]
+    assert scan_agent_ops(repo)["summary"]["permissions_encoded"] is False  # unread is never credited
+    findings = scan_agent_harness(repo)["findings"]
+    assert [(f["kind"], f["file"]) for f in findings] == [("broad_auto_approve", ".vscode/settings.json")] * len(broad)
+    assert broad_in_text(text) == broad
+
+
+def test_an_unparseable_editor_file_without_auto_approve_is_not_listed(tmp_path: Path) -> None:
+    repo = _vscode(tmp_path, '{"editor.tabSize": 2,, }}')
+    assert scan_agent_ops(repo)["settings"] == [] and scan_agent_harness(repo)["findings"] == []
 
 
 def test_a_narrow_auto_approve_list_raises_nothing(tmp_path: Path) -> None:

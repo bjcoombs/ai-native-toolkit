@@ -40,7 +40,8 @@ absent-file finding), ``detail`` and a one-line ``fix``:
   command (a ``chat.tools.terminal.autoApprove`` key of ``*`` or a match-all regex) or every
   tool (``chat.tools.autoApprove`` / ``chat.tools.global.autoApprove`` true); the VS Code twin
   of ``broad_allow``, read by ``lib.agents.harness_settings.auto_approve``. In a git checkout
-  the file must be tracked, as it is often a personal, gitignored one.
+  the file must be tracked, as it is often a personal, gitignored one. A file that does not parse
+  is read from its raw text (``harness_settings.broad_in_text``), so it never reads as clean.
 - ``credential_mount``: a devcontainer file that mounts a host credential
   directory (``~/.ssh``, ``~/.aws``, ``~/.config/gcloud`` ...).
 - ``hidden_unicode``: zero-width or bidirectional-control characters in an
@@ -105,7 +106,7 @@ from lib.instructions.claude_config import parse_frontmatter
 from lib.history.git_churn import tracked_files
 from lib.ci.shared_tooling import ON_KEY
 from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
-from lib.agents.harness_settings import auto_approve, load
+from lib.agents.harness_settings import auto_approve, broad_in_text, load, names_auto_approve
 
 ItemKind = Literal[
     "settings_hook", "frontmatter_hook", "env", "api_key_helper", "mcp_server", "cursor_hook",
@@ -500,7 +501,11 @@ class _Scan:
         text = self.read(path)
         data = load(path, jsonc=True) if text is not None else None
         rules = auto_approve(data) if data is not None else None
-        for key in rules.broad if rules is not None else []:
+        if data is None and text is not None and names_auto_approve(text):
+            broad = broad_in_text(text)  # an unparseable file never reads as clean (#846)
+        else:
+            broad = rules.broad if rules is not None else []
+        for key in broad:
             self.finding(
                 "broad_auto_approve", self.rel(path), _line_of(text or "", json.dumps(key)),
                 f"`{key}` lets agents run any terminal command without asking",
