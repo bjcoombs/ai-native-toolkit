@@ -377,3 +377,24 @@ def test_only_a_github_script_step_has_a_javascript_script() -> None:
 ])
 def test_nesting_too_deep_to_read_is_no_check_not_a_crash(unit: Unit) -> None:
     assert step_acts([unit], HELD) == set()
+
+
+# --- review round 4: a message is no label, and a callback's act is its own ----------------
+
+
+@pytest.mark.parametrize(("code", "acts"), [
+    ("if 'Assisted-by' not in body: print('Please run: gh pr edit --add-label needs-ai-disclosure')\n", set()),
+    ("import logging\nif 'Assisted-by' not in body: logging.warning('use --add-label x')\n", set()),
+    ("import os\nif 'Assisted-by' not in body: os.system('gh pr edit 1 --add-label ai')\n", {LABEL}),
+    ("import subprocess\nif 'AI' in body: subprocess.run(('gh', 'pr', 'edit', '--add-label=ai'))\n", {LABEL}),
+    ("import subprocess\nif 'AI' in body: subprocess.run(['echo', '--add-label'])\n", set()),
+    ("import subprocess\nif 'AI' in body: subprocess.run(cmd)\n", set()),
+])
+def test_a_python_label_is_a_process_call_running_gh(code: str, acts: set[str]) -> None:
+    assert step_acts([Unit(PYTHON, code)], HELD) == acts
+
+
+def test_a_javascript_act_inside_a_callback_belongs_to_the_callback() -> None:
+    code = 'if (!body.includes("Assisted-by")) { files.forEach(f => { if (f.big) core.setFailed("x") }) }'
+    assert step_acts([Unit(JS, code)], HELD) == set()
+    assert step_acts([Unit(JS, 'if (!body.includes("AI")) { await core.setFailed("x") }')], HELD) == {EXIT}

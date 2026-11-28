@@ -19,8 +19,10 @@ no check: an unsettled reading never counts. Both readers answer the same two qu
   ``/X/.test(body)``. A name assigned from a marker test is one too (``ok = "X" in body``).
   An **act** is Python ``sys.exit`` / ``exit`` / ``raise SystemExit`` with a non-zero or
   message argument (``sys.exit(0)``, ``sys.exit()`` and a bare ``raise SystemExit`` end the
-  run green), or a call passing ``--add-label``; JavaScript ``core.setFailed(...)``, ``throw``,
-  ``process.exit(N)`` with N non-zero, or ``addLabels(...)``. The act **follows** when it is a
+  run green), or a process call (``subprocess.*``, ``os.system``) running ``gh ... --add-label``,
+  never a message that names it; JavaScript ``core.setFailed(...)``, ``throw``,
+  ``process.exit(N)`` with N non-zero, or ``addLabels(...)``, as the statement's own call (one
+  inside a callback such as ``files.forEach(f => ...)`` belongs to the callback). The act **follows** when it is a
   statement of the branches of the ``if`` the test is the condition of, or an unconditional
   statement later in the same block when one of those branches leaves the flow first, or in
   JavaScript the operand right after the test in a ``||``/``&&`` chain (``body.includes('X') ||
@@ -45,6 +47,8 @@ from lib.ci.disclosure_terms import EXIT, LABEL, has_marker, is_read
 _PY_SEARCH = frozenset({"search", "match", "fullmatch", "findall", "finditer"})
 _PY_METHODS = frozenset({"startswith", "endswith", "find", "index", "count"})
 _PY_EXITS = frozenset({"sys.exit", "exit", "quit"})
+_PY_PROCESS = frozenset({"subprocess.run", "subprocess.call", "subprocess.check_call", "subprocess.check_output",
+                         "subprocess.Popen", "os.system", "run", "call", "check_call", "check_output", "Popen"})
 
 
 # --- Python ---------------------------------------------------------------------------------
@@ -135,7 +139,7 @@ class _Py:
             call = stmt.value
             if _dotted(call.func) in _PY_EXITS:
                 return {EXIT} if call.args and _red(call.args[0]) else set()
-            if any((t := _text(n)) is not None and "--add-label" in t for n in ast.walk(call)):
+            if _dotted(call.func) in _PY_PROCESS and _labels(call):
                 return {LABEL}
         if isinstance(stmt, ast.Raise) and isinstance(stmt.exc, ast.Call) and _dotted(stmt.exc.func) == "SystemExit":
             return {EXIT} if stmt.exc.args and _red(stmt.exc.args[0]) else set()
@@ -172,6 +176,17 @@ def _py_ends(stmts: list[ast.stmt]) -> bool:
     ``raise`` or a ``return``, so a later act runs only on the other branch (a guard clause)."""
     return any(isinstance(s, (ast.Raise, ast.Return)) or (
         isinstance(s, ast.Expr) and isinstance(s.value, ast.Call) and _dotted(s.value.func) in _PY_EXITS) for s in stmts)
+
+
+def _labels(call: ast.Call) -> bool:
+    """Whether a process call runs ``gh ... --add-label``: an argument list holding both words, or
+    one command string (``os.system("gh pr edit --add-label x")``). A message naming it is no call."""
+    first = call.args[0] if call.args else None
+    if isinstance(first, (ast.List, ast.Tuple)):
+        words = [_text(e) or "" for e in first.elts]
+        return bool(words) and words[0] == "gh" and any(w == "--add-label" or w.startswith("--add-label=") for w in words)
+    text = _text(first) if first is not None else None
+    return text is not None and text.split()[:1] == ["gh"] and "--add-label" in text.split()
 
 
 def _red(arg: ast.expr) -> bool:
@@ -530,8 +545,14 @@ class _Js:
         if texts[0] == "throw":
             return {EXIT}
         start = 1 if texts[0] == "await" else 0
+        depth = 0
         for k in range(start, len(toks) - 1):
-            if toks[k].kind == "id" and toks[k + 1].text == "(":
+            if toks[k].kind == "op" and toks[k].text in "([{":
+                depth += 1
+            elif toks[k].kind == "op" and toks[k].text in ")]}":
+                depth -= 1
+            # Only the statement's own call: one inside a callback (`files.forEach(f => ...)`) belongs to it.
+            if depth == 0 and toks[k].kind == "id" and toks[k + 1].text == "(":
                 if toks[k].text == "setFailed":
                     return {EXIT}
                 if toks[k].text == "addLabels":
