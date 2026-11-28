@@ -19,7 +19,8 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 STRIP = "tr -d '\\r'"
-JQ_RAW = re.compile(r"\bjq\b[^|)\n]*?\s(?:-[a-qs-zA-Z]*r[a-zA-Z]*|--raw-output)\b")
+JQ_WORD = re.compile(r"(?<![\w.-])jq(?![\w.-])")
+RAW_FLAG = re.compile(r"-[a-qs-zA-Z]*r[a-zA-Z]*|--raw-output")
 WHILE_READ = re.compile(r"\|\s*while\s+(?:IFS=\S*\s+)?read\b")
 
 
@@ -62,9 +63,43 @@ def _close(text: str, i: int) -> int | None:
     return None
 
 
+def _jq_command_end(text: str, i: int) -> tuple[int, bool]:
+    """End of the `jq` command whose arguments start at `i`, and whether it is raw.
+
+    Walks shell words up to an unquoted `|`, `)`, `;`, `&` or newline, skipping
+    quoted spans, so a `-r` written after a filter that holds `|` or `)` counts.
+    """
+    raw, n = False, len(text)
+    while i < n:
+        while i < n and text[i] in " \t":
+            i += 1
+        if i >= n or text[i] in "|);&\n":
+            break
+        word, start = [], i
+        while i < n and text[i] not in " \t|);&\n":
+            c = text[i]
+            if c in "'\"":
+                end = text.find(c, i + 1)
+                i = n if end < 0 else end + 1
+                word.append("'")
+                continue
+            if c == "\\":
+                i += 2
+                continue
+            word.append(c)
+            i += 1
+        if RAW_FLAG.fullmatch(text[start:i]) and "'" not in word:
+            raw = True
+    return i, raw
+
+
 def _unstripped(body: str) -> bool:
-    raw = list(JQ_RAW.finditer(body))
-    return bool(raw) and STRIP not in body[raw[-1].end():]
+    last = -1
+    for m in JQ_WORD.finditer(body):
+        end, raw = _jq_command_end(body, m.end())
+        if raw:
+            last = end
+    return last >= 0 and STRIP not in body[last:]
 
 
 def _logical_lines(text: str) -> list[tuple[int, str]]:
@@ -108,6 +143,8 @@ def find_unstripped(text: str) -> list[int]:
         "done < <(jq -r '.[]' \"$F\")",
         "case \"$(jq -r '.op' <<<\"$w\")\" in",
         "V=$(jq --raw-output .a f)",
+        "V=$(gh api x | jq '.a | .b' -r)",
+        "V=$(jq 'select(.x)' -r f)",
         "L=$(gh api user | jq -r '.login' | tr '[:upper:]' '[:lower:]')",
     ],
 )
@@ -124,6 +161,8 @@ def test_scan_flags_an_unstripped_capture(snippet: str) -> None:
         "N=$(jq '.a | length' f)",
         "jq -r '.path' run-context.json",
         "echo $(( 1 + 2 ))",
+        "V=$(jq '.a | \"-r\"' f)",
+        "V=$(jq-tool -r f)",
         "L=$(gh api user | jq -r '.login' | tr -d '\\r' | tr '[:upper:]' '[:lower:]')",
     ],
 )
