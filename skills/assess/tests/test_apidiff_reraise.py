@@ -50,6 +50,7 @@ def test_a_quoted_parenthesis_is_not_a_subshell() -> None:
     ("[ -s o.txt ] && exit 1 &", True), ("exit 1 &", True), ("fi &", True),
     ("apidiff a b > o.txt 2>&1", False), ("read x <&3 && exit 1", False), ("apidiff a b &> o.txt", False), ("apidiff a b |& tee o.txt", False),
     ("[ -s o.txt ] && exit 1", False), ('echo "R&D" && exit 1', False), ("echo 'a & b'", False),
+    ("[ -s o.txt ] && exit 1  # R&D gate", False), ("exit 1 & # bg", True), ('echo "$#" && exit 1 &', True),
 ])
 def test_backgrounded_reads_a_bare_ampersand_outside_quotes(line: str, want: bool) -> None:
     assert backgrounded(line) is want

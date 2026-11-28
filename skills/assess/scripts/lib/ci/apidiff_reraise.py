@@ -13,7 +13,7 @@ the shell text is read as words.
   (``echo broke; exit 1``, ``echo broke && exit 1``), never one behind ``||``, a test or a
   subshell (``SUBSHELL``: a command that opens with ``(``, not a quoted ``(``).
 - ``backgrounded(text)``: a line that sends a job to the background with a bare ``&`` outside
-  quotes (``[ -s o.txt ] && exit 1 &``, ``fi &``): its ``exit 1`` cannot fail the job (#1634).
+  quotes and comments (``[ -s o.txt ] && exit 1 &``, ``fi &``): its ``exit 1`` cannot fail the job (#1634).
   ``&&``, ``2>&1``, ``<&3``, ``&>`` and ``|&`` are not one.
 
 The rules are described with the apidiff check in ``lib.ci.api_compat``'s reference. Inward-only imports; never an orchestrator. Tests:
@@ -31,6 +31,7 @@ SUBSHELL = re.compile(r"\s*(?:(?:then|else|do|\{|!)\s+)*\(")   # a command that 
 _ECHO = (["echo"], ["printf"])   # commands that cannot fail before a chained ``exit``
 _BACKGROUND = re.compile(r"(?<![&<>|])&(?![&>])")   # ``... && exit 1 &``: the exit runs in a background job
 _QUOTED = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
+_COMMENT = re.compile(r"(?:^|\s)#.*$")   # a trailing comment: ``exit 1  # R&D gate``
 
 
 def reraises(cmd: list[str], held: frozenset[str] = frozenset()) -> bool:
@@ -97,5 +98,6 @@ def line_ends(text: str) -> bool:
 
 
 def backgrounded(text: str) -> bool:
-    """Whether the shell line ``text`` sends a job to the background: a bare ``&`` outside quotes."""
-    return bool(_BACKGROUND.search(_QUOTED.sub("", text)))
+    """Whether the shell line ``text`` sends a job to the background: a bare ``&`` outside quotes
+    and outside a trailing ``#`` comment."""
+    return bool(_BACKGROUND.search(_COMMENT.sub("", _QUOTED.sub("", text))))
