@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from lib.exec_summary import GATE_TASK, STEP_GATES_URL, summarised
 from lib.scoring.headline import as_headline, headline
 from lib.scoring.level_tally import default_model
@@ -49,6 +51,7 @@ def test_counts_only_drops_the_card_text() -> None:
     assert kept["summary_lines"] == len(block["summary_lines"])
 
 
+@pytest.mark.toolkit_repo
 def test_the_catalog_has_the_step_gates_entry_the_link_names() -> None:
     catalog = (ROOT / "docs" / "what-we-measure.md").read_text(encoding="utf-8")
     assert STEP_GATES_URL.endswith("/docs/what-we-measure.md#step-gates")
@@ -60,6 +63,7 @@ def test_every_default_gate_has_a_task() -> None:
     assert gates <= set(GATE_TASK)
 
 
+@pytest.mark.toolkit_repo
 def test_the_landing_page_shows_the_card_the_code_prints() -> None:
     """The site's "What the report says first" example is the code's own output, word for word."""
     page = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")

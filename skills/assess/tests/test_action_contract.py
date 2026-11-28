@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 from assess_test_support import TOOLKIT_ROOT
 
+pytestmark = pytest.mark.toolkit_repo  # reads the toolkit repository itself (#1649)
+
 try:  # PyYAML is not a declared dependency of this suite.
     import yaml
 except ImportError:  # pragma: no cover - environment-dependent

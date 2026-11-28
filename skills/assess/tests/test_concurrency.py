@@ -147,6 +147,7 @@ def test_scope_counts_only_files_under_the_scope(registry_repo: Path) -> None:
     assert block["reason"].startswith("short_history: ")  # one merge touched feature1
 
 
+@pytest.mark.toolkit_repo
 def test_this_repository_reads_the_generated_pair_above_the_threshold() -> None:
     """Over the 60 merges before FIXED_COMMIT (CI checks out full history), both files of
     the generated catalog pair are above the threshold and marked generated, and the median

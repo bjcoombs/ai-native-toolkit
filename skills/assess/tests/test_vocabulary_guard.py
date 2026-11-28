@@ -127,6 +127,7 @@ _README = TOOLKIT_ROOT / "README.md"
 _TEMPLATE_REFS = sorted((_TEMPLATE.parent / "references").glob("*.md"))
 
 
+@pytest.mark.toolkit_repo
 @pytest.mark.parametrize("source", [_TEMPLATE, *_TEMPLATE_REFS, _SCORER, _README],
                          ids=["assess-findings", *[f"assess-findings-{p.stem}" for p in _TEMPLATE_REFS],
                               "assess-layer-scorer", "readme"])

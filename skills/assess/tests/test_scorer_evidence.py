@@ -16,6 +16,8 @@ from __future__ import annotations
 import json
 import re
 
+import pytest
+
 from lib.report.evidence_check import KINDS, check_evidence
 from assess_test_support import TOOLKIT_ROOT
 
@@ -35,6 +37,7 @@ def _schema_examples() -> list:
     return json.loads(block.group(1))
 
 
+@pytest.mark.toolkit_repo
 def test_scorer_return_section_names_evidence_list():
     text = SCORER.read_text(encoding="utf-8")
     # The return list only, not the Evidence schema subsection that follows it,
@@ -44,12 +47,14 @@ def test_scorer_return_section_names_evidence_list():
     assert any("`evidence`" in line for line in bullets)
 
 
+@pytest.mark.toolkit_repo
 def test_scorer_schema_has_one_example_per_kind():
     examples = _schema_examples()
     assert sorted(e["kind"] for e in examples) == sorted(KINDS)
     assert all(isinstance(e.get("layer"), int) and 0 <= e["layer"] <= 8 for e in examples)
 
 
+@pytest.mark.toolkit_repo
 def test_scorer_schema_examples_verify_against_this_repo():
     result = check_evidence(REPO_ROOT, _schema_examples())
     assert result["evidence_rejected"] == []

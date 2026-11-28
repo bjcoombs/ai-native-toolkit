@@ -367,6 +367,7 @@ def test_cut_prefix_ignores_case_on_windows(tmp_path: Path, monkeypatch) -> None
     assert mutmut3._cut_prefix(f"in {home.as_posix().lower()}", home, None) == "in ."
 
 
+@pytest.mark.toolkit_repo
 def test_mutmut_pin_matches_the_weekly_workflow() -> None:
     """The uv runner's mutmut is the one the weekly mutation run uses, so the
     adapter's exit-code and key handling is the version CI exercises."""

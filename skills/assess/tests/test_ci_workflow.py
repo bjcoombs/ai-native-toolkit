@@ -96,6 +96,7 @@ def test_render_pins_actions_to_commit_shas():
         assert re.search(r"#\s*v\d", line), f"missing version comment: {line.strip()}"
 
 
+@pytest.mark.toolkit_repo
 def test_checkout_pin_matches_repo_workflow_and_readme():
     """The emitted checkout pin must match this repo's own gate workflow and
     the README snippet. Dependabot bumps only the workflow pin, so this test

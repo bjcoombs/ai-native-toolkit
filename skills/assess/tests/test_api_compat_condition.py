@@ -552,6 +552,7 @@ def test_bun_test_runs_buns_own_runner_not_the_script(tmp_path: Path) -> None:
     assert _block(run)["runs"] == [{"path": WF, "tool": "api-extractor"}]
 
 
+@pytest.mark.toolkit_repo
 def test_the_scorer_cites_a_pin_only_when_ci_runs_tests() -> None:
     """``present`` can be true from ``runs`` alone, so the pin citation carries its own gate."""
     scorer = TOOLKIT_ROOT / "agents" / "assess-layer-scorer.md"

@@ -154,6 +154,7 @@ def test_an_unread_include_marks_every_job_open(tmp_path: Path) -> None:
     assert scan_ci_checks(repo)["lint_runs"] is True
 
 
+@pytest.mark.toolkit_repo
 def test_the_toolkit_gate_template_settles_every_job_but_its_own() -> None:
     template = (REPO / "templates" / "assess-gate.yml").read_text(encoding="utf-8")
     jobs = {m.group(1) for m in re.finditer(r"^([\w.-]+):", template.split("\n---\n", 1)[-1], re.M)}

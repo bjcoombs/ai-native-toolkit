@@ -76,6 +76,7 @@ def _glossary_anchors_in(text: str) -> list[str]:
     return [t.partition("#")[2] for t in _LINK.findall(text) if t.partition("#")[0] == GLOSSARY_URL]
 
 
+@pytest.mark.toolkit_repo
 def test_every_term_is_defined_in_one_or_two_sentences() -> None:
     entries = _entries()
     for term in (*REQUIRED, *ALSO_DEFINED):
@@ -86,11 +87,13 @@ def test_every_term_is_defined_in_one_or_two_sentences() -> None:
         assert 1 <= sentences <= 2, f"the glossary entry for {term} has {sentences} sentences, not one or two"
 
 
+@pytest.mark.toolkit_repo
 def test_glossary_uses_the_supportive_voice() -> None:
     hits = banned_hits(GLOSSARY.read_text(encoding="utf-8"))
     assert not hits, f"docs/glossary.md uses words the vocabulary guard leaves out: {hits}"
 
 
+@pytest.mark.toolkit_repo
 def test_glossary_names_no_ids_or_layers() -> None:
     model = load_levels(DEFAULT_LEVELS)
     ids = {row["id"] for row in model["rows"]}
@@ -106,6 +109,7 @@ def test_glossary_names_no_ids_or_layers() -> None:
         assert not re.search(word, text, re.I), f"docs/glossary.md matches {word}; #1099 dropped layers"
 
 
+@pytest.mark.toolkit_repo
 @pytest.mark.parametrize("source", [FINDINGS_SKILL, README, INDEX, SCORING_MODEL],
                          ids=lambda p: p.relative_to(REPO_ROOT).as_posix())
 def test_links_into_the_glossary_land_on_a_heading(source: Path) -> None:
@@ -127,6 +131,7 @@ def test_report_template_links_each_term_at_the_summary() -> None:
     assert linked >= set(TEMPLATE_TERMS), f"the template's glossary line leaves out {set(TEMPLATE_TERMS) - linked}"
 
 
+@pytest.mark.toolkit_repo
 def test_readme_links_the_assess_terms() -> None:
     linked = set(_glossary_anchors(README))
     assert {"step", "gate", "practice", "evidence-grade"} <= linked

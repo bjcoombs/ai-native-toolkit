@@ -154,6 +154,7 @@ def _tour(script: Path, cwd: Path, *args: str) -> dict[str, Any]:
     return result
 
 
+@pytest.mark.toolkit_repo
 def test_the_tour_runs_from_the_unpacked_standalone_zip(tmp_path: Path) -> None:
     archive = _standalone_zip(tmp_path)
     with zipfile.ZipFile(archive) as zf:

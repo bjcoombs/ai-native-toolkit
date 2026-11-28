@@ -56,6 +56,7 @@ def _sources() -> list[tuple[str, ast.Module]]:
     return out
 
 
+@pytest.mark.toolkit_repo
 def test_the_scan_covers_every_runtime_python_tree():
     scanned = {rel for rel, _ in _sources()}
     for expected in ("skills/assess/scripts/assess_core.py", "skills/fleet/scripts/fleet.py",

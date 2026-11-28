@@ -91,6 +91,7 @@ def test_report_render_is_deterministic(tmp_path):
 
 # --- structural contract: the decomposed units exist and are wired up --------
 
+@pytest.mark.toolkit_repo
 def test_layer_scorer_agent_exists():
     agent = REPO_ROOT / "agents" / "assess-layer-scorer.md"
     assert agent.is_file()

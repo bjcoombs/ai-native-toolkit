@@ -19,7 +19,8 @@ from lib.ci import ci_includes
 from lib.ci.ci_checks import scan_ci_checks
 from lib.ci.ci_includes import GATE_TEMPLATE, is_toolkit_gate, is_toolkit_gate_text, merged_config, resolve_includes
 
-SHIPPED = GATE_TEMPLATE.read_text(encoding="utf-8")
+# The shipped template sits at the toolkit root; a vendored copy has none (#1649).
+SHIPPED = GATE_TEMPLATE.read_text(encoding="utf-8") if GATE_TEMPLATE.is_file() else ""
 LOOKALIKE = "gl.test/other/ai-native-toolkit/assess-gate@3.0.0"
 BUILD_ONLY = "build:\n  script:\n    - make build\n"
 
@@ -85,6 +86,7 @@ def test_a_lookalike_that_runs_tests_is_read_and_its_tests_count(tmp_path: Path)
     assert block["test_or_lint_configured"] is True
 
 
+@pytest.mark.toolkit_repo
 @pytest.mark.parametrize("change", [
     lambda t: t.replace("  script:\n", "  before_script:\n    - pytest -q\n  script:\n", 1),
     lambda t: t + "unit:\n  script:\n    - pytest -q\n",
@@ -130,6 +132,7 @@ def _documented_remote() -> str:
     return match.group(1)
 
 
+@pytest.mark.toolkit_repo
 def test_the_documented_remote_include_still_reads_settled(tmp_path: Path) -> None:
     app = tmp_path / "app"
     _commit(app, {".gitlab-ci.yml": f"include:\n  - remote: {_documented_remote()}\n{BUILD_ONLY}"})
@@ -140,6 +143,7 @@ def test_the_documented_remote_include_still_reads_settled(tmp_path: Path) -> No
     assert block["test_or_lint_configured"] is False
 
 
+@pytest.mark.toolkit_repo
 def test_a_mirror_of_the_gate_with_its_own_input_defaults_reads_settled(tmp_path: Path) -> None:
     """The README's mirror form: same jobs, another version and clone URL in the inputs."""
     template = re.sub(r"default: v\d+\.\d+\.\d+", "default: v3.0.0", SHIPPED)
@@ -157,6 +161,7 @@ def test_a_mirror_of_the_gate_with_its_own_input_defaults_reads_settled(tmp_path
     assert set(config.jobs) == {"build"}   # the gate's own text is never merged
 
 
+@pytest.mark.toolkit_repo
 def test_a_gate_mirror_under_rules_stays_conditional(tmp_path: Path) -> None:
     root = _mirror(tmp_path, SHIPPED)
     app = tmp_path / "app"
@@ -174,6 +179,7 @@ GATE_BODY_SHA256 = "b09841c1c95a88582ea8ef36431cb58bbd5d00bfffca2502895fe94b7b92
 GATE_READERS = ("core.ci_checks", "core.secrets_guard", "core.review_automation", "core.ci_model_jobs")
 
 
+@pytest.mark.toolkit_repo
 def test_a_gate_body_edit_is_recorded_with_the_collector_revisions() -> None:
     """A body edit changes what four collectors report for a gate mirror, and the fleet golden
     holds no mirror. Bump each GATE_READERS revision, then record the new digest here."""

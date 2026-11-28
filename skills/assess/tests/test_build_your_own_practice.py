@@ -36,6 +36,8 @@ from lib.profiles import ProfileError, single_repo_choice
 from lib.vocabulary import banned_hits
 from assess_test_support import TOOLKIT_ROOT
 
+pytestmark = pytest.mark.toolkit_repo  # reads the toolkit repository itself (#1649)
+
 GUIDE = TOOLKIT_ROOT / "docs" / "build-your-own-practice.md"
 _EXAMPLE = re.compile(r"<!-- guide-example: ([\w-]+) -->\n```\w*\n(.*?)```", re.S)
 

@@ -160,6 +160,7 @@ def test_first_screen_stops_at_the_first_section() -> None:
     assert first_screen(report) == ["Step 1 of 4: x."]
 
 
+@pytest.mark.toolkit_repo
 def test_the_report_path_is_the_one_ci_uploads() -> None:
     workflow = (TOOLKIT_ROOT / ".github" / "workflows" / "tests.yml").read_text(
         encoding="utf-8")

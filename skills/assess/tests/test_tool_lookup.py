@@ -162,6 +162,7 @@ def test_no_uv_packages_cover_the_layer_packages() -> None:
     assert NO_UV_DOC in NO_UV_POINTER
 
 
+@pytest.mark.toolkit_repo
 def test_the_doc_the_hints_name_shows_the_full_no_uv_line() -> None:
     page = (REPO / NO_UV_DOC).read_text(encoding="utf-8")
     assert f"### {NO_UV_SECTION}" in page.splitlines()

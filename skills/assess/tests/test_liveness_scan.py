@@ -550,6 +550,7 @@ def test_dominant_language_javascript_knip_present_is_available_not_run(
     ]
 
 
+@pytest.mark.toolkit_repo
 def test_scorer_doc_names_every_dead_code_status() -> None:
     """Every `tools[].status` the scan can emit is named in the layer-scorer
     agent's guidance, so a new status never reaches the report unhandled (a
