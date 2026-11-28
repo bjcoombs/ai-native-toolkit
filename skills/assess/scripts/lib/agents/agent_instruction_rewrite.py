@@ -20,7 +20,10 @@ next run follows text no reviewer approved (#826, hazard H2). The hazard reads t
   source's frontmatter ``imports:`` names (usually ``.github/workflows/shared/*.md``), each
   followed to any depth (``local_reach``: the agent's steps and prompt may sit there, not in
   the caller; #1600), and the CODEOWNERS file in effect (``.github/CODEOWNERS`` when none is
-  committed): a guard whose own lines the agent can drop unreviewed guards nothing.
+  committed): a guard whose own lines the agent can drop unreviewed guards nothing. The
+  ``imports:`` list is read as YAML (``lib.agents.gh_aw_imports``); a frontmatter on the way
+  that does not parse raises the hazard for that job (fail closed, #1602): its imports are
+  unknown, so they are never read as owned.
 - **Guard.** A committed CODEOWNERS (``.github/``, then the root, then ``docs/``: the first
   GitHub finds, ``CODEOWNERS_ORDER``)
   whose last matching line names an owner (``lib.docs.ownership_parser.codeowned``). The job
@@ -42,62 +45,56 @@ import re
 from collections.abc import Callable, Mapping
 
 from lib.agents.agent_job_scope import NO_AGENT_JOBS, SCOPE_UNREAD, UNREAD, WRITE
+from lib.agents.gh_aw_imports import imports
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_step_paths import local_workflow, read_action
 from lib.counts_only.block_shapes import AgentJob
 from lib.docs.ownership_parser import codeowned
 from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
+from lib.pack_yaml import UNPARSABLE, YamlError
 
 ROOT_INSTRUCTIONS = ("AGENTS.md", "CLAUDE.md")
 # gh-aw safe outputs that land the agent's file changes on a branch.
 FILE_OUTPUTS = frozenset({"create-pull-request", "push-to-pull-request-branch"})
 UNREAD_WORKFLOWS = "agent_workflows_unread"
-# A block import item: a bare path (no key), or a mapping that names it under one of these.
-IMPORT_KEYS = frozenset({"", "path", "uses"})
 # GitHub uses the first CODEOWNERS it finds in this order (about-code-owners).
 CODEOWNERS_ORDER = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 
 Read = Callable[[str], "str | None"]
-# A gh-aw import from another repository: ``owner/repo/path@ref``.
-_REMOTE_IMPORT = re.compile(r"@[\w.\-/]+$")
+# A gh-aw import from another repository: ``owner/repo/path@ref`` (an owner never opens with ``.``).
+_REMOTE_IMPORT = re.compile(r"[\w-][\w.-]*/[\w.-]+/[^@\s]+@[^@\s]+")
 
 
 def frontmatter(text: str) -> str | None:
-    """A gh-aw source's YAML frontmatter, or None when ``text`` has none."""
-    lines = text.splitlines()
+    """A gh-aw source's YAML frontmatter, or None when ``text`` has none.
+
+    An opening ``---`` with no closing one raises ``YamlError``: the frontmatter does not parse.
+    """
+    lines = text.lstrip("\ufeff").splitlines()
     if not lines or lines[0].strip() != "---":
         return None
     end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
-    return "\n".join(lines[1:end]) if end is not None else None
+    if end is None:
+        raise YamlError(UNPARSABLE)
+    return "\n".join(lines[1:end])
+
+
+def remote_import(value: str) -> bool:
+    """A gh-aw import from another repository: ``owner/repo/path@ref``, three or more path parts."""
+    return bool(_REMOTE_IMPORT.fullmatch(value))
 
 
 def gh_aw_imports(rel: str, front: str) -> list[str]:
     """The local files a gh-aw frontmatter's ``imports:`` names, relative to ``rel``'s folder.
 
-    Block (``- shared/x.md``, or a mapping item's ``path:`` or ``uses:`` for an import with
-    inputs) and flow (``[a.md, b.md]``, over one line or several) lists are
-    read; a trailing comment and a ``#Section`` suffix are dropped and a remote
-    ``owner/repo/path@ref`` import is skipped.
+    The list is read as YAML (``lib.agents.gh_aw_imports.imports``), so ``YamlError`` reaches
+    the caller when it does not parse. A ``#Section`` suffix is dropped and a remote
+    ``owner/repo/path@ref`` import is skipped; a local file name holding ``@`` stays local.
     """
-    lines = front.splitlines()
-    tree = IndentTree(parse_lines(lines))
-    top = next((i for i, line in enumerate(tree.lines) if line.structural and line.level == 0
-                and not line.dash and line.key == "imports"), None)
-    if top is None:
-        return []
-    flow = tree.lines[top].value
-    if flow.startswith("["):
-        end = next((k for k in range(top + 1, len(lines)) if "]" in strip_comment(lines[k])),
-                   top) if "]" not in flow else top
-        joined = " ".join([flow, *(strip_comment(line.strip()) for line in lines[top + 1:end + 1])])
-        values = joined[1:].split("]", 1)[0].split(",")
-    else:
-        values = [tree.lines[k].value for k in tree.children(top) if tree.lines[k].dash
-                  and tree.lines[k].key in IMPORT_KEYS]
     found: list[str] = []
-    for raw in values:
-        value = strip_comment(raw.strip()).strip("'\"").split("#", 1)[0].strip()
-        if value and not _REMOTE_IMPORT.search(value):
+    for raw in imports(front):
+        value = raw.split("#", 1)[0].strip()
+        if value and not remote_import(value):
             found.append(posixpath.normpath(posixpath.join(posixpath.dirname(rel), value)))
     return found
 
@@ -122,7 +119,10 @@ def owners_file(files: frozenset[str]) -> str:
 
 
 def local_reach(rel: str, read: Read) -> set[str]:
-    """The local reusable workflows, local actions and gh-aw imports of ``rel``, to any depth."""
+    """The local reusable workflows, local actions and gh-aw imports of ``rel``, to any depth.
+
+    ``YamlError`` when a gh-aw frontmatter on the way does not parse.
+    """
     found: set[str] = set()
     todo = [rel]
     while todo:
@@ -163,13 +163,21 @@ def codeowners_text(files: frozenset[str], read: Read) -> str:
     return (read(rel) or "") if rel in files else ""
 
 
+def guarded(job: AgentJob, owners: str, files: frozenset[str], read: Read) -> bool:
+    """Whether every path at risk has an owner; False when a gh-aw frontmatter does not parse."""
+    try:
+        return all(codeowned(owners, p) for p in at_risk(job, files, read))
+    except YamlError:
+        return False  # fail closed: an unread import list never reads as owned
+
+
 def instruction_rewrite(jobs: list[AgentJob], fronts: Mapping[str, str | None],
                         files: frozenset[str], read: Read,
                         unread_workflows: int) -> tuple[int | None, list[str], str | None]:
     """(count, workflow files, not-measured reason) for the hazard (module doc)."""
     owners = codeowners_text(files, read)
     exposed = [j for j in jobs if writes_files(j, fronts.get(j["path"]))
-               and not all(codeowned(owners, p) for p in at_risk(j, files, read))]
+               and not guarded(j, owners, files, read)]
     if exposed:
         return len(exposed), sorted({j["path"] for j in exposed}), None
     if not jobs:
