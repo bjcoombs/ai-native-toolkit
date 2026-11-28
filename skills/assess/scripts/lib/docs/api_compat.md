@@ -60,7 +60,7 @@ A CI run that cannot stop its job (above) is declared. So is a tool token named 
 ## Masking
 
 - CI files are read through `lib.ci.ci_masking.mask_lines`: `|| true`, `continue-on-error: true`, `allow_failure: true` and a never-true `if:` do not count. A tool on a line `mask_lines` returns as unsure (a `||` fallback that can pass, `pytest | tee` with pipefail off) is unsettled.
-- A followed script or recipe line whose `||` fallback does not re-raise does not count and is not followed (`lib.ci.docs_kept_true._commands`).
+- A followed script or recipe line whose `||` fallback does not re-raise does not count and is not followed (`lib.ci.ci_job_commands.commands`).
 - Only shell bodies count: GitHub `run:`, GitLab `script:` and `before_script:`. A GitLab `after_script:` failure does not change the job status, so it is not read.
 - GitLab jobs: a job whose own `when:` is `never` or `manual`, or whose every `rules:` entry is, runs nothing (`lib.ci.agent_evals._idle`). A hidden job (`.compat:`) runs only through `extends:` from a job that runs, followed to a fixed point. A tool in a hidden job nothing extends counts nothing; in a file that uses YAML aliases, merge keys or `!reference`, it is unsettled.
 

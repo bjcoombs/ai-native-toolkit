@@ -292,6 +292,7 @@ on one that is not linked.
 
 | Module | Reference | What it covers |
 |---|---|---|
+| `lib.ci.api_compat` | [api_compat.md](docs/api_compat.md) | API compatibility tools CI runs, export-pinning tests, the declared-only list and the known limits |
 | `lib.ci.check_command` | [check_command.md](docs/check_command.md) | Whether a command line runs tests, lint or a type check |
 | `lib.ci.ci_includes` | [ci_includes.md](docs/ci_includes.md) | GitLab CI `include:` items, `extends:` parents and the merged configuration view |
 | `lib.ci.ci_model_jobs` | [ci_model_jobs.md](docs/ci_model_jobs.md) | CI jobs that call a model, and the block they produce |

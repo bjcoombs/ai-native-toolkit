@@ -33,7 +33,7 @@ as text, and Python test files are parsed with ``ast``, never imported.
 Masking follows the #775 rule (``lib.ci.ci_masking.mask_lines``): ``|| true``, ``continue-on-error``,
 ``allow_failure`` and a never-true ``if:`` do not count, and a form whose failure the step may hide
 (``ci_unsure``) is unsettled, never credit. A followed script or recipe line with a ``||`` fallback
-that does not re-raise does not count and is not followed (``lib.ci.docs_kept_true``'s rule). Only
+that does not re-raise does not count and is not followed (``lib.ci.ci_job_commands.commands``). Only
 shell bodies are read: GitHub ``run:``, GitLab ``script:`` and ``before_script:`` (GitLab ignores an
 ``after_script:`` failure). On GitLab a job whose ``when:`` or every ``rules:`` entry is ``never``
 or ``manual`` runs nothing, and a hidden job (``.compat:``) runs only as far as a visible job that
@@ -65,7 +65,8 @@ from lib.ci.ci_build_follower import Followed
 from lib.ci.ci_masking import IndentTree, mask_lines, parse_lines
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
-from lib.ci.docs_kept_true import _OPERATOR, _commands
+from lib.ci.ci_job_commands import OPERATOR as _OPERATOR
+from lib.ci.ci_job_commands import commands as _commands
 from lib.instructions.command_resolver import command_words
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.run_context_types_api_compat import ApiCompatBlock, ApiCompatRun
