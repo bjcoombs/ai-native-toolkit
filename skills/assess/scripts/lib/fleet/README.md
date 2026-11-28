@@ -21,7 +21,7 @@ command line is `skills/fleet/scripts/fleet.py`; this package holds everything i
 | History and comparison | `fleet_history`, `fleet_compare`, `fleet_scanner_diff`, `fleet_rescore`, `fleet_trends`, `fleet_legacy`, `condition_effect`, `condition_demotion`, `calibration_corpus` |
 | Targets and achievements | `fleet_targets`, `fleet_targets_import`, `fleet_achievements`, `fleet_achievements_runs`, `fleet_credit` |
 | Report, pages and diagrams | `fleet_view`, `fleet_next_steps`, `fleet_opportunities`, `fleet_opportunities_section`, `fleet_learn_from`, `fleet_front`, `fleet_diagrams`, `fleet_svg`, `fleet_heatmap`, `fleet_slope`, `fleet_radar`, `fleet_tooling_map`, `fleet_tag_heatmap`, `fleet_tag_profile`, `fleet_agent_building`, `fleet_doc_freshness` |
-| The fleet page | `fleet_page`, `fleet_page_data`, `fleet_page_assets`, `fleet_page_live`, `fleet_publish`, `fleet_publish_session` |
+| The fleet page | `fleet_page`, `fleet_page_data`, `fleet_page_assets`, `fleet_page_live`, `fleet_publish`, `fleet_publish_session`, `fleet_shard`, `fleet_shard_index`, `fleet_publish_shards` |
 
 Each module's docstring says what it does. The co-change rules this package shares with the
 check manifest and the maturity model are in [lib/README.md](../README.md).

@@ -474,7 +474,7 @@ def _publish_section() -> str:
 
 
 def test_the_skill_names_every_planner_command_and_no_other() -> None:
-    named = set(re.findall(r"fleet_publish_plan\.py\" (\w+)", _publish_section()))
+    named = set(re.findall(r"fleet_publish_plan\.py\" ([\w-]+)", _publish_section()))
     assert named == set(_cli().COMMANDS)
 
 

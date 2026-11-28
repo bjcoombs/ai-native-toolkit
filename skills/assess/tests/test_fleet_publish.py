@@ -12,6 +12,7 @@ import pytest
 from fleet_data_fixture import SALT, build
 import lib.fleet.fleet_data as fd
 import lib.fleet.fleet_publish as fp
+import lib.fleet.fleet_shard as fs
 
 RUN_1, RUN_2 = "2026-11-20", "2026-11-27"
 
@@ -187,13 +188,16 @@ def test_limits_carry_their_stated_values() -> None:
     assert fp.WARN_SHARE == 0.8
 
 
-def _synthetic(repos: int) -> fd.FleetData:
-    """A hashed bundle of ``repos`` repositories under one team, from the fixture's shapes."""
+def _synthetic(repos: int, spread: bool = True) -> fd.FleetData:
+    """A hashed bundle of ``repos`` repositories from the fixture's shapes: spread round-robin over
+    the ownership view's two top-level units and its root (#950), or all under one team."""
     bundle = _bundle(fd.Privacy(salt=SALT))
     template = bundle["repos"][0]
-    unit = template["units"][0]["unit"]
-    bundle["repos"] = [{**copy.deepcopy(template), "key": f"h:{i:016x}", "units": [{"view": "ownership", "unit": unit}]}
-                       for i in range(repos)]
+    owners = bundle["views"][0]["units"]
+    tops = sorted(u["key"] for u in owners if u["parent"] is not None) + [next(u["key"] for u in owners if u["parent"] is None)]
+    units = tops if spread else [template["units"][0]["unit"]]
+    bundle["repos"] = [{**copy.deepcopy(template), "key": f"h:{i:016x}",
+                        "units": [{"view": "ownership", "unit": units[i % len(units)]}]} for i in range(repos)]
     lift = bundle["opportunities"]["biggest_lift"]  # type: ignore[index]
     assert lift is not None
     lift["repos"] = [r["key"] for r in bundle["repos"]]
@@ -295,3 +299,87 @@ def test_a_republish_with_the_same_content_passes_and_a_changed_one_is_refused()
     many["views"][0]["units"][0]["kind"] = "division"
     with pytest.raises(fp.RepublishConflict, match="and 1 more"):
         fp.project(many, RUN_1, stored=db.stored(), previous=previous)
+
+
+# --- shards (#950) ---------------------------------------------------------------------------
+
+SMALL = fp.LIMITS._replace(documents=6)  # the fixture needs 9 documents whole, at most 6 per shard
+
+
+def test_a_fleet_below_the_limits_plans_as_one_artifact_and_no_index() -> None:
+    plan, bundles = fs.shard_plan(_bundle())
+    assert not plan["sharded"] and plan["shards"] == [] and plan["index"] is None and bundles == {}
+
+
+def test_a_fleet_above_the_limits_plans_one_shard_per_top_level_unit_plus_an_index() -> None:
+    bundle = _bundle()
+    plan, bundles = fs.shard_plan(bundle, SMALL)
+    tops = [u["key"] for u in bundle["views"][0]["units"] if u["parent"] == "ownership/grp"]
+    assert [s["key"] for s in plan["shards"]] == sorted(tops) + [fs.UNASSIGNED]  # grp/proj4 sits at the root
+    assert all(s["size"]["fits"] and s["size"]["documents"] <= SMALL.documents for s in plan["shards"])
+    index = plan["index"]
+    assert index is not None and [e["label"] for e in index["shards"]] == ["team 1", "team 2", fs.UNASSIGNED_LABEL]
+    assert {r for keys in bundles.values() for r in (x["key"] for x in keys["repos"])} == {r["key"] for r in bundle["repos"]}
+    assert [x["key"] for x in bundles["ownership/grp/sub"]["repos"]] == ["grp/sub/proj1", "grp/sub/proj2"]
+    sub, roll = index["shards"][1], next(u["step"] for u in bundle["views"][0]["units"] if u["key"] == "ownership/grp/sub")
+    assert (sub["repos"], sub["measured"], sub["lowest_step"]) == (roll["repos"], roll["measured"], roll["lowest_step"])
+    assert "repos" not in index and all(set(e) == {"label", "kind", "url", "repos", "measured", "lowest_step"}
+                                        for e in index["shards"])  # no repository document
+
+
+def test_the_ten_thousand_repository_bundle_gets_a_shard_plan_not_a_refusal() -> None:
+    bundle = _synthetic(10_000)
+    assert not fp.project(bundle, RUN_1)["size"]["fits"]
+    plan, bundles = fs.shard_plan(bundle)
+    assert plan["sharded"] and len(plan["shards"]) == 3
+    whole = fp.project(bundle, RUN_1)["size"]["peak"]["bytes"]
+    for shard in plan["shards"]:
+        size = shard["size"]
+        assert size["fits"] and size["documents"] < fp.LIMITS.documents
+        assert size["peak"]["bytes"] < whole  # each runs document lists only its own repositories
+        lift = bundles[shard["key"]]["opportunities"]["biggest_lift"]  # type: ignore[index]
+        assert lift is not None and len(lift["repos"]) == len(bundles[shard["key"]]["repos"]) > 3000 and lift["repo_count"] == 10_000
+
+
+def test_one_top_level_unit_over_the_limits_is_refused_naming_the_unit() -> None:
+    bundle = _synthetic(6_000, spread=False)
+    team = bundle["repos"][0]["units"][0]["unit"]
+    with pytest.raises(fs.ShardTooLarge, match=rf"unit {re.escape(team)} needs about 600\d documents, over one artifact's 5000"):
+        fs.shard_plan(bundle)
+
+
+def test_each_shard_warns_at_eighty_percent_and_refuses_above_the_limit_naming_the_document() -> None:
+    bundle = _bundle()
+    plan, bundles = fs.shard_plan(bundle, SMALL)
+    peak = max(s["size"]["peak"]["bytes"] for s in plan["shards"])
+    warn = SMALL._replace(document_bytes=int(peak / 0.85))
+    warned = [s for s in fs.shard_plan(bundle, warn)[0]["shards"] if s["size"]["warnings"]]
+    assert warned and all(w["bytes"] >= 0.8 * warn.document_bytes for s in warned for w in s["size"]["warnings"])
+    with pytest.raises(fp.DocumentTooLarge, match=r"shard \S+( \S+)?: (runs|units|repos)/\S+ is about \d+ bytes"):
+        fs.shard_plan(bundle, SMALL._replace(document_bytes=peak - 1))
+
+
+def test_the_shard_plan_is_byte_identical_and_a_second_run_with_the_registry_adds_no_shard() -> None:
+    first, _ = fs.shard_plan(_bundle(), SMALL)
+    assert fs.dumps_shard_plan(first) == fs.dumps_shard_plan(fs.shard_plan(_bundle(), SMALL)[0])
+    assert first["added"] == [s["key"] for s in first["shards"]] and not first["links_complete"]
+    registry: fs.ShardRegistry = {"index": "https://claude.ai/artifact/i",
+                                  "shards": {s["key"]: f"https://claude.ai/artifact/{n}" for n, s in enumerate(first["shards"])}}
+    again, _ = fs.shard_plan(_bundle(scan_date=RUN_2), SMALL, registry=registry)
+    assert again["added"] == [] and again["retired"] == [] and again["links_complete"]
+    assert [s["url"] for s in again["shards"]] == list(registry["shards"].values())
+    assert all(s["view"]["index_url"] == registry["index"] for s in again["shards"])
+
+
+def test_a_recorded_shard_stays_sharded_and_a_unit_that_left_is_kept_as_retired() -> None:
+    registry: fs.ShardRegistry = {"index": None, "shards": {"ownership/grp/gone": "https://claude.ai/artifact/g"}}
+    plan, _ = fs.shard_plan(_bundle(), registry=registry)  # fits one artifact, but the fleet is already sharded
+    assert plan["sharded"] and plan["retired"] == ["ownership/grp/gone"]
+    assert plan["index"] is not None and plan["index"]["retired"] == [{"key": "ownership/grp/gone",
+                                                                       "url": "https://claude.ai/artifact/g"}]
+
+
+def test_a_shard_folder_is_one_to_one_with_its_key_and_safe_on_windows() -> None:
+    assert fs.shard_folder("h:409f5a9502b685ea") == "h~3A409f5a9502b685ea"
+    assert fs.shard_folder("ownership/grp/sub") == "ownership~2Fgrp~2Fsub"
+    assert fs.shard_folder("a:b") != fs.shard_folder("a~3Ab")

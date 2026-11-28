@@ -80,14 +80,15 @@ Each document's size is its body as compact JSON, plus the stored size for an `u
 document at 80% of the per-document limit is listed in `size.warnings`. One above the limit,
 or nested too deep, stops the publish with an error naming it. `size.documents` is the
 count after the publish (the documents already stored plus the new ones), and `size.fits`
-says whether that count is within one artifact's limit. Sharding (#950) reads both.
+says whether that count is within one artifact's limit. The [shard plan](#sharded-fleets) reads both.
 
 For a stored document, the guard adds the whole stored size to this run's entry. A
 republished run is therefore counted twice, which overstates the size and never
 understates it. A synthetic hashed 10,000-repository fleet comes to 10,005 documents. That is over the
-5,000 cap, so it is planned as shards (#950). Its
-largest is the `runs` document, at about 211 KB, which is over the 80% warning: the
-opportunity lists name every repository they lift.
+5,000 cap. Its largest is the `runs` document, at about 211 KB, which is over the 80% warning:
+the opportunity lists name every repository they lift. Spread over three top-level units, the
+same fleet is planned as three shards of about 3,340 documents each, and each shard's `runs`
+document lists only its own repositories.
 
 ### Batches
 
@@ -203,3 +204,63 @@ fleet's history directory for the org keeps the artifact URL and the runs publis
 `{"url": ..., "runs": [...]}`. `fleet_publish_plan.py url` prints the URL, or exits 1 before the
 first publish; `record` adds a run. A `publish.json` of another shape is refused, never
 overwritten, and `record` refuses a second artifact URL for the same org.
+
+### Sharded fleets
+
+A run over one artifact's limits is published as one artifact per top-level unit of the
+ownership view, plus an index (#950). `lib/fleet/fleet_shard.py` plans it; it is pure and makes
+no network call.
+
+- **When.** The bundle is projected whole first. If it fits (every document within the size and
+  depth limits, and the document count within the per-artifact limit), it stays one artifact and
+  has no index. A fleet whose `shards.json` already records shards stays sharded.
+- **Top-level units.** The children of the ownership view's roots. A repository goes to the
+  shard of the top-level unit above its ownership unit. A repository with no ownership unit, or
+  placed at a root, goes to one `unassigned` shard.
+- **A shard's data.** Its repositories; the top-level unit, the units below it and the units
+  above its repositories (so the root is in every shard); and the system units above its
+  repositories. `opportunities.biggest_lift.repos` and `opportunities.shared_templates[].repos`
+  keep only the shard's repositories, while their counts stay the fleet's.
+- **Size guard per shard.** Each shard is projected on its own against its own stored
+  documents, so the 80% warning and the refusal above the limit apply per shard and name the
+  shard and the document. A shard with more documents than one artifact holds is refused,
+  naming the unit and its estimate: one top-level unit is never split further.
+- **The index.** One static page (`index.html`, no database) with, per shard, its label, kind,
+  lowest Step, "N of M measured" and a link to its artifact, then the shards no longer in the
+  fleet, still linked. It holds no repository document.
+- **A shard's page.** The fleet page cut to the shard's units and repositories, without the
+  fleet-wide front screen and pictures. It opens on its top-level unit, links to the index, and
+  starts the drill-down breadcrumb at the index. In the system view it shows only its own
+  repositories and says how many of the system's repositories each other shard holds, with a
+  link to that shard. Only `https://claude.ai/` URLs are linked.
+- **Registry.** `shards.json` in the fleet's history directory for the org holds
+  `{"index": <url or null>, "shards": {<shard key>: <url>}}`. A new top-level unit is a new shard.
+  A unit that leaves the fleet keeps its artifact and is listed on the index as no longer in the
+  fleet. Nothing removes an entry or deletes a shard artifact.
+- **Targets.** Each shard page writes targets to its own `targets` collection. Export each
+  shard's and pass every export to one `fleet_targets_import.py` call, which merges them into
+  one targets file. A unit targeted in two shards (a system spanning them) is refused as a
+  duplicate.
+
+<!-- chat-skip:start -->
+The session, in order:
+
+1. Run `fleet_publish_plan.py shards out "<history>/<org>"`. It prints `index <url or new>`, then
+   `<folder> <url or new>` per shard. For each shard with a URL, export its collections into
+   `exports/<folder>/`, as for one artifact.
+2. Run `plan` with `--org-dir "<history>/<org>"`. It writes `out/publish/plan.json`, whose
+   `steps` list the pages in publish order (the index, then each shard), `index.html`, and per
+   shard `out/publish/shards/<folder>/` with `page.html`, `capabilities.json`, `plan.json` and
+   its batches.
+3. Publish the index page with no capabilities. Publish each shard's `page.html` with its
+   `capabilities.json` and contract `0.2.96`, then send its batches in order. Pass the recorded
+   URL for any step that has one.
+4. Record each new URL: `fleet_publish_plan.py record-shard "<history>/<org>" --url URL --index`,
+   or `--shard KEY` with the key the step names.
+5. If `plan.json` says `links_complete` is false, a page went out without a link that now
+   exists. Run `plan` again with the same arguments and republish only the pages; do not send
+   the batches again.
+<!-- chat-skip:end -->
+
+An artifact published as one artifact before the fleet outgrew it is not moved to shards
+automatically: the shard plan publishes new artifacts and leaves the old one as it was.
