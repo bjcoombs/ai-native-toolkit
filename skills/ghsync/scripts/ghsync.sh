@@ -514,13 +514,17 @@ discover_github() {
         # would abort the whole script before the org repo-list fallback below
         # ever runs - defeating the union discovery this path exists to provide.
         # Capture the command's exit status directly (a process-substitution feed
-        # into mapfile would mask gh's failure), then fall back to no teams.
+        # into the read loop would mask gh's failure), then fall back to no teams.
         team_output=$(gh api user/teams --paginate --jq ".[] | select(.organization.login == \"$ORG\") | .slug") || {
             echo "Note: unable to fetch your team memberships in $ORG; continuing with org repo list discovery"
             team_output=""
         }
         user_teams=()
-        [ -n "$team_output" ] && mapfile -t user_teams <<< "$team_output"
+        if [ -n "$team_output" ]; then
+            while IFS= read -r team; do
+                user_teams+=("$team")
+            done <<< "$team_output"
+        fi
 
         if [ ${#user_teams[@]} -eq 0 ]; then
             echo "Note: you don't belong to any teams in $ORG; discovering repos via the org repo list instead"
@@ -1091,7 +1095,9 @@ apply_activity_metadata() {
         fi
         repo_paths=()
         if [ -n "$kept_paths" ]; then
-            mapfile -t repo_paths <<< "$kept_paths"
+            while IFS= read -r path; do
+                repo_paths+=("$path")
+            done <<< "$kept_paths"
         fi
     fi
     rm -f "$merged" "$rows" "$meta_out_file.heads"
@@ -1186,7 +1192,11 @@ discover_repos
 
 # Deduplicate and sort on the relative path, so two repos that share a
 # basename under different parents stay distinct.
-mapfile -t repo_paths < <(sort -u "$all_repos_file")
+# A read loop rather than mapfile, which bash 3.2 (macOS /bin/bash) lacks.
+repo_paths=()
+while IFS= read -r repo; do
+    repo_paths+=("$repo")
+done < <(sort -u "$all_repos_file")
 rm -f "$all_repos_file"
 
 # Save archived repos to persistent cache (handy for downstream tooling).
@@ -1202,11 +1212,13 @@ else
 fi
 rm -f "$archived_repos_file"
 
-# Filter out blacklisted repos
+# Filter out blacklisted repos. Any of these arrays can be empty, and under
+# `set -u` bash 3.2 to 4.3 treat "${arr[@]}" on an empty array as an unbound
+# variable, so each expansion uses the ${arr[@]+"${arr[@]}"} form.
 filtered_repos=()
-for repo in "${repo_paths[@]}"; do
+for repo in ${repo_paths[@]+"${repo_paths[@]}"}; do
     is_blacklisted=false
-    for blacklisted in "${REPO_BLACKLIST[@]}"; do
+    for blacklisted in ${REPO_BLACKLIST[@]+"${REPO_BLACKLIST[@]}"}; do
         if [ "$repo" = "$blacklisted" ]; then
             is_blacklisted=true
             break
@@ -1216,7 +1228,7 @@ for repo in "${repo_paths[@]}"; do
         filtered_repos+=("$repo")
     fi
 done
-repo_paths=("${filtered_repos[@]}")
+repo_paths=(${filtered_repos[@]+"${filtered_repos[@]}"})
 
 if [ ${#REPO_BLACKLIST[@]} -gt 0 ]; then
     echo "Excluded ${#REPO_BLACKLIST[@]} blacklisted repo(s): ${REPO_BLACKLIST[*]}"
