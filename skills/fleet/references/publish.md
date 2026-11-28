@@ -239,8 +239,9 @@ no network call.
   fleet. Nothing removes an entry or deletes a shard artifact.
 - **Targets.** Each shard page writes targets to its own `targets` collection. Export each
   shard's and pass every export to one `fleet_targets_import.py` call, which merges them into
-  one targets file. A unit targeted in two shards (a system spanning them) is refused as a
-  duplicate.
+  one targets file. A unit shown in two shards and targeted in both is refused as a duplicate,
+  even when the Steps agree: the ownership root and every unit above a shard's repositories are
+  in every shard, as is a system spanning shards. Set such a target from one shard's page.
 
 <!-- chat-skip:start -->
 The session, in order:
@@ -259,8 +260,10 @@ The session, in order:
    or `--shard FOLDER` with the folder the step names. A folder the written plan does not name is
    refused, so a mistyped name never becomes a registry entry.
 5. If `plan.json` says `links_complete` is false, a page went out without a link that now
-   exists. Run `plan` again with the same arguments and republish only the pages; do not send
-   the batches again.
+   exists. Rerun `shards`, export every shard it now lists with a URL into `exports/<folder>/`
+   (the ones just published included: the planner refuses a recorded shard with no export), run
+   `plan` again with the same arguments and republish only the pages; do not send the batches
+   again.
 <!-- chat-skip:end -->
 
 An artifact published as one artifact before the fleet outgrew it is not moved to shards

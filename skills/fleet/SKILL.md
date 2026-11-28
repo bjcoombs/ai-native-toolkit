@@ -355,7 +355,8 @@ step runs in a signed-in session with the `Artifact` and `ArtifactData` tools. D
    ```
 
    For a sharded fleet, first list its artifacts, export each recorded shard's collections into
-   `exports/<folder>/`, and after publishing record each new URL:
+   `exports/<folder>/`, and after publishing record each new URL. Before replanning to relink the
+   pages, export every shard `shards` now lists with a URL, the ones just published included:
 
    ```bash
    uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" shards out "<history>/<org>"
