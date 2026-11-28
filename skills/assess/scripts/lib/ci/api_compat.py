@@ -8,15 +8,18 @@ as text, and Python test files are parsed with ``ast``, never imported.
   actions inlined, or ``.gitlab-ci.yml``) invokes a compatibility tool, on its own line or through
   the shared CI-step follower (``lib.ci.ci_step_follower``: a committed script, a ``make`` recipe,
   a Maven or Gradle build, up to ``_MAX_FOLLOW`` levels) or one root ``package.json`` script
-  (``npm run <t>``, ``pnpm``, ``yarn``, ``bun``), or a GitHub step ``uses:`` one of ``ACTIONS``
-  (``obi1kenobi/cargo-semver-checks-action``, ``bufbuild/buf-breaking-action``). The tools
+  (``npm run <t>``, ``npm test`` / ``t`` / ``tst``, ``pnpm``, ``yarn``, ``bun`` but not bun's own
+  ``bun test``), or a GitHub step ``uses:`` one of ``ACTIONS`` (``obi1kenobi/cargo-semver-checks-action``,
+  ``bufbuild/buf-breaking-action``, ``joelanford/go-apidiff``). The tools
   (``TOOLS``): ``apidiff`` (or ``go run .../apidiff``), ``api-extractor run`` (not ``--local``, which
   rewrites the report), ``griffe check``, ``cargo semver-checks``, ``buf breaking``, ``japicmp`` and
   ``revapi`` (their Maven goals and Gradle plugins, read from the follower's ``tasks`` and
   ``plugins``). An install (``go install .../apidiff``, ``npm i -D @microsoft/api-extractor``), a
   ``--help`` or ``--version`` call and an ``echo`` invoke nothing. A run counts only when it can
   turn the job red (``can_stop``): ``apidiff`` exits 0 on an incompatible change, so it needs a
-  re-raise (``exit 1``) in the job, script or recipe that runs it; the japicmp CLI needs an
+  re-raise (``exit 1``) that a read of its output decides (``_decides``: ``test ! -s out.txt || exit 1``)
+  in the job, script or recipe that runs it, on the same line or a later one, or a test of its ``$(...)`` output that decides one
+  (``if [ -n "$(apidiff a b)" ]; then exit 1; fi``, ``inline_apidiff``); the japicmp CLI needs an
   ``--error-on-*`` flag, and its Maven or Gradle plugin a ``breakBuild*`` or ``failOn*`` setting
   true. A run that cannot stop the job is listed under ``declared``, never counted.
 - **Pinning test (``pins``).** A tracked test file pins the public exports: a Python test whose
@@ -28,7 +31,8 @@ as text, and Python test files are parsed with ``ast``, never imported.
 - **Declared only (``declared``, listed, never counted).** A tool named in a build file
   (``pom.xml``, a Gradle build, ``package.json``, a Makefile, ``pyproject.toml``, ``Cargo.toml``,
   ``buf.yaml``, ``api-extractor.json``) or a file under ``hack/``, ``scripts/``, ``build/`` or
-  ``.github/`` (not a workflow, which is read as CI) that no CI run reaches, and a CI run that
+  ``.github/`` (not a workflow, which is read as CI) that no CI run reaches (griffe only as
+  ``griffe check`` or a ``[tool.griffe]`` table, never a griffe dependency), and a CI run that
   cannot stop its job (the CI file is the path). Docs never declare.
 
 Masking follows the #775 rule (``lib.ci.ci_masking.mask_lines``): ``|| true``, ``continue-on-error``,
@@ -39,7 +43,8 @@ shell bodies are read: GitHub ``run:``, GitLab ``script:`` and ``before_script:`
 ``after_script:`` failure). GitLab is read as GitLab merges it (``lib.ci.ci_merged_view``:
 local includes, and an ``extends:`` job's effective ``script:``). On GitLab a job whose ``when:`` or every ``rules:`` entry is ``never``
 or ``manual`` runs nothing, and a hidden job (``.compat:``) runs only as far as a visible job that
-runs ``extends:`` it without setting that body itself; a tool in a hidden job nothing extends, in a file that uses anchors or
+runs ``extends:`` it without setting that body itself; a tool in a hidden job nothing extends, in a file that uses
+a YAML alias as a whole value or a flow-sequence item (never a shell glob), a merge key or
 ``!reference``, is unsettled.
 
 ``present`` is true when a tool runs, or a pinning test is tracked and CI runs tests. Otherwise
@@ -71,6 +76,7 @@ from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_job_commands import OPERATOR as _OPERATOR
 from lib.ci.ci_job_commands import commands as _commands
+from lib.ci.ci_job_commands import fallback
 from lib.instructions.command_resolver import command_words
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.run_context_types_api_compat import ApiCompatBlock, ApiCompatRun
@@ -96,13 +102,22 @@ _JAPICMP_FLAG = re.compile(r"^-Djapicmp\." + _JAPICMP_SETTING + r"=true$")
 _JAPICMP_BREAK = re.compile(_JAPICMP_SETTING + r"\s*(?:>|=|\(|\.set\()\s*true")
 # Remote GitHub actions that run a compatibility check and stop the job on a breaking change.
 ACTIONS = {"obi1kenobi/cargo-semver-checks-action": "cargo-semver-checks",
-           "bufbuild/buf-breaking-action": "buf-breaking"}
-_ALIASING = re.compile(r"!reference|<<\s*:|(?:^|[\s\[,])\*[\w.-]+", re.M)
+           "bufbuild/buf-breaking-action": "buf-breaking",
+           "joelanford/go-apidiff": "apidiff"}   # exits with go-apidiff's code: non-zero on a break
+# A YAML alias only where YAML reads one: a whole value (``key: *name``, ``"key": !!seq *name``,
+# ``- *name``) or a flow-sequence item (``key: [*name, make]``), never a shell glob (``ls *.txt``).
+_ALIASING = re.compile(r"!reference|<<\s*:|^\s*(?:-\s+)?(?:[\"']?[\w.-]+[\"']?\s*:\s+|-\s+)(?:!!?\w+\s+)?"
+                       r"(?:\*[\w.-]+\s*(?:#.*)?$|\[(?:[^\]\n]*,)?\s*\*[\w.-]+)", re.M)
 # Words a launcher puts before the program it runs (``uv run``, ``npx --yes``, ``pnpm exec``).
 _LAUNCHERS = frozenset({"uv", "uvx", "pipx", "poetry", "pdm", "hatch", "rye", "pipenv", "npx", "bunx",
                         "pnpx", "pnpm", "yarn", "bun", "run", "exec", "dlx", "x", "python", "python3", "-m"})
 _VALUED = frozenset({"--with", "--from", "--package", "-p", "--python", "--project", "-C", "--directory"})
 _PM = frozenset({"npm", "pnpm", "yarn", "bun"})
+_NPM_TEST = frozenset({"test", "t", "tst"})   # npm's built-in aliases for ``npm run test``
+# ``bun <word>`` runs a script only when the word is not one of bun's own commands (``bun test`` is
+# bun's test runner, never the ``test`` script).
+_BUN_OWN = frozenset({"test", "install", "i", "add", "a", "remove", "rm", "update", "build", "init", "create",
+                      "upgrade", "link", "unlink", "pm", "x", "exec", "outdated", "publish", "patch"})
 _DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc", ".html")
 _BUILD_FILES = frozenset({"pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts",
                           "package.json", "Makefile", "makefile", "GNUmakefile", "justfile", "pyproject.toml",
@@ -111,7 +126,7 @@ _BUILD_DIRS = ("hack/", "scripts/", "build/", ".github/")
 _DECLARED: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("apidiff", re.compile(r"\bapidiff\b")),
     ("api-extractor", re.compile(r"api-extractor")),
-    ("griffe", re.compile(r"\bgriffe\b")),
+    ("griffe", re.compile(r"\bgriffe\s+check\b|^\s*\[tool\.griffe\b", re.M)),   # not a griffe dependency
     ("cargo-semver-checks", re.compile(r"semver-checks")),
     ("buf-breaking", re.compile(r"\bbuf\s+breaking\b")),
     ("japicmp", re.compile(r"japicmp")),
@@ -178,9 +193,10 @@ def _shell(line: str) -> str:
     return capture.group(2) if capture else text
 
 
-def _after(text: str, words: list[str]) -> list[list[str]]:
-    """The commands of one shell line after the one whose words are ``words``, less that
-    command's own ``||`` fallback (``apidiff a b || exit 1`` re-raises nothing: apidiff exits 0)."""
+def _rest(text: str, words: list[str]) -> list[str]:
+    """The operator-split parts of one shell line after the command whose words are ``words``,
+    less that command's own ``||`` fallback (``apidiff a b || exit 1`` re-raises nothing: apidiff
+    exits 0). Operators sit at the even indexes."""
     parts = _OPERATOR.split(text)
     for i in range(0, len(parts), 2):
         if command_words(parts[i].strip().strip("(){} ")) == words:
@@ -191,7 +207,7 @@ def _after(text: str, words: list[str]) -> list[list[str]]:
                     depth += rest[j].count("{") + rest[j].count("(") - rest[j].count("}") - rest[j].count(")")
                     j += 1
                 rest = rest[j:]
-            return [command_words(p.strip().strip("(){} ")) for p in rest[1::2]]
+            return rest
     return []
 
 
@@ -214,7 +230,8 @@ def _output_refs(line: str) -> list[str]:
     text = ci_line_text(line)
     capture = _CAPTURE.match(text)
     refs = [f"${capture.group(1)}", f"${{{capture.group(1)}}}"] if capture else []
-    tail = text[text.find("apidiff"):]
+    # apidiff's own command and its pipe only: ``apidiff a b; echo x > other.txt`` writes other.txt
+    tail = re.split(r"&&|\|\||;", text[text.find("apidiff"):], maxsplit=1)[0]
     return refs + [m.group(1) for m in _OUTPUT_FILE.finditer(tail) if not m.group(1).startswith("/dev/")]
 
 
@@ -223,22 +240,182 @@ def _names(ref: str, text: str) -> bool:
     return re.search(r"(?<![\w./-])" + re.escape(ref) + r"(?![\w./-])", text) is not None
 
 
+def _test_words(words: list[str]) -> list[str] | None:
+    """The operands of a ``[ ... ]``, ``[[ ... ]]`` or ``test ...`` command (an ``if`` before it
+    dropped), or None for any other command."""
+    words = words[1:] if words[:1] == ["if"] else words
+    if words[:1] in (["["], ["[["]) and words[-1:] == ["]" if words[0] == "[" else "]]"]:
+        return words[1:-1]
+    return words[1:] if words[:1] == ["test"] else None
+
+
+_COUNT_TEST = {("-ne", "0"): "pos", ("-eq", "0"): "neg", ("-lt", "1"): "neg", ("-le", "0"): "neg"}
+
+
+def _count_test(op: str, limit: str) -> str | None:
+    """The polarity of a line or byte count compared with a literal: ``-gt N`` and ``-ge N``
+    (N at least 1) succeed only on a non-empty report, even when a threshold lets a small one
+    pass (``-gt 5`` still goes red on a large break)."""
+    if limit.isdigit() and (op == "-gt" or (op == "-ge" and int(limit) >= 1)):
+        return "pos"
+    return _COUNT_TEST.get((op, limit))
+
+
+def _polarity(words: list[str]) -> str | None:
+    """``"pos"`` when a command that reads apidiff's output succeeds on a non-empty report
+    (``[ -s out.txt ]``, ``[ -n "$out" ]``, ``[ $(wc -l < out.txt) -gt 0 ]``, ``grep -q . out.txt``),
+    ``"neg"`` when it fails on one (``[ ! -s out.txt ]``, ``[ -z "$out" ]``, ``diff``, ``cmp``), else
+    None (``cat``: decides nothing). A leading ``if`` is dropped, and each ``!`` (before the command
+    or inside the test) turns the polarity over: ``if ! [ -z "$(cat out.txt)" ]`` is ``"pos"``."""
+    words = words[1:] if words[:1] == ["if"] else words
+    negated = False
+    while words[:1] == ["!"]:
+        negated, words = not negated, words[1:]
+    operands = _test_words(words)
+    if operands is None:
+        head = _name(words[0]) if words else ""
+        flags = "".join(w[1:] for w in words[1:] if w.startswith("-") and not w.startswith("--"))
+        if head == "grep" and "v" not in flags and "--invert-match" not in words:
+            found: str | None = "pos"
+        else:
+            found = "neg" if head in ("diff", "cmp") else None
+    else:
+        while operands[:1] == ["!"]:
+            negated, operands = not negated, operands[1:]
+        if len(operands) == 2 and operands[0] in ("-s", "-n", "-z"):
+            found = "pos" if operands[0] != "-z" else "neg"
+        elif len(operands) >= 3:   # ``$(wc -l < f) -gt 0``: the redirect is not a word
+            found = _count_test(operands[-2], operands[-1])
+        else:
+            found = None
+    if found is None or not negated:
+        return found
+    return "neg" if found == "pos" else "pos"
+
+
+def _words(part: str) -> list[str]:
+    return command_words(part.strip().strip("(){} "))
+
+
+def _and_chain(rest: list[str]) -> list[str]:
+    """The commands of the ``&&`` chain that opens ``rest`` (``rest[0]`` is ``&&``), braces kept
+    together, up to the next ``||``, ``;`` or ``|`` outside them: in ``[ -s f ] && echo x || exit 1``
+    the ``exit 1`` runs only when the test fails, so it is not in the chain."""
+    out: list[str] = []
+    depth = 0
+    for k, part in enumerate(rest[1:]):
+        if k % 2:
+            if depth <= 0 and part != "&&":
+                break
+            continue
+        depth += part.count("{") + part.count("(") - part.count("}") - part.count(")")
+        out.append(part)
+    return out
+
+
+def _decides(parts: list[str], refs: list[str], later: list[str], held: frozenset[str], piped: bool = False) -> bool:
+    """Whether a pipeline in the operator-split ``parts`` (commands at the even indexes) that reads
+    apidiff's output (names one of ``refs``, or, with ``piped``, the first pipeline, which apidiff
+    feeds) decides a re-raise: its last command succeeds on a non-empty report and its ``&&`` chain
+    holds the re-raise (``_and_chain``), or fails on one and ``||`` does, or it is an ``if`` test that succeeds on
+    one with a re-raise in its ``then`` branch (``then`` on that line or the next, read on across
+    ``later`` lines). An ``exit 1``
+    after a command that only prints the report (``cat out.txt; go build || exit 1``) is not."""
+    i = 0
+    while i < len(parts):
+        j = i
+        while j + 1 < len(parts) and parts[j + 1] == "|":
+            j += 2
+        reads = (piped and i == 0) or any(_names(r, p) for p in parts[i:j + 1:2] for r in refs)
+        words, rest = _words(parts[j]), parts[j + 1:]
+        polarity = _polarity(words) if reads else None
+        if polarity is not None and words[:1] == ["if"]:
+            if polarity == "pos" and rest[:1] in ([";"], []) and any(_reraises(c, held) for c in _then_body(rest, later)):
+                return True
+        elif polarity is not None and len(rest) > 1 and (polarity, rest[0]) in (("pos", "&&"), ("neg", "||")):
+            branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
+            if any(_reraises(_words(p), held) for p in branch):
+                return True
+        i = j + 2
+    return False
+
+
 def _checks_output(words: list[str], unit: list[str]) -> bool:
-    """Whether apidiff's output decides a re-raise: a later command on its own line that reads its
-    pipe (``apidiff a b | grep -q . && exit 1``), or a later line of the same shell that names its
-    captured variable or output file and re-raises (``if [ -s out.txt ]; then exit 1; fi``). An
-    ``exit 1`` that reads nothing apidiff wrote is not its check."""
+    """Whether apidiff's output decides a re-raise (``_decides``): the pipeline it feeds on its own
+    line (``apidiff a b | grep -q . && exit 1``), or a later command of its line or of a later line
+    of the same shell that reads its captured variable or output file
+    (``apidiff a b > out.txt; test ! -s out.txt || exit 1``, ``if [ -s out.txt ]; then exit 1; fi``).
+    An ``exit 1`` that reads nothing apidiff wrote, or that its read does not decide, is not its check."""
     if not unit:
         return False
     held = frozenset(_STATUS_VAR.findall("\n".join(unit)))   # ``rc=$?`` holds apidiff's 0
     first = _shell(unit[0])
-    piped = re.search(r"apidiff[^|;&]*\|(?!\|)", first) is not None
-    if piped and any(_reraises(w, held) for w in _after(first, words)):
-        return True
     refs = _output_refs(unit[0])
-    return any(any(_names(r, ci_line_text(line)) for r in refs) and any(_reraises(c["words"], held)
-                                                               for c in _commands(_shell(line)))
-               for line in unit[1:])
+    rest = _rest(first, words)
+    piped = rest[:1] == ["|"]
+    if not _rescued("".join(rest[1:])) and _decides(rest[1:], refs, unit[1:], held, piped):
+        return True
+    return any(not _rescued(ci_line_text(line)) and _decides(_OPERATOR.split(ci_line_text(line)), refs, unit[k + 1:], held)
+               for k, line in enumerate(unit[1:], start=1))
+
+
+def _rescued(text: str) -> bool:
+    """Whether a passing ``||`` fallback follows a command of the line as written
+    (``if [ -s o ]; then false; fi || true``): its re-raise cannot turn the job red. Read here
+    because a CI line's masking drops the ``if`` test and with it this ``fi || true``."""
+    return any(c["masked"] for c in _commands(_shell(text)))
+
+
+_SUBST = re.compile(r"^\$\((.*)\)$", re.S)
+
+
+def _tested_substitution(words: list[str]) -> tuple[str, list[str]] | None:
+    """``(flag, inner words)`` for a test of one command substitution's output:
+    ``[ -n "$(apidiff a b)" ]``, ``[[ -z ... ]]``, ``test -n ...``, an ``if`` before any of them."""
+    operands = _test_words(words)
+    if operands is None:
+        return None
+    words = operands
+    sub = _SUBST.match(words[1]) if len(words) == 2 and words[0] in ("-n", "-z") else None
+    return (words[0], command_words(sub.group(1))) if sub else None
+
+
+def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
+    """The commands of an ``if``'s ``then`` branch, up to ``else``, ``elif`` or ``fi``: from the
+    operator-split ``parts`` after the condition, then from the ``later`` lines of the shell."""
+    cmds = [command_words(p.strip().strip("(){} ")) for p in parts[1::2]]
+    cmds += [c["words"] for line in later for c in _commands(_shell(line))]
+    if not cmds or cmds[0][:1] != ["then"]:
+        return []
+    out: list[list[str]] = []
+    for cmd in [cmds[0][1:], *cmds[1:]]:
+        if cmd[:1] in (["else"], ["elif"], ["fi"]):
+            break
+        out.append(cmd)
+    return out
+
+
+def inline_apidiff(text: str, later: list[str]) -> bool | None:
+    """Whether a shell line runs apidiff inside a test of its output (``$(...)``): None when it
+    does not, True when the test decides a re-raise (``if [ -n "$(apidiff a b)" ]; then exit 1;
+    fi``, ``test -n ... && exit 1``, ``[ -z ... ] || exit 1``, the ``then`` branch read on to
+    ``fi`` across ``later`` lines), else False (``-z`` with ``then exit 1`` goes red when nothing
+    changed, never on a break)."""
+    parts = _OPERATOR.split(text)
+    found: bool | None = None
+    for i in range(0, len(parts), 2):
+        words = command_words(parts[i].strip().strip("(){} "))
+        tested = _tested_substitution(words)
+        if tested is None or tool_of(tested[1]) != "apidiff":
+            continue
+        flag, rest = tested[0], parts[i + 1:]
+        op, nxt = (rest[0], command_words(rest[1].strip().strip("(){} "))) if len(rest) > 1 else ("", [])
+        if words[0] == "if":
+            stops = flag == "-n" and op == ";" and any(_reraises(c) for c in _then_body(rest, later))
+        else:
+            stops = (flag, op) in (("-n", "&&"), ("-z", "||")) and _reraises(nxt)
+        found = found or stops
+    return found
 
 
 def can_stop(tool: str, words: list[str], unit: list[str]) -> bool:
@@ -304,6 +481,11 @@ class _Reader:
         raw = raw if raw is not None else lines
         for index, line in enumerate(lines):
             commands = list(_commands(_shell(line)))
+            inline = inline_apidiff(ci_line_text(raw[index]), raw[index + 1:])   # masking drops an ``if`` test
+            if inline and not any(c["masked"] for c in commands) and not _rescued(ci_line_text(raw[index])):
+                found.add("apidiff")
+            elif inline is not None:
+                self.report_only.add("apidiff")
             for cmd in commands:
                 tool = tool_of(cmd["words"]) if not cmd["masked"] else None
                 if tool is not None and can_stop(tool, cmd["words"], raw[index:]):
@@ -329,9 +511,16 @@ class _Reader:
         """The tools a root ``package.json`` script runs, for ``npm run <t>`` and its kin."""
         if not words or _name(words[0]) not in _PM:
             return set()
+        pm = _name(words[0])
         rest = [w for w in words[1:] if not w.startswith("-")]
-        target = rest[1] if rest[:1] == ["run"] and len(rest) > 1 else (
-            rest[0] if words[0] in ("yarn", "pnpm", "bun") and rest and rest[0] not in _LAUNCHERS else None)
+        if rest[:1] in (["run"], ["run-script"]) and len(rest) > 1:
+            target: str | None = rest[1]
+        elif pm == "npm":
+            target = "test" if rest[:1] and rest[0] in _NPM_TEST else None
+        elif rest and rest[0] not in _LAUNCHERS and not (pm == "bun" and rest[0] in _BUN_OWN):
+            target = rest[0]
+        else:
+            target = None
         script = _package_scripts(self.read_local, "").get(target or "")
         key = f"package.json#{target}"
         if not isinstance(script, str) or key in path:
