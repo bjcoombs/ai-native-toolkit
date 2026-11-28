@@ -87,6 +87,8 @@ def quoted_end(text: str) -> int:
 
 def split_key(text: str) -> tuple[str, str]:
     """``(key, value text)`` of a mapping line, or ``YamlError``."""
+    if not text:
+        raise YamlError(UNPARSABLE)
     if text[0] in "?":
         raise YamlError(UNSUPPORTED)
     if text[0] in "{[&*!|>%@`":

@@ -250,7 +250,7 @@ def _block_list(rows: list[Row]) -> list[str]:
 
 def imports(front: str) -> list[str]:
     """The raw ``imports:`` items of a gh-aw frontmatter (module doc); ``YamlError`` when unread."""
-    lines = [strip_comment(raw) for raw in front.lstrip("﻿").splitlines()]
+    lines = [strip_comment(raw) for raw in front.lstrip("\ufeff").splitlines()]
     found = [(value, body) for key, value, body in _entries(lines) if key == "imports"]
     if not found:
         return []

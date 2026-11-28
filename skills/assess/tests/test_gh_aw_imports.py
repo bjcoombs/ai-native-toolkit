@@ -64,6 +64,8 @@ def test_imports_reads_each_yaml_list_form(front: str, expected: list[str]) -> N
     "imports:\n  - {path: a.md\n",          # an unclosed flow mapping item
     "imports: [{path: a.md, path: b.md}]\n",  # a duplicate flow key
     "imports: [{inputs: x}]\n",             # a flow mapping with no path
+    "imports: [{, path: a.md}]\n",          # an empty leading flow key
+    "imports:\n  - {path: a.md, , x: 1}\n",  # an empty middle flow key
     "imports:\n  - path: a.md\n   x: 1\n",  # a key out of line with its mapping
     "imports:\n  - [a.md]\n",               # a flow list inside a block list
 ])
