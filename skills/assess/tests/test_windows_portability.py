@@ -515,10 +515,13 @@ def test_the_registered_markers_are_the_known_skip_set():
     assert registered == POSIX_ONLY_MARKERS | ROOT_PROBE_MARKERS | NON_SKIP_MARKERS
 
 
-def test_the_root_probe_marker_ignores_the_platform(monkeypatch):
-    """On Windows at the toolkit root the toolkit_repo tests run: the skip follows the root only."""
-    from assess_test_support import TOOLKIT_REPO_MARKER, toolkit_root_verdict
+def test_the_root_probe_marker_takes_no_platform_input():
+    """The toolkit_repo skip follows the root and the CI repository only, never the platform."""
+    import inspect
+
+    from assess_test_support import TOOLKIT_REPO_MARKER, gate_toolkit_repo_tests, toolkit_root_verdict
     assert {TOOLKIT_REPO_MARKER} == ROOT_PROBE_MARKERS
-    monkeypatch.setattr(sys, "platform", "win32")
-    assert toolkit_root_verdict(True, None) == "run"
-    assert toolkit_root_verdict(False, None) == "skip"
+    assert list(inspect.signature(toolkit_root_verdict).parameters) == ["present", "github_repository"]
+    assert list(inspect.signature(gate_toolkit_repo_tests).parameters) == [
+        "items", "root", "present", "github_repository"]
+    assert "sys.platform" not in inspect.getsource(gate_toolkit_repo_tests)

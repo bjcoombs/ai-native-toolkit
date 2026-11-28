@@ -114,6 +114,14 @@ def test_the_gate_fails_the_session_in_this_repositorys_ci_without_the_root() ->
     assert marked.added == []
 
 
+def test_the_gate_does_not_fail_a_session_with_no_marked_test() -> None:
+    """mutmut runs unmarked tests from ``skills/assess/mutants/``, where the probe misses."""
+    plain = _Item(False)
+    gate_toolkit_repo_tests([plain], root=Path("/elsewhere"), present=False,
+                            github_repository=TOOLKIT_REPOSITORY)
+    assert plain.added == []
+
+
 def test_this_repositorys_ci_finds_the_root() -> None:
     """The live probe: in this repository's CI the marked tests run, never skip."""
     if os.environ.get("GITHUB_REPOSITORY", "").lower() != TOOLKIT_REPOSITORY:

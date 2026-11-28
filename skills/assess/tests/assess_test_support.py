@@ -91,19 +91,23 @@ class _MarkableItem(Protocol):
 
 def gate_toolkit_repo_tests(items: Iterable[_MarkableItem], *, root: Path, present: bool,
                             github_repository: str | None) -> None:
-    """Skip the ``toolkit_repo`` tests outside the toolkit root, or fail the session in its CI."""
+    """Skip the ``toolkit_repo`` tests outside the toolkit root, or fail the session in its CI.
+
+    The failure needs a marked test in the session: mutmut runs a selection of unmarked
+    tests from a copy under ``skills/assess/mutants/``, where the root probe misses.
+    """
     verdict = toolkit_root_verdict(present, github_repository)
     if verdict == "run":
         return
+    marked = [item for item in items if item.get_closest_marker(TOOLKIT_REPO_MARKER)]
     where = root.as_posix()
-    if verdict == "fail":
+    if verdict == "fail" and marked:
         raise pytest.UsageError(
             f"GITHUB_REPOSITORY is {github_repository}, but {where} is not the {TOOLKIT_PLUGIN_NAME} "
             "root (no .claude-plugin/plugin.json naming it), so the toolkit_repo tests would skip (#1649)")
     reason = f"reads the {TOOLKIT_PLUGIN_NAME} repository, and {where} is not its root (#1649)"
-    for item in items:
-        if item.get_closest_marker(TOOLKIT_REPO_MARKER):
-            item.add_marker(pytest.mark.skip(reason=reason))
+    for item in marked:
+        item.add_marker(pytest.mark.skip(reason=reason))
 
 
 def skip_without_posix_shell() -> None:
