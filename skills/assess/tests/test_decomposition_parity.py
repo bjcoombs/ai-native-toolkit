@@ -33,6 +33,7 @@ from assess_core import build_and_publish_run
 from assess_report import render_report
 from golden import normalize_report
 from lib.class_sizes import loc_by_class
+from lib.skill_disclosure import _frontmatter_end
 
 # skills/assess/tests/ -> repo root is three parents up from this file's dir.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -120,17 +121,14 @@ THIN_BODY_LIMIT = 500
 
 
 def _body_line_count(text: str) -> int:
-    """Lines after the closing ``---`` of the frontmatter; the whole file if it has none.
+    """Lines after the closed frontmatter block; the whole file if it has none.
 
     The limit guards the orchestrator's instructions, which live in the body, so
-    frontmatter keys (name, description, any added later) do not count.
+    frontmatter keys (name, description, any added later) do not count. Uses the
+    same frontmatter reading as the /assess skill-disclosure scan's ``body_lines``.
     """
     lines = text.splitlines()
-    if lines and lines[0].strip() == "---":
-        for i, line in enumerate(lines[1:], start=1):
-            if line.strip() == "---":
-                return len(lines) - i - 1
-    return len(lines)
+    return len(lines) - _frontmatter_end(lines)
 
 
 def _assert_thin(text: str) -> None:
