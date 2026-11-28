@@ -42,8 +42,8 @@ LISTED_GRADES: frozenset[str] = frozenset({"config_only", "declared"})
 # Block -> the issue that places its row in a shipped model. A staged block's signals carry their
 # evidence class so a test model grades them, while no default criterion reads them yet; the
 # check-manifest and signal-input tests allow them only while the default model leaves the block
-# unread, so the entry goes when the row lands. backlog_ready: #1322, placed by #1324.
-STAGED_BLOCKS: dict[str, int] = {"backlog_ready": 1324}
+# unread, so the entry goes when the row lands. Empty: backlog_ready (#1322) was placed by #1324.
+STAGED_BLOCKS: dict[str, int] = {}
 
 # Signal path -> its producer input class: each signal entry's `evidence` in
 # checks/core/ (#953), validated against `InputClass` by the loader.

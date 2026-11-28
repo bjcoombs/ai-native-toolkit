@@ -29,8 +29,8 @@ from lib.hosting.gh_cli import GithubRepo
 from lib.hosting.gitlab_cli import GitlabProject
 from lib.hosting.platform_cli import CliResult
 from lib.run import signals
-from lib.scoring.level_signals import criterion_grade, signal_path_validator
-from lib.scoring.levels import MaturityModel, load_levels
+from lib.scoring.level_signals import criterion_grade
+from lib.scoring.levels import MaturityModel
 
 FIXTURES = Path(__file__).parent / "fixtures" / "backlog_ready"
 PLATFORM = FIXTURES / "platform"
@@ -55,7 +55,9 @@ def _repo(tmp_path: Path, config: str | None = None) -> Path:
 
 
 def _model() -> MaturityModel:
-    return load_levels(FIXTURES / "levels.toml", signal_path_validator())
+    """The default model's backlog-ready row alone, with no Steps (placed by #1324)."""
+    model = lt.default_model()
+    return MaturityModel(version=model["version"], rows=[r for r in model["rows"] if r["id"] == "backlog-ready"])
 
 
 def _condition(block: Any, cid: str = L2) -> dict[str, Any]:
@@ -397,6 +399,9 @@ def test_headless_reads_not_measured(tmp_path: Path) -> None:
     assert [block[m] for m in (*METRICS, *MET)] == [None] * 6
     cond = _condition(block)
     assert cond["state"] == "not_measured"
+    # #1324: each null bool names its reason, so the condition reads no_network, not "no value read".
+    assert [block[f"{m}_reason"] for m in MET] == ["no_network"] * 3
+    assert cond["reason"] == "no_network"
     assert _condition(block, "backlog-ready.1")["state"] == "met"
 
 
@@ -411,6 +416,7 @@ def test_empty_window_not_measured(tmp_path: Path, gh: FakeGh) -> None:
     assert [block[f"{m}_reason"] for m in METRICS] == ["empty_window"] * 3
     assert [block[m] for m in MET] == [None, None, None]
     assert _condition(block)["state"] == "not_measured"
+    assert [block[f"{m}_reason"] for m in MET] == ["empty_window"] * 3
 
 
 def test_counts_only_output(tmp_path: Path, gh: FakeGh, glab: FakeGlab,
@@ -656,3 +662,24 @@ def test_no_actor_on_an_issue_whose_author_is_gone_leaves_the_response_unread(tm
     node["timelineItems"]["nodes"] = [{"__typename": "IssueComment", "createdAt": "2026-11-01T06:00:00Z", "author": None}]
     block = _block(_repo(tmp_path))
     assert (block["outcomes"]["responded"], block["outcomes"]["response_unread"]) == (2, 1)
+
+
+@pytest.mark.parametrize(("overdue_days", "met", "reason"), [
+    (3.0, None, "response_pending"),  # answered at 3.1 days, the median is 1.8: within the limit
+    (5.0, False, None),                # the median is at least 2.75 days whenever it is answered
+])
+def test_an_overdue_issue_waits_at_least_its_age(overdue_days: float, met: bool | None, reason: str | None) -> None:
+    # #1324: an overdue issue's wait is bounded below by its age, not by infinity.
+    fast = Issue(NOW - timedelta(days=10), None, (), NOW - timedelta(days=9.5))  # waited 0.5 days
+    late = Issue(NOW - timedelta(days=overdue_days), None, ())
+    fields = outcome_fields(_read([fast, late]), BacklogThresholds(), False, ())
+    assert (fields["first_response_median_days"], fields["first_response_met"]) == (0.5, met)
+    assert fields.get("first_response_met_reason") == reason
+
+
+def test_a_window_of_young_unanswered_issues_reads_response_pending() -> None:
+    fields = outcome_fields(_read([Issue(NOW - timedelta(days=1), None, ())]), BacklogThresholds(), False, ())
+    assert fields["first_response_met"] is None
+    assert fields["first_response_median_days_reason"] == "empty_window"
+    assert fields["first_response_met_reason"] == "response_pending"
+    assert outcome_fields(_read([]), BacklogThresholds(), False, ())["first_response_met_reason"] == "empty_window"

@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import shutil
+import tomllib
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import lib.fleet.calibration_corpus as cc
 import lib.scoring.level_tally as lt
 import lib.manifest.check_manifest as cm
 from lib.assess_config import load_backlog_ready_labels
@@ -14,11 +16,10 @@ from lib.backlog_ready import (READY_LABELS, UNTRIAGED_LABELS, documents_ready_l
                                scan_backlog_ready, stale_state)
 from lib.backlog_ready_gitlab import READY_SECTIONS, template_has_sections
 from lib.counts_only.content_free import counts_only
-from lib.scoring.level_signals import STAGED_BLOCKS, criterion_grade, signal_path_validator
-from lib.scoring.levels import MaturityModel, load_levels
+from lib.scoring.level_signals import DEFAULT_LEVELS, STAGED_BLOCKS, criterion_grade
+from lib.scoring.levels import MaturityModel
 
 FIXTURES = Path(__file__).parent / "fixtures" / "backlog_ready"
-MODEL = FIXTURES / "levels.toml"
 CID = "backlog-ready.1"
 SIGNALS = ("required_form_field", "untriaged_on_open", "ready_label_documented", "stale_job_safe")
 FORM = ".github/ISSUE_TEMPLATE/feature.yml"
@@ -46,7 +47,9 @@ def _read(rel: str) -> str:
 
 
 def _model() -> MaturityModel:
-    return load_levels(MODEL, signal_path_validator())
+    """The default model's backlog-ready row alone, with no Steps (placed by #1324)."""
+    model = lt.default_model()
+    return MaturityModel(version=model["version"], rows=[r for r in model["rows"] if r["id"] == "backlog-ready"])
 
 
 def _condition(block: Any) -> dict[str, Any]:
@@ -576,9 +579,9 @@ def test_a_fixture_or_assess_doc_is_not_documentation(tmp_path: Path) -> None:
     assert scan_backlog_ready(_repo(tmp_path / "b", {DOC: None, "docs/triage.md": doc}))["ready_label_documented"] is True
 
 
-# --- success criteria 2 and 3: the test model -----------------------------------------
+# --- success criteria 2 and 3: the model row -----------------------------------------
 
-def test_the_test_model_loads_and_scores_the_fixtures(tmp_path: Path) -> None:
+def test_the_model_row_scores_the_fixtures(tmp_path: Path) -> None:
     model = _model()
     (row,) = model["rows"]
     assert row["id"] == "backlog-ready" and not model.get("steps")
@@ -592,21 +595,72 @@ def test_the_test_model_loads_and_scores_the_fixtures(tmp_path: Path) -> None:
 def test_level_1_is_listed_not_counted(tmp_path: Path) -> None:
     for c in _model()["rows"][0]["levels"][0]["criteria"]:
         assert criterion_grade(c) == "config_only"
-    combined = lt.default_model()
-    combined["rows"] = [*combined["rows"], *_model()["rows"]]
+    model = lt.default_model()
     met = scan_backlog_ready(_repo(tmp_path))
-    before = lt.level_result(combined, {})
-    after = lt.level_result(combined, {"backlog_ready": met})
+    before = lt.level_result(model, {})
+    after = lt.level_result(model, {"backlog_ready": met})
     assert before["tally"]["met"] == after["tally"]["met"]  # N unchanged
     assert before["tally"]["measured"] == after["tally"]["measured"]
     assert CID in after["listed"] and CID not in after["counted"]
     assert before["step"] == after["step"]
 
 
-def test_the_row_is_staged_outside_the_default_model() -> None:
-    assert STAGED_BLOCKS["backlog_ready"] == 1324
-    assert not [r for r in lt.default_model()["rows"] if r["id"] == "backlog-ready"]
+def test_the_row_is_a_default_practice_and_no_gate() -> None:
+    # Success criterion 2 of #1324: exactly one shipped model holds the row, and no Step gates it.
+    assert "backlog_ready" not in STAGED_BLOCKS
+    models = [DEFAULT_LEVELS, *sorted((DEFAULT_LEVELS.parent / "profiles").glob("*.toml"))]
+    holding = [p.name for p in models
+               if any(r["id"] == "backlog-ready" for r in tomllib.loads(p.read_text(encoding="utf-8"))["rows"])]
+    assert holding == ["default.toml"]
+    assert "backlog-ready" not in str(tomllib.loads(DEFAULT_LEVELS.read_text(encoding="utf-8")).get("steps", []))
     assert not [c for c in lt.gate_conditions(lt.default_model()) if c.startswith("backlog-ready.")]
+
+
+# --- #1324 success criterion 1: discrimination on the #842 corpus ----------------------
+
+L2 = "backlog-ready.2"
+
+
+def _corpus_split(corpus_dir: Path) -> dict[str, int]:
+    """How ``backlog-ready.2`` falls across the corpus expected-state files, counts only."""
+    expected = cc.load_corpus(corpus_dir)
+    states = {e["repo"]: e["states"] for e in expected}
+    missing = [e["repo"] for e in expected if L2 not in e["states"]]
+    assert not missing, (f"{len(missing)} expected-state file(s) predate the backlog-ready row: reseed with "
+                         "scripts/calibration_corpus.py seed CLONE_ROOT --platform")
+    return cc.row_split(states, "backlog-ready").get(L2, {})
+
+
+def test_corpus_discriminates() -> None:
+    """At least one corpus repository meets level 2 and at least one does not (#1324, #1318 criterion 7).
+
+    The expected-state files are seeded by hand from the pinned clones with
+    ``scripts/calibration_corpus.py seed CLONE_ROOT --platform``; until they are, there is
+    nothing to read and the test skips, saying so."""
+    if not cc.load_corpus(cc.CORPUS_DIR):
+        pytest.skip(f"no corpus expected-state files under {cc.CORPUS_DIR.name}/ yet: seed them with "
+                    "scripts/calibration_corpus.py seed CLONE_ROOT --platform")
+    split = _corpus_split(cc.CORPUS_DIR)
+    assert split["met"] >= 1 and split["unmet"] >= 1, split
+
+
+def _write_corpus(corpus_dir: Path, states: list[str | None]) -> None:
+    for n, state in enumerate(states):
+        cc.write_expected(corpus_dir, {"corpus_version": cc.CORPUS_VERSION, "repo": f"h:{n:016x}",
+                                       "pinned": f"h:{n + 100:016x}", "levels_version": "v",
+                                       "states": {} if state is None else {"backlog-ready.1": "met", L2: state}})
+
+
+def test_the_corpus_check_counts_met_and_unmet_apart(tmp_path: Path) -> None:
+    _write_corpus(tmp_path / "split", ["met", "unmet", "not_measured"])
+    split = _corpus_split(tmp_path / "split")
+    assert (split["met"], split["unmet"], split["not_measured"]) == (1, 1, 1)
+    # Met nowhere measured: not_measured is not unmet, so the corpus does not discriminate.
+    _write_corpus(tmp_path / "flat", ["met", "not_measured"])
+    assert _corpus_split(tmp_path / "flat")["unmet"] == 0
+    _write_corpus(tmp_path / "old", ["met", None])
+    with pytest.raises(AssertionError, match="predate the backlog-ready row"):
+        _corpus_split(tmp_path / "old")
 
 
 def test_the_manifest_signals_are_config_text() -> None:
