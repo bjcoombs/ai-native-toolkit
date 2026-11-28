@@ -12,7 +12,9 @@ probe's bare ``insta`` matched ``install`` in every repository):
   the start of a requirement, normalised (``pytest_socket`` reads as ``pytest-socket``).
 - **Rust** (``cargo_names``): the keys of a ``Cargo.toml`` dependency table
   (``dependencies``, ``dev-dependencies``, ``build-dependencies``, ``workspace.dependencies``
-  and their ``target.<cfg>`` forms), a renamed one by its ``package``.
+  and their ``target.<cfg>`` forms), a renamed one by its ``package``. An ``optional = true``
+  dependency is a feature offered to downstream users (``arbitrary`` for their fuzzing), so it
+  is not read.
 - **JavaScript** (``npm_names``): the keys of ``package.json`` ``dependencies``,
   ``devDependencies``, ``optionalDependencies`` and ``peerDependencies``; an ``@fast-check/``
   package reads as ``fast-check``.
@@ -138,6 +140,8 @@ def python_names(rel: str, text: str) -> set[str]:
 
 def _cargo_keys(table: Mapping[str, Any]) -> Iterator[str]:
     for key, value in table.items():
+        if isinstance(value, Mapping) and value.get("optional") is True:
+            continue   # a feature offered to downstream users (fuzz support), not used here
         package = value.get("package") if isinstance(value, Mapping) else None
         yield package if isinstance(package, str) else key
 

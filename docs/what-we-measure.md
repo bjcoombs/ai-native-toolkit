@@ -494,7 +494,7 @@ It reads which files change together in history, so coupling the import graph do
 
 Coverage says a line ran, not that its behaviour held. A fuzzer, a property test, a snapshot or a test that cannot reach the network turns red when behaviour moves, so an agent's change that passes the tests is more likely to be right.
 
-Test practices that pin behaviour beyond line coverage, each read from a dependency declaration or a test signature: scheduled fuzzing, fuzz targets, property-based tests, network-isolated tests and snapshot tests. Evidence only: it adds an evidence line to the tests-run-in-CI condition while that condition is met, and counts toward nothing.
+Test practices that pin behaviour beyond line coverage, each read from a dependency or a test signature. They are scheduled fuzzing, fuzz targets, property-based tests, network-isolated tests and snapshot tests. Evidence only: it adds an evidence line to the tests-run-in-CI condition while that condition is met, and counts toward nothing.
 
 - Collector: `core.behaviour_pins`, reading `repo_root`.
 - Network: no.

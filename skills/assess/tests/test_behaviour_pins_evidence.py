@@ -90,6 +90,10 @@ def test_each_form_of_a_scheduled_fuzz_workflow_counts(tmp_path: Path, files: di
     {".github/workflows/w.yml": _workflow("[schedule]", "cargo fuzz run parse || true")},
     {".github/workflows/w.yml": _workflow("[schedule]", "make test --no-fuzz")},
     {".github/workflows/w.yml": _workflow("[schedule]", "make nightly")},
+    {".github/workflows/w.yml": _workflow("[schedule]", "cargo test --workspace --exclude fuzz")},
+    {".github/workflows/w.yml": _workflow("[schedule]", "pytest --ignore=tests/fuzz")},
+    {".github/workflows/w.yml": _workflow("[schedule]", 'pytest -k "not fuzz"')},
+    {".github/workflows/w.yml": _workflow("[schedule]", "pytest --deselect tests/fuzz/test_parse.py")},
 ])
 def test_a_fuzz_run_off_schedule_an_install_an_echo_or_a_masked_run_does_not_count(
         tmp_path: Path, files: dict[str, str]) -> None:
@@ -135,6 +139,13 @@ def test_a_file_saying_install_and_no_insta_dependency_reads_nothing(tmp_path: P
     })
     assert _block(root)["practices"] == []
     assert cargo_names('[dev-dependencies]\nsnap = { package = "insta", version = "1" }\n') == {"insta"}
+
+
+def test_an_optional_arbitrary_dependency_is_a_feature_not_a_fuzz_target(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"Cargo.toml": '[dependencies]\narbitrary = { version = "1", optional = true }\n'})
+    assert _block(root)["practices"] == []
+    root = _repo(tmp_path, {"Cargo.toml": '[dependencies]\narbitrary = { version = "1", features = ["derive"] }\n'})
+    assert _block(root)["practices"] == ["fuzz_targets"]
 
 
 @pytest.mark.parametrize("rel", ["vendor/x/Cargo.toml", "third_party/x/Cargo.toml", "pkg/testdata/Cargo.toml",

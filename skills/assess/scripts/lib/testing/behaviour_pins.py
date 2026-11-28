@@ -16,8 +16,9 @@ never a substring, so a file holding the word ``install`` is not the ``insta`` c
   ``run:`` lines (``lib.ci.ci_job_commands.job_lines``, the #775 masking rule) after
   ``lib.ci.ci_step_follower.follow_workflow``, and the scripts, make recipes and local actions
   they call through ``StepFollower`` up to ``_MAX_FOLLOW`` levels. A command behind a passing
-  ``||`` fallback, an install (``cargo install cargo-fuzz``), an ``echo`` and a ``--no-fuzz``
-  style flag do not count. The arm is ``scheduled-workflow``.
+  ``||`` fallback, an install (``cargo install cargo-fuzz``), an ``echo``, a ``--no-fuzz``
+  style flag and what a run leaves out (``--exclude fuzz``, ``--ignore=tests/fuzz``,
+  ``-k "not fuzz"``) do not count. The arm is ``scheduled-workflow``.
 - ``fuzz_targets``: the ``libfuzzer-sys`` or ``arbitrary`` crate, or a Go ``func FuzzXxx(f
   *testing.F)`` in a ``_test.go`` file (``go-fuzz-test``).
 - ``property_tests``: ``hypothesis``, the ``proptest`` or ``quickcheck`` crate, jqwik
@@ -73,6 +74,9 @@ _NAME = re.compile(r"^name:\s*(.+?)\s*$", re.M)
 _USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(\S+)")
 _QUIET = frozenset({"echo", "printf", ":", "true"})
 _MAX_FOLLOW = 3
+# Flags that leave something out of a run, and their operand: `--exclude fuzz`, `-k "not fuzz"`.
+_SELECT_OUT = frozenset({"--exclude", "--ignore", "--ignore-glob", "--deselect", "-k", "-m", "--skip"})
+_SELECT_OUT_PREFIXES = ("--no-", "--skip", "--exclude=", "--ignore", "--deselect=", "-k=", "-m=")
 
 Reader = Callable[[str, str], set[tuple[str, str]]]
 
@@ -124,7 +128,17 @@ def _fuzz_command(words: list[str]) -> bool:
     prog = program(words)
     if not prog or installs(words) or prog[0] in _QUIET:
         return False
-    return any(_fuzz_word(w) for w in prog if not w.startswith(("--no-", "--skip")))
+    skip = False
+    for word in prog:
+        if skip:
+            skip = False
+            continue
+        if word in _SELECT_OUT:
+            skip = True
+            continue
+        if not word.startswith(_SELECT_OUT_PREFIXES) and _fuzz_word(word):
+            return True
+    return False
 
 
 def _runs_fuzz(line: str, follower: StepFollower, depth: int = 0) -> bool:

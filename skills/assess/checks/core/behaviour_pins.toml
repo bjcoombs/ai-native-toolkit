@@ -5,7 +5,7 @@
 id = "core.behaviour_pins"
 kind = "collector"
 title = "Tests that pin behaviour beyond coverage"
-summary = "Test practices that pin behaviour beyond line coverage, each read from a dependency declaration or a test signature: scheduled fuzzing, fuzz targets, property-based tests, network-isolated tests and snapshot tests. Evidence only: it adds an evidence line to the tests-run-in-CI condition while that condition is met, and counts toward nothing."
+summary = "Test practices that pin behaviour beyond line coverage, each read from a dependency or a test signature. They are scheduled fuzzing, fuzz targets, property-based tests, network-isolated tests and snapshot tests. Evidence only: it adds an evidence line to the tests-run-in-CI condition while that condition is met, and counts toward nothing."
 issues = [855]
 callable = "lib.testing.behaviour_pins:pins_or_unknown"
 publishes = ["behaviour_pins"]
