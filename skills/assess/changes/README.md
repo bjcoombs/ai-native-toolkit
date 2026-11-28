@@ -13,9 +13,13 @@ During a version freeze, a PR that would bump a version counter adds one file he
 | `level_result` | `LEVEL_RESULT_VERSION` | `skills/assess/scripts/lib/scoring/level_tally.py` | [`history/level_result.md`](history/level_result.md) |
 | `signals_schema` | `SIGNALS_SCHEMA_VERSION` | `skills/assess/scripts/lib/run/signals.py` | [`history/signals_schema.md`](history/signals_schema.md) |
 | `levels_default` | `version` | `skills/assess/levels/default.toml` | [`history/levels_default.md`](history/levels_default.md) |
+| `profile_citizen` | `version` | `skills/assess/levels/profiles/citizen.toml` | [`history/profile_citizen.md`](history/profile_citizen.md) |
+| `profile_handover` | `version` | `skills/assess/levels/profiles/handover.toml` | [`history/profile_handover.md`](history/profile_handover.md) |
 | `fleet_data` | `FLEET_DATA_VERSION` | `skills/assess/scripts/lib/fleet/fleet_data.py` | [`history/fleet_data.md`](history/fleet_data.md) |
 | `achievements` | `ACHIEVEMENTS_VERSION` | `skills/assess/scripts/lib/fleet/fleet_achievements.py` | [`history/achievements.md`](history/achievements.md) |
 | `fleet_row` | `FLEET_ROW_VERSION` | `skills/assess/scripts/lib/fleet/runner.py` | [`history/fleet_row.md`](history/fleet_row.md) |
+
+Each shipped profile under `skills/assess/levels/profiles/` has its own counter, `profile_<name>`, which folds to `profile-<name>-<date>` as `levels_default` folds to `default-<date>`. A new profile adds its counter to `COUNTERS` in `scripts/fold_changes.py`, a pointer line above its `version` and a history file; `scripts/tests/test_fold_changes.py` fails on a profile without one.
 
 A note bumps its counter when folded, except `fleet_row`: the fleet history readers accept only the current row version, so the fold refuses to pick its value. The release PR passes `--set fleet_row=3` to bump it (and moves the readers), or `--set fleet_row=2` to record the notes without a bump, as `head_sha` and `dirty` were added.
 

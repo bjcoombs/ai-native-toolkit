@@ -18,8 +18,10 @@ For each counter with notes the fold writes one history entry at the top of the
 history file, below its marker line: ``<new> (<release> release): <n> changes
 since <old>.`` followed by the bullets in issue order. It sets the counter to
 ``<new>`` and deletes the notes. ``<new>`` is the next minor for a semver
-counter, the next integer for an integer one and ``default-<date>`` for the
-maturity model; ``--set counter=value`` overrides it. ``--check`` validates the
+counter, the next integer for an integer one, ``default-<date>`` for the
+maturity model and ``profile-<name>-<date>`` for a shipped profile (one counter,
+``profile_<name>``, per ``levels/profiles/<name>.toml``, #1667); ``--set
+counter=value`` overrides it. ``--check`` validates the
 notes and the layout (pointer line, no history comment left in a source file,
 history file with one marker) and writes nothing.
 """
@@ -35,6 +37,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CHANGES_DIR = Path("skills/assess/changes")
 HISTORY_DIR = CHANGES_DIR / "history"
+# The shipped maturity-model profiles; each has its own dated counter, profile_<name>.
+PROFILES_DIR = Path("skills/assess/levels/profiles")
 FRAGMENT_NAME = re.compile(r"^(?P<issue>[1-9][0-9]*)\.(?P<counter>[a-z_]+)\.md$")
 # Entries in the changes directory that are not notes.
 NOT_NOTES = frozenset({"README.md", HISTORY_DIR.name})
@@ -42,8 +46,9 @@ NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "
 # The fold writes each new entry directly below this line of a history file.
 MARKER = "<!-- make fold writes each new entry below this line, newest first. -->"
 # A history entry left as a comment in a source file: ``# 1.4.0 (also): ...``,
-# ``# 39 (4.0.0 release): ...``, ``# default-2026.11.24 (...): ...``, ``# 2: ...``.
-HISTORY_COMMENT = re.compile(r"^#\s*(default-[0-9.]+|[0-9]+(\.[0-9]+\.[0-9]+)?)( \([^)]*\))?:\s")
+# ``# 39 (4.0.0 release): ...``, ``# default-2026.11.24 (...): ...``,
+# ``# profile-handover-2026.11.23 (...): ...``, ``# 2: ...``.
+HISTORY_COMMENT = re.compile(r"^#\s*(default-[0-9.]+|profile-[a-z0-9_]+-[0-9.]+|[0-9]+(\.[0-9]+\.[0-9]+)?)( \([^)]*\))?:\s")
 
 
 @dataclass(frozen=True)
@@ -53,6 +58,7 @@ class Counter:
     path: Path
     assignment: re.Pattern[str]  # group "value" is the counter's current value
     kind: str  # "semver", "int" or "dated"
+    prefix: str = "default-"  # a dated counter's value before the date
     noun: str = "changes"
     # Why the fold will not pick this counter's next value: the release must pass --set.
     explicit: str = ""
@@ -85,6 +91,12 @@ COUNTERS: dict[str, Counter] = {
         re.compile(r'^version = "(?P<value>default-[0-9.]+)"$'),
         "dated",
     ),
+    **{f"profile_{name}": Counter(
+        PROFILES_DIR / f"{name}.toml",
+        re.compile(rf'^version = "(?P<value>profile-{name}-[0-9.]+)"$'),
+        "dated",
+        prefix=f"profile-{name}-",
+    ) for name in ("citizen", "handover")},
     "fleet_data": Counter(
         Path("skills/assess/scripts/lib/fleet/fleet_data.py"),
         re.compile(r"^FLEET_DATA_VERSION = (?P<value>[0-9]+)$"),
@@ -225,7 +237,7 @@ def next_value(counter: Counter, value: str, date: datetime.date) -> str:
         return f"{major}.{int(minor) + 1}.0"
     if counter.kind == "int":
         return str(int(value) + 1)
-    return "default-" + date.strftime("%Y.%m.%d")
+    return counter.prefix + date.strftime("%Y.%m.%d")
 
 
 def _count(n: int, noun: str) -> str:

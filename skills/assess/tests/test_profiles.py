@@ -1,6 +1,8 @@
 """Named maturity-model profiles and the model choice of a single-repository run (lib/profiles.py, #1150).
 
-Pins that every shipped profile reuses the default model's practices unchanged, that a run
+Pins that every shipped profile keeps the default rows it shares and the default Steps
+unchanged, that a profile may add a row the default model lacks but not change a Step or read
+a block no collector produces (#1667), that a run
 meeting every handover practice reads "Ready for handover" and that the same run without CI
 running the tests names that one gap, that a custom model's own practices are marked, that a
 single-repository run gives the Step /fleet gives for the same model and blocks, and the
@@ -89,14 +91,108 @@ def test_the_shipped_profiles_are_handover_and_citizen() -> None:
 
 
 @pytest.mark.parametrize("name", ["handover", "citizen"])
-def test_a_profile_reuses_the_default_practices_and_gates_unchanged(name: str) -> None:
+def test_a_profile_keeps_the_default_rows_it_shares_and_the_default_steps(name: str) -> None:
     choice = resolve(name, None, signal_path_validator())
     assert choice.kind == "profile" and choice.label == f"profile: {name}"
-    assert non_default_ids(choice.model) == []
+    # a profile may add rows (#1667), but a row sharing a default row's id redefines nothing
+    default_ids = {row["id"] for row in default_model()["rows"]}
+    assert [cid for cid in non_default_ids(choice.model) if cid.rpartition(".")[0] in default_ids] == []
     default_steps = {s["step"]: s for s in default_model()["steps"]}
     for step in choice.model["steps"]:
         assert step == default_steps[step["step"]]
     assert choice.model["version"].startswith(f"profile-{name}-")
+
+
+EXTRA_ROW = """
+[[rows]]
+id = "fresh-docs"
+title = "Very fresh docs"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [{ signal = "SIGNAL", op = "lte", value = 5 }]
+"""
+
+
+def _profiles_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str) -> None:
+    """A profiles directory holding one invented profile, ``extra``, which the loader reads."""
+    import lib.profiles
+
+    directory = tmp_path / "profiles"
+    directory.mkdir()
+    (directory / "extra.toml").write_text(text, encoding="utf-8")
+    monkeypatch.setattr(lib.profiles, "PROFILES_DIR", directory)
+
+
+def _extra(signal: str = "doc_staleness.summary.stale_pct", steps_from: str = "", steps_to: str = "") -> str:
+    """The handover profile with one row the default model lacks, as profile ``extra``."""
+    import re
+
+    text = re.sub(r'(?m)^version = ".*"$', 'version = "profile-extra-2026.11.28"',
+                  profile_path("handover").read_text(encoding="utf-8"))
+    return text.replace(steps_from, steps_to) + EXTRA_ROW.replace("SIGNAL", signal)
+
+
+def test_a_profile_may_hold_a_row_the_default_model_lacks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _profiles_dir(tmp_path, monkeypatch, _extra())
+    for choice in (resolve("extra", None, signal_path_validator()), single_repo_choice("extra", None)):
+        assert choice.kind == "profile"
+        assert non_default_ids(choice.model) == ["fresh-docs.1"]
+    lines = _summary(_blocks(), resolve("extra", None))
+    assert lines[1] == ("Not every practice met (profile: extra). "
+                        "Missing: Very fresh docs (not met) [not in the default model].")
+
+
+def test_a_profile_whose_steps_differ_from_the_default_is_refused(tmp_path: Path,
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    _profiles_dir(tmp_path, monkeypatch, _extra(steps_from='name = "Supervised agent PRs"',
+                                                steps_to='name = "Handover ready"'))
+    with pytest.raises(ProfileError, match="profile extra: Step 2 is not the default model's Step 2"):
+        resolve("extra", None)
+
+
+def test_a_profile_row_reading_a_block_no_collector_produces_is_refused(tmp_path: Path,
+                                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    _profiles_dir(tmp_path, monkeypatch, _extra(signal="change_ledger.unlinked_count"))
+    with pytest.raises(ProfileError, match="profile extra: row fresh-docs reads change_ledger, "
+                                           "which no collector produces"):
+        resolve("extra", None)
+
+
+def test_the_collector_blocks_are_the_scan_names() -> None:
+    from lib.profiles import collector_blocks
+    from lib.scoring.level_signals import scan_names
+
+    assert collector_blocks() == scan_names()
+
+
+def test_the_level_reads_every_block_a_shipped_profile_reads() -> None:
+    from lib.scoring.level_tally import DEFAULT_BLOCKS, PROFILE_BLOCKS, model_blocks
+
+    shipped = {b for name in profile_names() for b in model_blocks(resolve(name, None).model)}
+    assert set(PROFILE_BLOCKS) == shipped - set(DEFAULT_BLOCKS)
+    assert set(PROFILE_BLOCKS) <= set(LEVEL_READS)
+
+
+def test_profile_blocks_are_the_blocks_outside_the_default_model(tmp_path: Path) -> None:
+    from lib.scoring.level_tally import profile_blocks
+
+    (tmp_path / "extra.toml").write_text(_extra(signal="ai_usage.agent_share"), encoding="utf-8")
+    assert profile_blocks(tmp_path) == ("ai_usage",)
+    assert profile_blocks(tmp_path / "none") == ()
+
+
+def test_a_single_repository_run_reads_a_profile_block(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.profiles
+
+    _profiles_dir(tmp_path, monkeypatch, _extra(signal="ai_usage.agent_share"))
+    with pytest.raises(ProfileError, match="profile: extra reads ai_usage"):
+        single_repo_choice("extra", None)
+    monkeypatch.setattr(lib.profiles, "PROFILE_BLOCKS", ("ai_usage",))
+    assert non_default_ids(single_repo_choice("extra", None).model) == ["fresh-docs.1"]
 
 
 @pytest.mark.parametrize("name", ["handover", "citizen"])

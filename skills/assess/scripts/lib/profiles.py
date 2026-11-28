@@ -9,15 +9,24 @@ selects a custom model instead, and neither flag keeps the default
 profile or a malformed model. ``profile_path`` gives a profile's file, so ``/fleet``
 turns ``--profile`` into its ``--levels`` and every later ``--levels`` check holds.
 
-Built-in profiles reuse the default model's practices: each row is a default row of the
-same id, title and criteria, cut to fewer levels, so a profile never redefines a signal
-(``tests/test_profiles.py``). ``handover`` is the bar a production team expects before it
-takes a repository over; ``citizen`` is the lighter bar while a citizen developer builds.
-Each file justifies every practice it holds in one line.
+A profile may hold rows the default model lacks (#1667); ``resolve`` checks two rules on
+every profile it loads (``check_profile``) and raises ``ProfileError`` naming what breaks
+one: each of its Steps is the default model's Step of the same number, unchanged, so a Step
+means the same under every profile; and each row reads only blocks some collector produces
+(``collector_blocks``, the names ``level_signals.scan_names`` reads), so a row is never not
+measured by construction. A row
+sharing a default row's id keeps that row's title and criteria, cut to fewer levels, so a
+profile never redefines a default practice (``tests/test_profiles.py``). The corpus rule
+(``references/scoring-model.md``) governs entry to the default model only; profile rows are
+exempt. ``handover`` is the bar a production team expects before it takes a repository
+over; ``citizen`` is the lighter bar while a citizen developer builds. Each file justifies
+every practice it holds in one line. A profile edit records a version note in
+``skills/assess/changes/<issue>.profile_<name>.md`` (``changes/README.md``).
 
 A single-repository run evaluates the chosen model over the run context's ``level``
-reads (``level_tally.LEVEL_READS``: the blocks the default model reads), so
-``single_repo_choice`` refuses a custom model whose criteria read any other block, naming
+reads (``level_tally.LEVEL_READS``: the blocks the default model reads, then those the
+shipped profiles read beyond them, ``level_tally.PROFILE_BLOCKS``), so
+``single_repo_choice`` refuses a model whose criteria read any other block, naming
 it, rather than reporting its criteria as not measured (the ``pack`` block of the run's
 ``--pack`` checks is the one addition, #1273); over those blocks the run gives
 the same Step as ``/fleet --levels`` for the same repository.
@@ -65,6 +74,7 @@ Tests: ``tests/test_profiles.py``.
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,7 +83,7 @@ from typing import Any, Literal
 from lib.card_facts import CardFact
 from lib.scoring.headline import reason_word
 from lib.scoring.level_result_types import ConditionResult, LevelResult
-from lib.scoring.level_tally import DEFAULT_BLOCKS, default_model, level_result, model_blocks, run_context_level
+from lib.scoring.level_tally import DEFAULT_BLOCKS, PROFILE_BLOCKS, default_model, level_result, model_blocks, run_context_level
 from lib.scoring.level_tally import run_exclusions
 from lib.scoring.levels import LevelsError, MaturityModel, PathValidator, Row, load_levels
 from lib.pack_layering import layer_packs, pack_sources, row_source
@@ -82,7 +92,7 @@ from lib.packs import Pack, PackError
 from lib.prior_level import base_model_key
 from lib.scoring.signal_grades import DEFAULT_LEVELS
 
-__all__ = ["CUSTOM_MODEL_SUFFIX", "PROFILES_DIR", "RESERVED_PREFIXES", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
+__all__ = ["CUSTOM_MODEL_SUFFIX", "check_profile", "collector_blocks", "PROFILES_DIR", "RESERVED_PREFIXES", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
            "chosen_model", "model_for_level", "model_rows", "model_facts", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
            "run_level", "single_repo_choice"]
 
@@ -181,6 +191,35 @@ def add_model_arguments(parser: argparse.ArgumentParser, *, levels: bool = True)
             help="Evaluate a custom maturity model (TOML, lib/scoring/levels.py format) instead of the default.")
 
 
+# The published headless schema, whose ``scans`` names are the blocks the collectors produce.
+SIGNALS_SCHEMA = DEFAULT_LEVELS.parent.parent / "references" / "signals.schema.json"
+
+
+def collector_blocks() -> frozenset[str]:
+    """The blocks some collector produces: the ``scans`` names of the published headless schema,
+    less the ``--pack`` block, as ``level_signals.scan_names`` reads them. Read from the file so
+    this module never imports the scan registry, which reaches the platform clients."""
+    schema = json.loads(SIGNALS_SCHEMA.read_text(encoding="utf-8"))
+    return frozenset(schema["properties"]["scans"]["propertyNames"]["enum"]) - {PACK_BLOCK}
+
+
+def check_profile(name: str, model: MaturityModel) -> None:
+    """``ProfileError`` naming the first rule profile ``name`` breaks (#1667): a Step that is not
+    the default model's Step of the same number, unchanged, or a row reading a block no
+    collector produces. A row the default model lacks is allowed."""
+    default_steps = {step["step"]: step for step in default_model()["steps"]}
+    for step in model["steps"]:
+        if default_steps.get(step["step"]) != step:
+            raise ProfileError(f"profile {name}: Step {step['step']} is not the default model's Step "
+                               f"{step['step']}; a profile keeps the default Steps unchanged")
+    produced = collector_blocks()
+    for row in model["rows"]:
+        unknown = sorted({c["signal"].split(".")[0] for level in row["levels"] for c in level["criteria"]} - produced)
+        if unknown:
+            raise ProfileError(f"profile {name}: row {row['id']} reads {', '.join(unknown)}, which no "
+                               "collector produces")
+
+
 def resolve(profile: str | None, levels: str | Path | None,
             validator: PathValidator | None = None) -> ModelChoice:
     """The model ``--profile`` or ``--levels`` names, else the default; ``ProfileError`` on a
@@ -189,7 +228,9 @@ def resolve(profile: str | None, levels: str | Path | None,
         raise ProfileError("--profile and --levels each choose the model: pass one")
     try:
         if profile is not None:
-            return ModelChoice(load_levels(profile_path(profile), validator), "profile", profile)
+            model = load_levels(profile_path(profile), validator)
+            check_profile(profile, model)
+            return ModelChoice(model, "profile", profile)
         if levels is not None:
             path = Path(levels)
             model = load_levels(path, validator)
@@ -216,12 +257,12 @@ def single_repo_choice(profile: str | None, levels: str | Path | None,
         choice = ModelChoice(layer_packs(choice.model, choice.name, packs, validator), choice.kind, choice.name)
     except PackError as e:
         raise ProfileError(str(e)) from e
-    readable = {*DEFAULT_BLOCKS, *((PACK_BLOCK,) if packs else ())}
+    readable = {*DEFAULT_BLOCKS, *PROFILE_BLOCKS, *((PACK_BLOCK,) if packs else ())}
     outside = sorted(set(model_blocks(choice.model)) - readable)
     if outside:
         raise ProfileError(
             f"{choice.label} reads {', '.join(outside)}, which the single-repository level does not "
-            f"read (it reads the default model's blocks: {', '.join(DEFAULT_BLOCKS)}); "
+            f"read (it reads the default model's and the shipped profiles' blocks: {', '.join(sorted(readable))}); "
             "use /fleet --levels for this model")
     return choice
 

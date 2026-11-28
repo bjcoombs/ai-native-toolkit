@@ -25,7 +25,7 @@
 #   describe the code being handed over.
 #
 # Changing a criterion changes results: bump "version" with every edit.
-
+# History: skills/assess/changes/history/profile_handover.md, newest entry first.
 version = "profile-handover-2026.11.23"
 
 [[rows]]
