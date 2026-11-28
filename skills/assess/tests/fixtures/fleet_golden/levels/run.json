@@ -37,6 +37,10 @@
       "revision": 1
     },
     {
+      "id": "core.ai_governance",
+      "revision": 1
+    },
+    {
       "id": "core.ai_usage",
       "revision": 2
     },
@@ -286,7 +290,7 @@
     },
     {
       "id": "core.owner_exclusions",
-      "revision": 2
+      "revision": 3
     },
     {
       "id": "core.plugin_version",

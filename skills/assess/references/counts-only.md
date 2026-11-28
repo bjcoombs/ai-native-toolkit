@@ -208,6 +208,16 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_outcome.rework_null_reason` | token |
 | `agent_outcome.limits` | dropped |
 
+## ai_governance
+
+| Field | Kept as |
+|---|---|
+| `ai_governance.enforced_reason` | token |
+| `ai_governance.enforcing_workflows` | path (hashed when hashing is on) |
+| `ai_governance.policy_files` | path (hashed when hashing is on) |
+| `ai_governance.template_files` | path (hashed when hashing is on) |
+| `ai_governance.opt_out_files` | path (hashed when hashing is on) |
+
 ## ai_usage
 
 | Field | Kept as |
