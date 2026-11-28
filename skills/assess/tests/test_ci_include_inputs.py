@@ -89,6 +89,8 @@ def test_an_inputs_key_named_like_an_include_key_names_no_source() -> None:
 @pytest.mark.parametrize(("text", "defaults"), [
     (_outer("1.0"), {"version": "1.0"}),
     (_outer(None), {}),
+    ("---\n" + _outer("1.0"), {"version": "1.0"}),
+    ("\n---\n" + _outer("1.0"), {"version": "1.0"}),
     ("spec:\n  inputs:\n    version: {default: 1.5, description: x}\n    stage:\n      default: test\n---\n",
      {"version": "1.5", "stage": "test"}),
     ("spec:\n  inputs:\n    jobs:\n      default:\n        - a\n---\n", {"jobs": None}),

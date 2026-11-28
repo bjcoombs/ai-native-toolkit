@@ -8,7 +8,8 @@ substitutes the value before it reads the clone at the ref; a ref with an input 
 known for reads ``input_ref``, never ``ref_missing``, so a reader can tell the two apart.
 
 - ``spec_defaults(text)``: each input's ``default:``, None for one that is no one-line scalar;
-  an input with no ``default:`` is left out. No ``---`` separator: no spec header, none.
+  an input with no ``default:`` is left out. No ``---`` separator: no spec header, none. A
+  document-start ``---`` before ``spec:`` is skipped.
 - ``item_inputs(pairs, values)``: an include item's ``inputs:`` values, each interpolated with
   the values of the file it sits in, so a value travels down a nested chain; None where unknown.
 - ``file_inputs(text, passed)``: the values a file reads, ``passed`` over its spec defaults.
@@ -99,10 +100,12 @@ def _entry(value: str, rows: _Rows) -> dict[str, tuple[str, _Rows]]:
 def spec_defaults(text: str) -> dict[str, str | None]:
     """Each input's ``default:`` from the ``spec:`` header of a component's file."""
     lines = [strip_comment(line).rstrip() for line in text.splitlines()]
-    cut = next((i for i, line in enumerate(lines) if line == "---"), None)
+    first = next((i for i, line in enumerate(lines) if line.strip()), 0)
+    start = first + 1 if lines[first:first + 1] == ["---"] else 0  # a document-start marker
+    cut = next((i for i in range(start, len(lines)) if lines[i] == "---"), None)
     if cut is None:
         return {}
-    rows = [(len(line) - len(line.lstrip(" ")), line.strip()) for line in lines[:cut] if line.strip()]
+    rows = [(len(line) - len(line.lstrip(" ")), line.strip()) for line in lines[start:cut] if line.strip()]
     if not rows:
         return {}
     spec = _mapping(rows).get("spec")
