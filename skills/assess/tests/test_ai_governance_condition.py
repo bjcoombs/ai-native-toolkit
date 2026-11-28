@@ -246,6 +246,12 @@ def test_a_non_zero_or_message_exit_is_an_act(exit_call: str) -> None:
     assert enforces_disclosure(step) is True
 
 
+def test_a_stderr_redirect_does_not_bind_a_name_to_the_body() -> None:
+    step = ('run: |\n  gh pr view 1 --json body > body.txt 2>/dev/null\n'
+            '  if echo "$LOGIN" | grep -qi "copilot" 2>/dev/null; then exit 1; fi\n')
+    assert enforces_disclosure(step) is False
+
+
 def test_a_body_written_to_a_file_and_tested_there_counts() -> None:
     step = "run: |\n  gh pr view 1 --json body > body.json\n  grep -q 'AI assistance' body.json || exit 1\n"
     assert enforces_disclosure(step) is True

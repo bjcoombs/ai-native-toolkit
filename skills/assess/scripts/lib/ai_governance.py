@@ -99,7 +99,8 @@ _OUTPUT = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*|(?:\bprint|console\.\w+|core
 _SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*(?:\./)?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
 _ECHO = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*")
 _ASSIGNED = re.compile(r"^\s*(?:-\s+)?(?:export\s+|const\s+|let\s+|var\s+)?\$?\{?([A-Za-z_]\w*)\}?\s*(?::|=(?!=))")
-_WRITTEN = re.compile(r">\s*([\w./-]+)")
+# The file a read is written to: a stdout redirect, never a 2> or &> one, and never /dev/*.
+_WRITTEN = re.compile(r"(?<![\d&])>>?\s*(?!/dev/)([\w./-]+)")
 _CD = re.compile(r"\bcd\s+([\w./-]+)\s*(?:&&|;)")
 _YAML_COMMENT = re.compile(r"^\s*#.*$", re.MULTILINE)
 _CHECKBOX = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s+(.*)$", re.MULTILINE)
