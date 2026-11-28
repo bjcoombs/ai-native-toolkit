@@ -195,10 +195,15 @@ _SOURCEMAP_COMMENT = re.compile(
 _SOURCEMAP_TAIL_BYTES = 1024 * 1024
 # Bootstrap code webpack and Parcel emit near the top of a bundle, and the
 # notice webpack 5's eval devtool writes above it (seven lines, so the
-# bootstrap marker itself falls outside the first five).
+# bootstrap marker itself falls outside the first five). Each alternative is
+# anchored to the shape the bundler writes, so a hand-written file that names
+# a marker in a string or a passing comment is not evidence.
 _BUNDLER_MARKERS = re.compile(
-    r"webpackBootstrap|__webpack_require__|__webpack_modules__|parcelRequire"
-    r'|The "eval" devtool has been used')
+    r"^/\*{6}/"                                       # webpack's line prefix
+    r"|^\s*(var|const|let)\s+__webpack_(modules|require)__\s*="
+    r"|^\s*parcelRequire\s*="
+    r'|^\s*\*\s*ATTENTION: The "eval" devtool has been used',
+    re.MULTILINE)
 
 
 def _has_sourcemap(path: Path) -> bool:

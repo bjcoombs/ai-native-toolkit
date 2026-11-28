@@ -284,3 +284,17 @@ def test_artifact_evidence_webpack_eval_devtool_banner(tmp_path):
                  ' *\n */\n/******/ (() => { // webpackBootstrap\n',
                  encoding="utf-8")
     assert artifact_evidence(f) == "bundler-banner"
+
+
+@pytest.mark.parametrize("first_line", [
+    'const help = "webpackBootstrap";',
+    "const names = ['__webpack_require__', 'parcelRequire'];",
+    '// See how The "eval" devtool has been used in old builds.',
+])
+def test_artifact_evidence_ignores_bundler_words_in_hand_written_code(
+        tmp_path, first_line):
+    """A marker named in a string or a comment is not bootstrap code."""
+    from lib.complexity.generated_files import artifact_evidence
+    f = tmp_path / "tool.js"
+    f.write_text(first_line + "\nexport { help };\n", encoding="utf-8")
+    assert artifact_evidence(f) is None
