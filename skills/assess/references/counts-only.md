@@ -177,6 +177,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `agent_ops.settings.default_mode` | token |
+| `agent_ops.settings.tool` | token |
 | `agent_ops.managed.state` | token |
 | `agent_ops.managed.reason` | token |
 | `agent_ops.managed.sources.kind` | token |

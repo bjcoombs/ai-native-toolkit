@@ -8,6 +8,12 @@ This module scans the repo-observable subset of those guardrails:
 
 - ``.claude/settings.json`` / ``.claude/settings.local.json`` - permission
   ``allow`` / ``deny`` / ``ask`` entry counts, hook events, sandbox config.
+- the other harnesses' settings and hook files, treated as equivalent (#846,
+  ``lib.agents.harness_settings``): ``.gemini/settings.json`` and ``.cursor/hooks.json`` and
+  Copilot's ``.github/hooks/*.json`` hook events, and VS Code's
+  ``chat.tools.terminal.autoApprove`` rules in ``.vscode/settings.json`` as ``allow`` / ``deny``
+  counts. Each ``settings`` entry names its ``tool``. ``summary.hooks_disabled`` counts the
+  tracked hook files renamed with a ``.disabled`` suffix (never credited).
 - ``.claude/hooks/`` - hook scripts on disk.
 - ``.claude/workflows/`` and ``.claude/routines/`` - routine/loop definitions
   (evidence of repeated, encoded agent work cycles).
@@ -84,7 +90,6 @@ apply in every mode.
 """
 from __future__ import annotations
 
-import json
 import re
 from functools import partial
 from pathlib import Path
@@ -94,18 +99,13 @@ from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_model_jobs import signs_in
 from lib.ci.ci_step_paths import inside, local_workflow, read_action
 from lib.ci.ci_triggers import workflow_events
-from lib.instructions.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
+from lib.instructions.command_index import ci_config_files, read_config, repo_files
 from lib.counts_only.block_shapes import AgentJob, AgentWorkflow
 from lib.agents.agent_instruction_rewrite import frontmatter as _frontmatter, instruction_rewrite
 from lib.agents.agent_job_scope import gh_aw_job, merge_readings, summarize, workflow_jobs
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
-from lib.history.git_churn import is_tracked, tracked_files
-
-# Candidate settings files, repo-root-relative. Order is the report order.
-_SETTINGS_PATHS = (
-    ".claude/settings.json",
-    ".claude/settings.local.json",
-)
+from lib.agents.harness_settings import HOOKS_DIR, disabled_hook_files, hooks_present, scan_dir, settings_files
+from lib.history.git_churn import tracked_files
 
 # Directories whose committed contents evidence encoded routine/loop work.
 _ROUTINE_DIRS = (
@@ -113,108 +113,8 @@ _ROUTINE_DIRS = (
     ".claude/routines",
 )
 
-_HOOKS_DIR = ".claude/hooks"
-
-# permissions.defaultMode values Claude Code documents
-# (https://code.claude.com/docs/en/permission-modes); any other string reads "other".
-_DEFAULT_MODES = frozenset({
-    "default", "manual", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions",
-})
 UNREADABLE_MANAGED = "managed_settings_unreadable"
 UNREAD_WORKFLOWS = "agent_workflows_unread"
-# Hook types other than command that act on their own (#922); a typeless hook does not.
-_ACTING_TYPES = frozenset({"prompt", "agent", "http", "mcp_tool"})
-
-
-def _count_list(value: Any) -> int:
-    return len(value) if isinstance(value, list) else 0
-
-
-def _hook_acts(hook: Any) -> bool:
-    """A hook that does something: a known non-command type (``prompt``, ``agent``, ``http``,
-    ``mcp_tool``), or a
-    command other than ``true``, ``:`` or ``exit 0``. An echo counts: a hook's output can add
-    context or a decision. A hook with no or an unknown ``type`` does not count."""
-    if not isinstance(hook, dict):
-        return False
-    if hook.get("type") in _ACTING_TYPES:
-        return True
-    if hook.get("type") != "command":
-        return False
-    command = hook.get("command")
-    parts = command.replace("&&", ";").split(";") if isinstance(command, str) else []
-    return not all(not p.strip() or p.strip() in NOOP_COMMANDS for p in parts)
-
-
-def _event_acts(groups: Any) -> bool:
-    """An event whose matcher groups hold at least one hook that does something (#922)."""
-    return isinstance(groups, list) and any(
-        isinstance(g, dict) and isinstance(g.get("hooks"), list) and any(map(_hook_acts, g["hooks"]))
-        for g in groups)
-
-
-def _scan_settings_file(
-    repo_root: Path, rel: str, tracked: frozenset[Path] | None
-) -> dict[str, Any] | None:
-    """Parse one settings file into its guardrail counts, or None when absent."""
-    path = repo_root / rel
-    if not path.is_file():
-        return None
-    entry: dict[str, Any] = {
-        "path": rel,
-        "tracked": is_tracked(path, tracked),
-        "parse_ok": False,
-        "allow_count": 0,
-        "deny_count": 0,
-        "ask_count": 0,
-        "hook_events": 0,
-        "sandbox_configured": False,
-    }
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return entry
-    if not isinstance(data, dict):
-        return entry
-    entry["parse_ok"] = True
-    permissions = data.get("permissions")
-    if isinstance(permissions, dict):
-        entry["allow_count"] = _count_list(permissions.get("allow"))
-        entry["deny_count"] = _count_list(permissions.get("deny"))
-        entry["ask_count"] = _count_list(permissions.get("ask"))
-        mode = permissions.get("defaultMode")
-        if isinstance(mode, str):
-            entry["default_mode"] = mode if mode in _DEFAULT_MODES else "other"
-    hooks = data.get("hooks")
-    if isinstance(hooks, dict):
-        entry["hook_events"] = sum(1 for groups in hooks.values() if _event_acts(groups))
-    entry["sandbox_configured"] = "sandbox" in data
-    return entry
-
-
-def _scan_dir(
-    repo_root: Path, rel: str, tracked: frozenset[Path] | None
-) -> dict[str, Any]:
-    """Count files (and how many are tracked) directly under ``rel``."""
-    root = repo_root / rel
-    file_count = 0
-    tracked_count = 0
-    if root.is_dir():
-        try:
-            for p in sorted(root.rglob("*")):
-                if not p.is_file() or p.name.startswith("."):
-                    continue
-                file_count += 1
-                if is_tracked(p, tracked):
-                    tracked_count += 1
-        except OSError:
-            pass
-    return {
-        "path": rel,
-        "present": root.is_dir(),
-        "file_count": file_count,
-        "tracked_count": tracked_count,
-    }
 
 
 # -- agent workflows (#815, #847) ----------------------------------------------
@@ -438,23 +338,15 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
 
-    settings = [
-        entry
-        for rel in _SETTINGS_PATHS
-        if (entry := _scan_settings_file(repo_root, rel, tracked)) is not None
-    ]
-    hooks_dir = _scan_dir(repo_root, _HOOKS_DIR, tracked)
-    routine_dirs = [_scan_dir(repo_root, rel, tracked) for rel in _ROUTINE_DIRS]
+    settings = settings_files(repo_root, tracked)
+    hooks_dir = scan_dir(repo_root, HOOKS_DIR, tracked)
+    routine_dirs = [scan_dir(repo_root, rel, tracked) for rel in _ROUTINE_DIRS]
 
     managed = read_managed_settings() if managed_settings else not_read()
     tracked_settings = [s for s in settings if s["tracked"]]
     in_repo = any(
         s["allow_count"] + s["deny_count"] + s["ask_count"] > 0
         for s in tracked_settings
-    )
-    hooks_present = (
-        any(s["hook_events"] > 0 for s in tracked_settings)
-        or hooks_dir["tracked_count"] > 0
     )
     workflows, unread = scan_agent_workflows(repo_root)
     scheduled = sum(w["scheduled"] for w in workflows)
@@ -464,7 +356,8 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
 
     summary: dict[str, Any] = {
         "permissions_encoded": in_repo,
-        "hooks_present": hooks_present,
+        "hooks_present": hooks_present(settings, hooks_dir),
+        "hooks_disabled": len(disabled_hook_files(repo_root, tracked)),
         "routines_present": routines_present,
         "scheduled_agent_workflows": scheduled,
         "event_agent_workflows": triggered,

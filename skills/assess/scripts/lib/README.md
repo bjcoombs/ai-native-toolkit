@@ -181,7 +181,7 @@ New code imports the new path.
 
 - **`agents/`**: what a repository builds with agents and how an agent runs in it, the
   Layer 8 inputs. `agent_identity` is shared core and stays at the root; `agent_consistency`,
-  `agent_systems` and `agent_instructions_grader` moved with the `instructions` group. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`, `agent_environment.py`, `agent_harness.py`, `agent_instruction_rewrite.py`, `agent_job_scope.py`, `agent_manifests.py`, `agent_ops.py`, `gh_aw_imports.py`, `managed_settings.py`.
+  `agent_systems` and `agent_instructions_grader` moved with the `instructions` group. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`, `agent_environment.py`, `agent_harness.py`, `agent_instruction_rewrite.py`, `agent_job_scope.py`, `agent_manifests.py`, `agent_ops.py`, `gh_aw_imports.py`, `harness_settings.py`, `managed_settings.py`.
 - **`ci/`**: CI configuration read offline, the `ci` group (#1392, #1393): the committed CI
   files read line by line (continuations, matrices, expressions, triggers), GitLab `include:`
   items resolved offline and the merged line view, and the blocks built from them: CI checks
@@ -271,7 +271,7 @@ New code imports the new path.
   the input class and grade of each signal a condition reads, the verified tally with its
   per-tag rows and result types, the layer and signal grades, the headline, the action
   conditions and the next-step guidance. `signal_grades` locates `levels/default.toml` from
-  its own path (`parents[3]`). Files: `__init__.py`, `action_conditions.py`, `condition_evidence.py`, `headline.py`, `layer_grades.py`, `level_result_types.py`, `level_signals.py`, `level_tags.py`, `level_tally.py`, `levels.py`, `levels_fields.py`, `levels_hints.py`, `levels_starter.py`, `next_step_guidance.py`, `next_step_guidance_backlog.py`, `next_step_guidance_contracts.py`, `next_step_guidance_guards.py`, `signal_grades.py`.
+  its own path (`parents[3]`). Files: `__init__.py`, `action_conditions.py`, `condition_evidence.py`, `headline.py`, `layer_grades.py`, `level_result_types.py`, `level_signals.py`, `level_tags.py`, `level_tally.py`, `levels.py`, `levels_fields.py`, `levels_hints.py`, `levels_starter.py`, `next_step_guidance.py`, `next_step_guidance_backlog.py`, `next_step_guidance_contracts.py`, `next_step_guidance_guards.py`, `next_step_guidance_hooks.py`, `signal_grades.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 - **`testing/`** ([README](testing/README.md)): the Layer 6 test signals outside `test_pressure/`: the coverage gate and

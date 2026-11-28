@@ -442,7 +442,14 @@
 #   counts toward hooks_present only when it holds a hook that does
 #   something: a prompt, agent, http or mcp_tool hook, or a command other
 #   than true, : or exit 0. An empty event list or a hook with no type does
-#   not count (#922). Level 2's second criterion, agent_work_present, is met by a
+#   not count (#922). The other harnesses' files widen both level 1 and the
+#   hook criterion, never adding a condition (lib/agents/harness_settings.py,
+#   #846): hook events in .gemini/settings.json, .cursor/hooks.json and
+#   Copilot's .github/hooks/*.json count as Claude settings hooks do, and VS
+#   Code's chat.tools.terminal.autoApprove rules count as permission entries.
+#   A tracked hook file renamed with a .disabled suffix, while no live hook
+#   counts and agent_work_present is not false, is a decline record (owner_exclusions.declines, source
+#   hooks_disabled) that reads level 2 declined, not unmet. Level 2's second criterion, agent_work_present, is met by a
 #   routine file, a scheduled agent workflow (#815) or an issue or pull request
 #   workflow that runs an agent (#847): one condition, never two. Not measured
 #   (agent_workflows_unread) when only another repository's reusable workflow may

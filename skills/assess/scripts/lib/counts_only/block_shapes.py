@@ -41,9 +41,11 @@ from lib.keyhole.structure_drift import EmptyOwnershipPattern
 # -- agent_ops ---------------------------------------------------------------
 
 class AgentOpsSettingsFile(TypedDict):
-    """One ``.claude/settings*.json`` file found on disk, tracked or not."""
+    """One harness settings or hook file found on disk, tracked or not
+    (``lib.agents.harness_settings``, #846)."""
 
     path: str
+    tool: str  # claude_code, gemini, cursor, copilot or vscode
     tracked: bool
     parse_ok: bool
     allow_count: int
@@ -90,6 +92,7 @@ class AgentOpsSummary(TypedDict):
 
     permissions_encoded: bool | None
     hooks_present: bool
+    hooks_disabled: int  # tracked hook files with a .disabled suffix that hold a hook (#846)
     routines_present: bool  # a routine dir file or a scheduled agent workflow (#815)
     scheduled_agent_workflows: int
     event_agent_workflows: int

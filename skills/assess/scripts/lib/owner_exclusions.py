@@ -53,7 +53,11 @@ in `level.json` and `fleet-data.json`. The block also carries `declines` (#828),
 when `.assess/agents-declined.json` exists (`decline_markers.read_agent_decline`): the
 declared agent opt-out that `level_tally` reads as `declined`, and also when a Copilot
 instruction file declines Copilot review for the whole repository
-(`ai_governance.read_copilot_opt_out`, #851), whose record is shown and declines no condition. Counts-only keeps
+(`ai_governance.read_copilot_opt_out`, #851), whose record is shown and declines no condition, and
+when a tracked hook file carries a `.disabled` suffix and no live hook counts
+(`harness_settings.read_hooks_disabled`, #846), whose record declines the hook condition; it is
+left out when `agent_ops` reads `agent_work_present` false, since that condition also needs agent
+work and a disabled hook says nothing about it. Counts-only keeps
 ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 """
 from __future__ import annotations
@@ -65,8 +69,10 @@ from pathlib import Path
 from typing import Any
 
 from lib.assess_config import ASSESS_DIR, load_config
-from lib.scoring.level_result_types import OwnerExclusion, OwnerExclusionsBlock, SkippedExclusion
+from lib.scoring.level_result_types import DeclineRecord, OwnerExclusion, OwnerExclusionsBlock, SkippedExclusion
 from lib.ai_governance import read_copilot_opt_out
+from lib.agents.agent_ops import scan_agent_ops
+from lib.agents.harness_settings import read_hooks_disabled
 from lib.run.decline_markers import read_agent_decline
 from lib.scoring.level_tally import condition_ids, default_model
 
@@ -154,13 +160,23 @@ def _warn(skip: SkippedExclusion) -> None:
           "the condition stays in force", file=sys.stderr)
 
 
+def _hooks_disabled(repo_root: Path) -> DeclineRecord | None:
+    """The disabled-hooks record (#846), only while the hook condition's agent-work criterion is
+    not read false: a disabled hook never takes an unmet routines criterion out of the denominator."""
+    record = read_hooks_disabled(repo_root)
+    if record is None or scan_agent_ops(repo_root)["summary"]["agent_work_present"] is False:
+        return None
+    return record
+
+
 def owner_exclusions_block(repo_root: Path) -> OwnerExclusionsBlock:
     """The run context's ``owner_exclusions`` block for one repository, warning on each skipped entry."""
     block = parse_exclusions(load_config(repo_root), condition_ids(default_model()))
     for skip in block["skipped"]:
         _warn(skip)
-    # #828, #851: present only when declared, so a block without one is unchanged
-    records = [r for r in (read_agent_decline(repo_root / ASSESS_DIR), read_copilot_opt_out(repo_root)) if r is not None]
+    # #828, #851, #846: present only when declared, so a block without one is unchanged
+    records = [r for r in (read_agent_decline(repo_root / ASSESS_DIR), read_copilot_opt_out(repo_root),
+                           _hooks_disabled(repo_root)) if r is not None]
     if records:
         block["declines"] = records
     return block
