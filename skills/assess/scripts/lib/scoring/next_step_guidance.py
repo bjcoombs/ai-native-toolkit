@@ -37,8 +37,9 @@ with its own. `guidance` returns `None` for a signal or shape it has no wording 
 then states the signal expression alone. `measure_hint(signal)` says why a signal can
 be unavailable (a full `/assess` run only, a network read, an opt-in pass, a ghreport
 permission; for the `structure`, `stats_summary` and `promissory_markers` blocks a missing
-grimp, networkx, lizard or `rg`, and for `structure_drift` no ownership map). Every signal of
-`levels/default.toml` has wording (tested).
+grimp, networkx, lizard or `rg`, and for `structure_drift` no ownership map; the secrets guard
+and coverage gate hints on an unread GitLab include are `next_step_guidance_includes`'s, #1350).
+Every signal of `levels/default.toml` has wording (tested).
 """
 from __future__ import annotations
 
@@ -50,6 +51,7 @@ from lib.scoring.next_step_guidance_backlog import BACKLOG_FLAGS, BACKLOG_HINT
 from lib.scoring.next_step_guidance_contracts import API_COMPAT_HINT, CONTRACT_FLAGS
 from lib.scoring.next_step_guidance_guards import GUARD_FLAGS, GUARD_HINT
 from lib.scoring.next_step_guidance_hooks import HOOK_FLAGS
+from lib.scoring.next_step_guidance_includes import COVERAGE_INCLUDES_HINT, SECRETS_GUARD_HINT
 
 # The guardrail deny rule the permissions wording names (#1153); ``/assess --fix`` writes it,
 # with the repository's default branch in place of ``main`` (``lib/starter_templates.py``, #1154).
@@ -666,14 +668,7 @@ _MEASURE_HINTS = {
                           "no false claim among none is not a claim that holds.",
     "nested_instructions": "The always-loaded budget is not measured (`no_loaded_instructions`) when "
                            "Claude Code loads no instruction file at launch: there is no budget to keep.",
-    "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
-                     "no secrets scan in CI when its push protection setting was not read: run with "
-                     "`--platform`, or `/assess` with `gh` signed in, as a repository admin, organization owner or security "
-                     "manager, or add a CI "
-                     "scan, to settle it. It is also not measured "
-                     "(`ci_includes_unresolved`) when a GitLab include that could hold the scan was not read, or "
-                     "(`gitlab_rules_unevaluated`) when a GitLab scan job runs under rules, only/except or a "
-                     "when that is not evaluated.",
+    "secrets_guard": SECRETS_GUARD_HINT,
     "skill_personal_data": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
                            "holds no `SKILL.md` or agent definition: there is nothing to scan.",
     "skill_script_tests": "Not measured (`no_skill_scripts`) when no skill in the repository, or in "
@@ -747,7 +742,7 @@ _MEASURE_HINTS = {
                      "requires the status is not read. To measure the level, run a threshold of "
                      "at least 50 percent in a CI step (`pytest --cov --cov-fail-under=80`). "
                      "The block is unavailable when the scan did not run: check "
-                     "the fleet run's `--scans` and its `logs/` directory.",
+                     "the fleet run's `--scans` and its `logs/` directory." + COVERAGE_INCLUDES_HINT,
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
     "backlog_ready": BACKLOG_HINT,

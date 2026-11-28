@@ -794,5 +794,6 @@ def test_the_report_names_the_practices_in_place_before_the_blocking_gate_and_gi
     ctx = {**_minimal_ctx(), "level": level, "headline": summarised(headline(level, model), level, None, model)}
     report = render_report(ctx, "demo")
     named = report.index("In place: 2 practices at their top level: doc-freshness; guardrails-stated.")  # fixture titles
-    assert named < report.index("Blocks Step 2:") < report.index("## In place") < report.index("## Catalogue")
+    # #1640: the fixture reads no liveness, so its one gate reads not measured
+    assert named < report.index("Step 2 not measured: the liveness gate") < report.index("## In place") < report.index("## Catalogue")
     assert all(entry["top"] and entry["why"] in report for entry in level["in_place"])

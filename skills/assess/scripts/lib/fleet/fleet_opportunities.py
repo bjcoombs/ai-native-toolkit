@@ -7,8 +7,10 @@ phrased as an opportunity: what is already in place first, then the change that 
 next level. No team or repository is ranked, numbered or compared, and no insight names a
 person (the inputs are scan blocks and repository ids only).
 
-- ``in_place``: per ``team`` row, how many measured repositories already hold its top level,
-  by the level result's rule (#1470): a repository counts only when its own level result
+- ``in_place``: per ``team`` row, how many measured repositories already hold its top level, and
+  how many scanned repositories read the row not measured, by reason (``not_measured``,
+  ``not_measured_reasons``, ``lib/fleet/fleet_not_measured.py``, #1350). In place is
+  read by the level result's rule (#1470): a repository counts only when its own level result
   (``lib.fleet.fleet_level.repo_level``, the badge's source) lists the row in ``in_place`` with
   ``top``, so every condition is counted and met. A declared or config-only condition (an
   instruction file) never makes a row count, here or in the repository's badge.
@@ -66,6 +68,7 @@ from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_maturity import SCOPE
+from lib.fleet.fleet_not_measured import InPlace as InPlace, reasons
 from lib.fleet.fleet_step_lifts import StepLift, step_lifts
 from lib.fleet.fleet_why import criterion_why
 from lib.scoring.level_result_types import LevelResult
@@ -76,12 +79,6 @@ TITLE = "Opportunities"
 CI_PREFIX = "ci_checks."
 MIN_INCLUDERS = 2  # a CI source fewer repositories include is not shared
 PER_LIST = 20  # repository names per report line; the rest are counted
-
-
-class InPlace(TypedDict):
-    row: str
-    at_top: int  # measured repositories whose level result holds the row at its top level (#1470)
-    measured: int  # repositories with a known level on the row
 
 
 class Lift(TypedDict):
@@ -175,9 +172,12 @@ def _in_place(team_rows: Sequence[Row], ok: Sequence[FleetRow],
     top = {r["repo"]: rows_at_top(results.get(r["repo"])) for r in ok}
     out: list[InPlace] = []
     for row in team_rows:
-        known = [r["repo"] for r in ok if evaluate_row(row, repo_signals(r))["level"] is not None]
+        levels = {r["repo"]: evaluate_row(row, repo_signals(r))["level"] for r in ok}
+        known = [repo for repo, level in levels.items() if level is not None]
+        unknown = [repo for repo, level in levels.items() if level is None]
         out.append({"row": row["id"], "at_top": sum(row["id"] in top[repo] for repo in known),
-                    "measured": len(known)})
+                    "measured": len(known), "not_measured": len(unknown),
+                    "not_measured_reasons": reasons(row["id"], unknown, results)})
     return out
 
 

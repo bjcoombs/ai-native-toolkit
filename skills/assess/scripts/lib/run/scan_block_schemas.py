@@ -413,14 +413,16 @@ COVERAGE_GATE: JsonDict = {
         "enforced_basis": _field(
             {"enum": ["ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read",
                       "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs",
-                      "unread_ci_system", "status_check_unconfirmed", "not_run_in_ci", "no_ci"]},
+                      "unread_ci_system", "status_check_unconfirmed", "not_run_in_ci", "no_ci",
+                      "ci_includes_unresolved"]},
             "The reason for enforced_meets_minimum: ci_run (true); no_gate, "
             "threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, "
             "unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest "
             "--cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run "
             "it), included_jobs, unread_ci_system and status_check_unconfirmed (a Codecov "
             "status target, which no CI line runs and which gates a merge only when branch "
-            "protection requires it; issue #882) (null)."),
+            "protection requires it; issue #882) and ci_includes_unresolved (no gate in the checkout, "
+            "and a GitLab include the coverage scan does not read could hold one; issue #1350) (null)."),
         "not_detected": _STRINGS,
     },
 }
@@ -465,6 +467,13 @@ DELIVERY: JsonDict = {
 
 _TOKENS: JsonDict = {"type": "array", "items": {"type": "string"}}
 
+
+def _approvals(what: str) -> JsonDict:
+    """An approval-integrity count of sampled changes (#1664)."""
+    return _field({"type": ["integer", "null"]},
+                  f"Sampled changes {what}; null when an account whose bot status is unknown, "
+                  "a missing commit or an unreadable time decides it.")
+
 REVIEW_REALITY: JsonDict = {
     "description": (
         "Whether merged changes were reviewed (lib/hosting/review_reality.py), from the shared sample "
@@ -508,6 +517,22 @@ REVIEW_REALITY: JsonDict = {
                                     "behind approved_share and reviewed_share (#943)."),
         "bot_sequence": _field(_TOKENS, "One token per sampled change, in the order of sequence: "
                                         "bot, none or unknown (review-bot output, #943)."),
+        "independent_approval_count": _approvals(
+            "approved by a person other than the author (bots, [identities] bots and agents "
+            "excluded; lib/hosting/approval_integrity.py, #1664)"),
+        "no_independent_approval_count": _approvals(
+            "without an approval by a person other than the author"),
+        "bot_only_approval_count": _approvals(
+            "approved by another account, every one of them a bot"),
+        "stale_approval_count": _approvals(
+            "whose approvals by people all name a commit other than the head (always null on "
+            "GitLab, which gives no reviewed commit)"),
+        "approved_after_merge_count": _approvals(
+            "whose earliest approval by a person came after the merge (null on GitLab where no "
+            "approval time is given)"),
+        "self_merged_unapproved_count": _approvals(
+            "merged by their author without an approval by a person"),
+        "bot_authored_count": _approvals("authored by a bot"),
     },
 }
 

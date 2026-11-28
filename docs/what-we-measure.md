@@ -686,6 +686,7 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
   - `codecov_target_not_read`: The only coverage gate that could reach 50 percent is a Codecov project status. Its target is auto, missing (Codecov's default is auto) or not a number. So the floor it holds is the base commit's coverage, not a number this scan can compare. Run a coverage threshold of at least 50 percent in a CI step, such as pytest --cov --cov-fail-under=80 or a fail_under your CI runs. A numeric Codecov target (target: 80%) makes the threshold readable. Whether branch protection requires the status is not read.
   - `codecov_patch_only`: The only coverage gate that could reach 50 percent is a Codecov patch status. It bounds coverage of the changed lines only, and removing a test changes none, so it says nothing about the floor on total coverage. To have the coverage gate measured, run a coverage threshold of at least 50 percent in a CI step. Examples are pytest --cov --cov-fail-under=80, or a fail_under your CI runs. Or add a numeric target to a Codecov project status.
   - `status_check_unconfirmed`: The coverage gate of at least 50 percent is a Codecov status target, and no CI line runs it. Codecov posts it as a commit status. It holds a merge only when branch protection requires it, and this scan does not read branch protection. Nothing to change if the Codecov status is a required check. To have the coverage gate measured, also run the threshold in a CI step (pytest --cov --cov-fail-under=80).
+  - `ci_includes_unresolved`: No coverage gate was found in the checkout, and the GitLab CI includes a local, project, remote or component file. The coverage scan does not read included files, so the gate may run there. Run the coverage threshold in the repository's own CI (pytest --cov --cov-fail-under=80). The coverage scan reads no included file.
   - `root_coverage_config_unresolved`: A scoped run found a fail_under in the root coverage.py config for a Python package with none of its own, not where CI runs coverage. coverage.py reads the config of the directory it runs in. So the root floor counts only when CI runs coverage from the root or names that config. Run coverage in CI from the repository root (pytest --cov, coverage report), or pass the root config with --cov-config or --rcfile; or give the package its own fail_under and run coverage from its directory or with --cov-config naming that config.
 
 Why the signals named here matter:
@@ -1082,9 +1083,9 @@ Why the signals named here matter:
 
 It shows how many recently merged changes had a review and an approval, which is how far a second reader reaches into what agents and people merge.
 
-Review and approval shares over the sampled merged changes, read through gh or glab.
+Review and approval shares, and approval-integrity counts, over the sampled merged changes, read through gh or glab.
 
-- Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`, `review_rules`.
+- Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`, `review_rules`, `fleet_config`.
 - Network: yes, GitHub or GitLab (with --platform).
 - Headless: reported by headless and fleet runs.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.bot_sequence` token, `review_reality.merge_queue_source` token, `review_reality.reason` drop, `review_reality.sequence` token.
@@ -1135,7 +1136,7 @@ A secrets hook in the pre-commit config and a secrets scan in CI, such as gitlea
 - Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.rules_unevaluated` token, `secrets_guard.ci.tools` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.rules_unevaluated` token, `secrets_guard.ci.tools` token, `secrets_guard.configured_reason` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
 - Used by: row `secrets-guard`.
 - Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
 - Not measured when:
@@ -1454,7 +1455,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `repo_guards` | Ratchets and repo-owned guards | `repo_root` | `repo_guards` | no |
 | `review_automation` | AI review committed in CI | `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci` | `review_automation` | no |
 | `review_evidence` | Review evidence | `review_automation`, `review_reality` | `review_evidence` | no |
-| `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts`, `review_rules` | `review_reality` | yes |
+| `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts`, `review_rules`, `fleet_config` | `review_reality` | yes |
 | `review_rules` | Merge and review rules kept as code | `repo_root` | `review_rules` | no |
 | `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot`, `prior_level` | no |
 | `run_id` | Run id | - | private input | no |

@@ -102,6 +102,10 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
   the path reports ``available: false``;
 - the code in a null signal's sibling ``<leaf>_reason`` field, such as
   ``agent_ops.summary.permissions_encoded_reason`` ``managed_settings_unreadable`` (#1153);
+- for a null signal in ``NULL_BASIS``, the token in its basis field (#1350):
+  ``ci_checks.enforced_check_runs`` and ``coverage_gate.enforced_meets_minimum`` read their
+  ``enforced_basis`` (``included_jobs``, ``ci_includes_unresolved``, ``unknown_trigger``, ...),
+  so a fleet view splits the not-measured CI gate and coverage gate by cause;
 - ``block_absent`` (the run has no such block, or it is null), ``no_value`` (the signal is
   missing or null) or ``type_mismatch``.
 
@@ -284,6 +288,11 @@ def scan_not_applicable(cond: Mapping[str, Any], by_id: Mapping[str, Mapping[str
     return None
 
 
+# A null signal whose cause its block writes in a basis field, not ``<leaf>_reason`` (#1350).
+NULL_BASIS: Mapping[str, str] = {"ci_checks.enforced_check_runs": "enforced_basis",
+                                 "coverage_gate.enforced_meets_minimum": "enforced_basis"}
+
+
 def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
     """The reason code for an unavailable signal (see the module doc)."""
     # A null block reads as an absent one: an omitted spread key is null in the run
@@ -302,6 +311,8 @@ def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
         if node[part] is None and isinstance(node.get(f"{part}_reason"), str):
             # a null signal's sibling `<leaf>_reason` code (#1153)
             return reason_code(node[f"{part}_reason"])
+        if node[part] is None and isinstance(node.get(NULL_BASIS.get(signal, "")), str):
+            return str(node[NULL_BASIS[signal]])  # a null CI or coverage gate's basis token (#1350)
         node = node[part]
     return "no_value"
 
