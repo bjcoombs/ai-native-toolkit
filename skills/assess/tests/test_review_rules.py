@@ -203,6 +203,11 @@ def test_a_ruleset_counts_only_when_active_and_requiring_review(
     # a product's own grading code is not review guidance
     ({"tests/rubrics/test_grade.py": "x", ".github/workflows/r.yml": _workflow("pull_request", "pytest tests/rubrics")},
      []),
+    ({"src/preview/rubrics/g.py": "x", ".github/workflows/r.yml":
+      _workflow("pull_request", "pytest src/preview/rubrics")}, []),
+    ({".github/code-review/rubrics/a.md": "x", ".github/workflows/r.yml":
+      _workflow("pull_request", "cat .github/code-review/rubrics/a.md")},
+     [("review_guide", ".github/code-review/rubrics")]),
     ({"docs/review/rubrics/a.md": "x", ".github/workflows/r.yml":
       _workflow("pull_request", "echo hi") + "# reads docs/review/rubrics\n"}, []),
     ({"docs/review/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("schedule", "cat docs/review/rubrics/a.md")}, []),

@@ -73,12 +73,13 @@ _GUIDE_DIR = re.compile(
 # A grading-sheet folder counts only under a parent whose name says review (``docs/review/rubrics``):
 # a bare ``tests/rubrics`` is a product's own code.
 _SHEETS_DIR = re.compile(r"(?:[a-z0-9]+[-_.])*rubrics?")
+_REVIEW_WORD = re.compile(r"(?:^|[-_.])(?:code[-_]?)?reviews?(?:$|[-_.])")  # a token: not ``preview``
 
 
 def _is_guide(path: str) -> bool:
     parts = [p.lower() for p in PurePosixPath(path).parts]
     return bool(_GUIDE_DIR.fullmatch(parts[-1])) or (
-        bool(_SHEETS_DIR.fullmatch(parts[-1])) and any("review" in p for p in parts[:-1]))
+        bool(_SHEETS_DIR.fullmatch(parts[-1])) and any(_REVIEW_WORD.search(p) for p in parts[:-1]))
 
 
 class _Unsettled(Exception):
