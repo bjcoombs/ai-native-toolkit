@@ -120,7 +120,9 @@ disk, returns its text so those scans read the included jobs too:
   nested chain. With no known value, or an interpolation that is not a bare
   ``inputs.<name>`` (``| expand_vars``), the item is ``input_ref``, never ``ref_missing``.
   A file read again with other input values has its includes walked again with them, since
-  they may pin other nested files; with the same values it is walked once.
+  they may pin other nested files; with the same values it is walked once. The repository's
+  own ``.gitlab-ci.yml`` takes no values, not even its spec defaults: a pipeline started by
+  hand, by the API or on a schedule can set its inputs, so an input ref there is ``input_ref``.
 - ``component: <host>/<project path>/<name>@<version>``: the project
   ``<project path>`` resolved as above, file ``templates/<name>.yml`` or
   ``templates/<name>/template.yml``, at ``<version>`` when the clone holds it.

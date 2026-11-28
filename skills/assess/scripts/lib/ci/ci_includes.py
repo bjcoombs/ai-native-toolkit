@@ -501,7 +501,7 @@ def resolve_includes(repo_root: Path, ghsync_root: Path | None = None,
         return EMPTY
     walk = _Walk(repo_root, ghsync_root.resolve() if ghsync_root is not None else None, renames)
     walk.seen.add((str(repo_root), None, GITLAB_CI))
-    walk.walk(text, own, 1, None, file_inputs(text, {}))
+    walk.walk(text, own, 1, None, {})  # a pipeline's own inputs may be set at run time (#1339)
     return Resolution(tuple(walk.files), tuple(walk.records), text, tuple(walk.slots))
 
 

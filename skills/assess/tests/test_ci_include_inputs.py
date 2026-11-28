@@ -198,7 +198,9 @@ def test_a_project_ref_by_input_resolves(tmp_path: Path) -> None:
     assert _nested(root, app) == ("resolved", "ref")
 
 
-def test_an_input_ref_in_the_repositorys_own_file_reads_input_ref(tmp_path: Path) -> None:
-    root, app = _fleet(tmp_path, _outer("1.0"), NESTED)
+@pytest.mark.parametrize("ci", [NESTED, _outer("1.0")])
+def test_an_input_ref_in_the_repositorys_own_file_reads_input_ref(tmp_path: Path, ci: str) -> None:
+    """Even with a spec default: a pipeline started with inputs can override it."""
+    root, app = _fleet(tmp_path, _outer("1.0"), ci)
     record = resolve_includes(app.resolve(), root.resolve()).includes[0]
     assert record["status"] == "input_ref" and "input_ref" in STATUSES
