@@ -18,6 +18,7 @@ draws on the readers below.
 | Which tests belong to which code? | `sibling_tests` (the one home for test-file naming rules), `import_credit` |
 | Where should testing effort go? | `test_focus`, `untrusted_hotspot` |
 | How does mutation testing cap the score? | `mutation_cap`, `mutation_refresh` |
+| Which tests pin behaviour beyond coverage (fuzzing, property, network-isolated, snapshot)? | `behaviour_pins`, `behaviour_pins_manifests` |
 
 Each module's docstring says what it reads and what it returns. All of them only read: none
 runs the tests or a coverage tool.

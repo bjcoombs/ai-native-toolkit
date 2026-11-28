@@ -96,6 +96,14 @@
       },
       "revision": 5
     },
+    "core.behaviour_pins": {
+      "repos": {
+        "grpa/sub/deep/svc2": "bd47a22e12f1c99aaf1b03e3f4e69fd0798ee248c7f73d350ff7b21784703610",
+        "grpa/svc1": "f26b6446276eb2cdf1cd76fff3de70f4db2aa9ed6115951f1e368e060c90f614",
+        "grpb/lib1": "bd47a22e12f1c99aaf1b03e3f4e69fd0798ee248c7f73d350ff7b21784703610"
+      },
+      "revision": 1
+    },
     "core.ci_checks": {
       "repos": {
         "grpa/sub/deep/svc2": "c52536f0c0954fa12d353751fe88c57c0c20c399b942c95be5ca709d434913e7",

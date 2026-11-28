@@ -110,6 +110,7 @@ from lib.skill_personal_data import scan_skill_personal_data
 from lib.skill_library import scan_skill_library
 from lib.ci.ci_model_jobs import scan_ci_model_jobs
 from lib.ci.ci_hazards import scan_ci_hazards
+from lib.testing.behaviour_pins import pins_or_unknown
 from lib.ci.repo_guards import guards_or_unknown
 from lib.ai_governance import scan_ai_governance
 from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
@@ -566,6 +567,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # caps CI runs, and whether each guard script has its own tests. Feeds the repo-guards and
     # repo-guard-tested rows.
     _spec("repo_guards", guards_or_unknown),
+    # Tests that pin behaviour beyond coverage (issue #855): fuzzing, property, network-isolated
+    # and snapshot tests from dependency declarations and test signatures. Evidence only: the
+    # level entry attaches it to the tests-run-in-CI condition while that condition is met.
+    _spec("behaviour_pins", pins_or_unknown),
     # AI governance (issue #851): an AI disclosure a pull request workflow enforces, a policy
     # only declared, and Copilot review opt-outs. Feeds the ai-policy-enforced and
     # ai-policy-declared rows.

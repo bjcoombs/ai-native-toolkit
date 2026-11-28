@@ -101,6 +101,7 @@
           "archetype",
           "backlog_ready",
           "behaviour",
+          "behaviour_pins",
           "ci_checks",
           "ci_hazards",
           "ci_model_jobs",

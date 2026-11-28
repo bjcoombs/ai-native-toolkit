@@ -271,13 +271,14 @@ New code imports the new path.
   the input class and grade of each signal a condition reads, the verified tally with its
   per-tag rows and result types, the layer and signal grades, the headline, the action
   conditions and the next-step guidance. `signal_grades` locates `levels/default.toml` from
-  its own path (`parents[3]`). Files: `__init__.py`, `action_conditions.py`, `headline.py`, `layer_grades.py`, `level_result_types.py`, `level_signals.py`, `level_tags.py`, `level_tally.py`, `levels.py`, `levels_fields.py`, `levels_hints.py`, `levels_starter.py`, `next_step_guidance.py`, `next_step_guidance_backlog.py`, `next_step_guidance_guards.py`, `signal_grades.py`.
+  its own path (`parents[3]`). Files: `__init__.py`, `action_conditions.py`, `condition_evidence.py`, `headline.py`, `layer_grades.py`, `level_result_types.py`, `level_signals.py`, `level_tags.py`, `level_tally.py`, `levels.py`, `levels_fields.py`, `levels_hints.py`, `levels_starter.py`, `next_step_guidance.py`, `next_step_guidance_backlog.py`, `next_step_guidance_guards.py`, `signal_grades.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 - **`testing/`** ([README](testing/README.md)): the Layer 6 test signals outside `test_pressure/`: the coverage gate and
   the readings it combines (coverage activation, CI coverage runs, the root coverage.py
   config), the coverage report, test focus, sibling tests, import credit, the mutation cap
-  and refresh, and untrusted hotspots. Files: `__init__.py`, `ci_workdir.py`, `coverage_activation.py`, `coverage_ci.py`, `coverage_codecov.py`, `coverage_gate.py`, `coverage_report.py`, `coverage_root_config.py`, `import_credit.py`, `mutation_cap.py`, `mutation_refresh.py`, `sibling_tests.py`, `test_focus.py`, `untrusted_hotspot.py`.
+  and refresh, untrusted hotspots, and the evidence-only behaviour-pinning test practices
+  (#855). Files: `__init__.py`, `behaviour_pins.py`, `behaviour_pins_manifests.py`, `ci_workdir.py`, `coverage_activation.py`, `coverage_ci.py`, `coverage_codecov.py`, `coverage_gate.py`, `coverage_report.py`, `coverage_root_config.py`, `import_credit.py`, `mutation_cap.py`, `mutation_refresh.py`, `sibling_tests.py`, `test_focus.py`, `untrusted_hotspot.py`.
 
 ## Module reference
 

@@ -108,6 +108,7 @@ fragments = [
   "ci_model_jobs",
   "ci_hazards",
   "repo_guards",
+  "behaviour_pins",
   "ai_governance",
   "org_security_policy",
   "github_secret_scanning",

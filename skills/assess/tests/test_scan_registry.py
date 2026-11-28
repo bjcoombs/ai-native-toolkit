@@ -363,10 +363,12 @@ def test_a_spread_key_is_readable_from_its_stage_on():
 
 
 def test_the_level_entry_reads_the_default_models_blocks():
+    from lib.scoring.condition_evidence import EVIDENCE_BLOCKS
     from lib.scoring.level_tally import DEFAULT_BLOCKS, EXCLUSIONS_BLOCK, default_model, model_blocks
 
     spec = next(s for s in reg.SCANS if s.key == "level")
-    assert spec.reads == (*DEFAULT_BLOCKS, EXCLUSIONS_BLOCK, "maturity_model", "pack")
+    # the model's blocks, then the evidence-only blocks (#855), then the exclusions
+    assert spec.reads == (*DEFAULT_BLOCKS, *EVIDENCE_BLOCKS, EXCLUSIONS_BLOCK, "maturity_model", "pack")
     assert DEFAULT_BLOCKS == model_blocks(default_model())
     assert spec.stage == reg.STAGE_POST_OFFERS and not spec.network
 

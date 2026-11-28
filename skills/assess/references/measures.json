@@ -3528,6 +3528,41 @@
       "why_source": ""
     },
     {
+      "name": "behaviour_pins",
+      "title": "Tests that pin behaviour beyond coverage",
+      "summary": "Test practices that pin behaviour beyond line coverage, each read from a dependency declaration or a test signature: scheduled fuzzing, fuzz targets, property-based tests, network-isolated tests and snapshot tests. Evidence only: it adds an evidence line to the tests-run-in-CI condition while that condition is met, and counts toward nothing.",
+      "collector": "core.behaviour_pins",
+      "reads": [
+        "repo_root"
+      ],
+      "headless_reads": null,
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "behaviour_pins.pins.arm": "token",
+          "behaviour_pins.pins.path": "path",
+          "behaviour_pins.pins.practice": "token",
+          "behaviour_pins.practices": "token",
+          "behaviour_pins.reason": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "Coverage says a line ran, not that its behaviour held. A fuzzer, a property test, a snapshot or a test that cannot reach the network turns red when behaviour moves, so an agent's change that passes the tests is more likely to be right.",
+      "why_source": ""
+    },
+    {
       "name": "ci_checks",
       "title": "CI runs a test or lint command",
       "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command. Whether such a line can fail its job on ordinary changes: not masked, and not outside the ordinary triggers. Whether such a line runs a linter. The value is null when no check is found but a CI file pulls its jobs from elsewhere. It is also null when no check is found and the tree tracks a CI file the scan does not parse. It is null under --platform when most sampled merged pull requests carry an external CI check. It is null when a root Prow OWNERS_ALIASES is the only CI evidence.",
@@ -6409,6 +6444,18 @@
       "private": false
     },
     {
+      "name": "behaviour_pins",
+      "title": "Tests that pin behaviour beyond coverage",
+      "publishes": [
+        "behaviour_pins"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "broken_instruction_refs",
       "title": "Broken instruction references",
       "publishes": [
@@ -7047,6 +7094,7 @@
         "structure",
         "structure_drift",
         "test_pressure",
+        "behaviour_pins",
         "owner_exclusions",
         "maturity_model",
         "pack"
@@ -7653,6 +7701,7 @@
         "structure",
         "structure_drift",
         "test_pressure",
+        "behaviour_pins",
         "owner_exclusions"
       ],
       "network": false,
