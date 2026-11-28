@@ -68,7 +68,7 @@ def test_the_summary_reads_step_n_and_the_next_step_not_measured() -> None:
 
 def test_the_card_reads_the_next_step_not_measured_and_never_a_gate_not_held() -> None:
     lines = card_lines(_step2(), MODEL, KNOWN)  # type: ignore[arg-type]
-    assert lines[0] == "Step 2, Step 3 not measured: supervised agent PRs, Step 2 of 4."
+    assert lines[0] == "Step 2, Step 3 not measured · Step 2 of 4: supervised agent PRs."
     assert "Step 3 not measured: the CI runs tests gate, not measured here (needs a full run)." in lines
     text = "\n".join(lines)
     assert GATE_GAP["ci_runs_tests"] not in text

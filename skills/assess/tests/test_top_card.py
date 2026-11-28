@@ -114,7 +114,7 @@ def test_a_gate_not_measured_carries_the_headline_note() -> None:
     level = _below()
     level["next_step"]["blockers"][0].update(state="not_measured", reason="needs_full_run")
     lines = card_lines(level, MODEL, KNOWN)  # type: ignore[arg-type]
-    assert lines[0] == "Step 3, Step 4 not measured: unattended agent PRs, Step 3 of 4."
+    assert lines[0] == "Step 3, Step 4 not measured · Step 3 of 4: unattended agent PRs."
     assert lines[2] == "Step 4 not measured: the coverage gate, not measured here (needs a full run)."
     assert lines[-2].endswith("(not measured here: needs a full run)")
 

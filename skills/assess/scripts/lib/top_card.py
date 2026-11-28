@@ -17,8 +17,8 @@ precedes every gate line.
    - below it: ``Step 3 of 4: unattended agent PRs.``, the Step's name in the model, its first
      letter lowered unless the name opens with an acronym (``CI-gated merges`` stays);
    - below it, when every gate of the next Step that does not hold was not measured
-     (``lib/scoring/step_reading.py``, #1640): ``Step 2, Step 3 not measured: supervised agent
-     PRs, Step 2 of 4.``, never the next Step;
+     (``lib/scoring/step_reading.py``, #1640): ``Step 2, Step 3 not measured · Step 2 of 4:
+     supervised agent PRs.``, never the next Step;
    - below the first Step of a model whose Step 1 has a gate (#889): ``Not yet at Step 1 of 3.``;
    - a model without Steps: ``This maturity model defines no Steps.``;
 
@@ -235,7 +235,8 @@ def _lead(level: Mapping[str, Any], model: MaturityModel) -> str:
     name = step_name(model, step)
     reading = step_reading(level)
     if reading is not None:  # #1640: the next Step's open gates were not measured
-        return f"{reading}: {_lower_first(name)}, Step {step} of {top}." if name else f"{reading}, Step {step} of {top}."
+        held = f"Step {step} of {top}: {_lower_first(name)}" if name else f"Step {step} of {top}"
+        return f"{reading} · {held}."  # the held Step's name stays beside its number
     return f"Step {step} of {top}: {_lower_first(name)}." if name else f"Step {step} of {top}."
 
 
