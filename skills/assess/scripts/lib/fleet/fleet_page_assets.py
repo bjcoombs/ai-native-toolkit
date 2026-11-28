@@ -260,7 +260,9 @@ SCRIPT = r"""
       + "a condition the result lists but does not count is in neither.</p><ul>" + r.tags.map(function (c) {
       var t = tagOf(bundle, c.tag);
       return "<li><button class=\"link\" data-tag=\"" + esc(c.tag) + "\">" + esc(t ? t.title : c.tag) + "</button> "
-        + esc(c.met + " met, " + c.unmet + " unmet" + (c.not_measured ? ", " + c.not_measured + " not measured" : "")) + "</li>";
+        // measured 0 is not measured, never a share of 0, as the unit tier reads it
+        + esc((c.measured ? c.met + " met, " + c.unmet + " unmet" : "not measured")
+          + (c.not_measured ? ", " + plural(c.not_measured, "condition", "conditions") + " not measured" : "")) + "</li>";
     }).join("") + "</ul>";
   }
   function tagDetail(bundle, r, key) {

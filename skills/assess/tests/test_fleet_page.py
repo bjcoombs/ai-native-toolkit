@@ -183,7 +183,15 @@ def test_the_drill_runs_org_unit_repository_tag_condition_and_stays_byte_identic
     with its state and the next Step's needs), then one condition's state, reading and needs."""
     org, unit, repo, tag, cond = _drill("full", DRILL)
     assert 'data-unit="grp/sub"' in org and 'data-repo="grp/sub/proj2"' in unit and "data-tag" not in unit
-    assert 'data-tag="docs">Docs</button> 0 met, 0 unmet' in repo and 'data-tag="governance"' in repo
+    assert 'data-tag="docs">Docs</button> not measured</li>' in repo and 'data-tag="governance"' in repo
+    assert " met, " not in repo  # every fixture tally has measured 0: not measured, never 0 met, 0 unmet
+    _, full = _parts(fx.goldens()["expected-full.html"])
+    proj1 = next(r for r in full["repos"] if r["key"] == "grp/sub/proj1")
+    proj1["tags"][1].update(met=1, measured=3, unmet=2)  # a measured Docs tally shows its counts
+    counted = _drill("full", [{"unit": "grp/sub", "repo": "grp/sub/proj1"}], full)[0]
+    assert 'data-tag="docs">Docs</button> 1 met, 2 unmet</li>' in counted
+    other = _drill("full", [{"unit": "grp/other", "repo": "grp/other/proj3"}])[0]
+    assert 'data-tag="docs">Docs</button> not measured, 2 conditions not measured</li>' in other
     assert "Docs</strong> on grp/sub/proj2" in tag and 'data-row="0" data-level="2"' in tag
     text = _text(tag)
     assert "Instruction docs, level 1 : held, the practice reads level 1 of 2" in text
