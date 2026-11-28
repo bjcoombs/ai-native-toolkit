@@ -13,7 +13,9 @@ one page per group, with no rescan:
   for that criterion at its level (``lib.fleet.fleet_why.criterion_why``, #1128); a criterion
   with no manifest entry (a caller's own model) gets no Why line, never an empty one. A team row names the repositories holding the group
   back, each with its current value; an org row names the settings scope it
-  applies to;
+  applies to. A ``false`` agent-permission or secrets-guard reading adds "not found in the
+  repository" and the step names where else the practice can be set
+  (``lib/scoring/next_step_guidance_outside.py``, #1662);
 - for an ``unknown`` row, the signals that could not be measured and why: a
   measurement gap, not a setback. A row with a confirmed floor (#697) reads
   "at least N", and a signal only a full ``/assess`` measures (its block
@@ -93,6 +95,7 @@ from lib.fleet.fleet_groups import (GroupRow, full_run_only_signals, platform_si
 from lib.fleet.fleet_why import criterion_why
 from lib.scoring.next_step_guidance import guidance, measure_hint
 from lib.scoring.next_step_guidance import parts as unmet_parts_of
+from lib.scoring.next_step_guidance_outside import ELSEWHERE_SIGNALS, NOT_FOUND
 from lib.scoring.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate, floor_of
 from lib.run_context_types import JsonDict
 from lib.vocabulary import IN_PLACE
@@ -251,6 +254,21 @@ def _step(number: int, criterion: Criterion, where: Sequence[str],
             *where]
 
 
+def holding_entry(name: str, outcome: CriterionOutcome, parts: Sequence[str]) -> str:
+    """One repository on a step's "Holding the group back" line: its current value, and the unmet
+    parts of a compound check. A ``false`` reading of a practice that can be set outside the
+    repository adds ``NOT_FOUND`` (#1662): the scan saw no trace in the commit, not an absence."""
+    note = f": {NOT_FOUND}" if outcome["actual"] is False and outcome["signal"] in ELSEWHERE_SIGNALS else ""
+    unmet = f"; unmet: {', '.join(code(p) for p in parts)}" if parts else ""
+    return f"{code(name)} (now {scalar(outcome['actual'])}{note}{unmet})"
+
+
+def elsewhere_lines(signal: str) -> list[str]:
+    """The step line naming where else ``signal``'s practice can be set (#1662); none for any other."""
+    where = ELSEWHERE_SIGNALS.get(signal)
+    return [f"   - Can also be set outside the repository: {where}."] if where else []
+
+
 def _team_steps(row: Row, result: RowResult, target: int, failed: Mapping[str, str],
                 signals: Mapping[str, JsonDict], report_unmeasured: bool = True) -> list[str]:
     evaluations = result.get("repos", {})
@@ -267,13 +285,11 @@ def _team_steps(row: Row, result: RowResult, target: int, failed: Mapping[str, s
         number += 1
         blocking.update(name for name, _ in hits)
         found = {name: unmet_parts_of(criterion["signal"], signals.get(name, {})) for name, _ in hits}
-        listed = ", ".join(
-            f"{code(name)} (now {scalar(o['actual'])}"
-            + (f"; unmet: {', '.join(code(p) for p in found[name])})" if found[name] else ")")
-            for name, o in hits)
+        listed = ", ".join(holding_entry(name, o, found[name]) for name, o in hits)
         union = sorted({p for found_parts in found.values() for p in found_parts})
-        lines += _step(number, criterion, [f"   - Holding the group back ({len(hits)}): {listed}."], union,
-                       criterion_why(row, level, criterion["signal"]))
+        elsewhere = elsewhere_lines(criterion["signal"]) if any(o["actual"] is False for _, o in hits) else []
+        lines += _step(number, criterion, [f"   - Holding the group back ({len(hits)}): {listed}.", *elsewhere],
+                       union, criterion_why(row, level, criterion["signal"]))
     unmeasured = [name for name in below if name not in blocking]
     if unmeasured and report_unmeasured:
         parts = []

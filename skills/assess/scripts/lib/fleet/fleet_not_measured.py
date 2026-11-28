@@ -12,7 +12,10 @@ then code, so a split such as 21 of 27 reads as such.
 ``absence_line`` is the report sentence for such a practice: "not found at its top level in N
 measured repositories; M not measured (code count, ...)" when any repository reads unknown, and
 "not in place at its top level in any of the N measured repositories" only when none does. A
-repository may hold the practice at a lower level, so the line names the top level. ``report.md``'s "What's working
+repository may hold the practice at a lower level, so the line names the top level. For a row
+whose top level can be set outside the repository (``next_step_guidance_outside.ELSEWHERE_ROWS``,
+the secrets guard, #1662) the first form reads "not found in the repository at its top level in
+any of the N measured repositories", and both forms end with where else it can be set. ``report.md``'s "What's working
 across the fleet" lists these lines (``lib/fleet/fleet_opportunities_section.py``), and the fleet
 report writer follows the same rule (``skills/fleet/references/report-and-diagrams.md``).
 
@@ -26,6 +29,7 @@ from collections.abc import Iterable, Mapping
 from typing import TypedDict
 
 from lib.scoring.level_result_types import LevelResult
+from lib.scoring.next_step_guidance_outside import ELSEWHERE_ROWS, NOT_FOUND
 
 NO_VALUE = "no_value"  # a repository whose level result names no not-measured condition on the row
 
@@ -64,9 +68,12 @@ def _repos(n: int) -> str:
 
 def absence_line(p: InPlace, title: str) -> str:
     """The report line for a practice no measured repository holds at its top level."""
+    elsewhere = ELSEWHERE_ROWS.get(p["row"])
+    tail = f"; {elsewhere}." if elsewhere else "."
     if not p["not_measured"]:
         where = "the 1 measured repository" if p["measured"] == 1 else f"any of the {_repos(p['measured'])}"
-        return f"- {title}: not in place at its top level in {where}."
+        found = NOT_FOUND if elsewhere else "not in place"
+        return f"- {title}: {found} at its top level in {where}{tail}"
     split = ", ".join(f"`{r['reason']}` {r['count']}" for r in p["not_measured_reasons"])
     return (f"- {title}: not found at its top level in {_repos(p['measured'])}; {p['not_measured']} not measured "
-            f"({split}).")
+            f"({split}){tail}")
