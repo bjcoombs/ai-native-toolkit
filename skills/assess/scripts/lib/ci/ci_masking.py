@@ -62,7 +62,8 @@ parser (the core has no YAML dependency). Only literal values count.
   ``set -e``, unless a later statement of that body re-raises a status: it
   exits or returns a non-zero literal, a variable or ``$?`` (``exit 1``,
   ``exit $status``), as ``.github/workflows/floor.yml``'s retry loop does.
-
+- Never reached (#1622). A bare ``exit`` or ``exit`` with any status, alone at the top level of a body (nesting as above, any
+  shell, GitLab too), masks every later statement of it: ``exit 0`` then ``pytest`` earns nothing; ``if ...; then exit 0; fi`` masks nothing.
 - Errexit-exempt positions (#936, ``lib.ci.ci_exempt``). With errexit on, bash does not stop
   at a failing command on the left of ``&&`` / ``||``, in a pipeline but its last command
   (pipefail off: the default ``bash -e {0}`` and ``sh``; on for ``shell: bash``, a custom
@@ -76,7 +77,6 @@ parser (the core has no YAML dependency). Only literal values count.
 - A folded block scalar (``run: >``) is read as YAML folds it: adjacent non-blank lines at
   the block's indentation are one line, so ``pytest`` and ``|| true`` on two lines are one
   masked statement, and ``pytest`` then ``exit 0`` is the one command ``pytest exit 0``.
-
 - Not measured (#1008, ``lib.ci.ci_unsure``). ``mask_lines(text)`` returns ``(unmasked,
   unsure)``: the forms whose failure the step may hide are left out of the unmasked lines
   and returned on their own, so ``ci_checks`` and ``coverage_ci`` read them null
@@ -158,16 +158,15 @@ pipeline, the `||` pipelines up to the next `&&` are dropped (`ruff check . --ex
 || pytest` drops `pytest`), and a folded block scalar (`run: >`) is folded into one
 line before any rule reads it. The default `bash -e` stops at the failing check first, so
 `pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
-`exit 0` rule; a literal `if: false`,
-`if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
-`\\` continuations are joined first.
+`exit 0` rule; a literal `if: false`, `if: 'false'` or `if: ${{ false }}` masks its step or job like
+`continue-on-error: true`. `\\` continuations are joined first. Issue #1622 masks every statement after a top-level `exit`.
 Issue #1008 adds `mask_lines(text) -> (unmasked, unsure)`, the forms that read null
 (`lib.ci.ci_unsure`). Issue #1061 masks a pipeline member but the last with pipefail off
 (null with a later `PIPESTATUS` read or re-raise) and an uncalled function's body in a
 GitHub bash or sh body. Known limits (module docstring): an exempt check inside a subshell or function with a later statement there, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
-shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.
+shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`; #1622: `tests/test_ci_exit_unreachable.py`.
 """
 from __future__ import annotations
 
@@ -441,10 +440,10 @@ def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> t
     return out, grouped
 
 
-def _exit_zero(statement: list[tuple[str, str]]) -> bool:
-    """A statement that is ``exit 0`` alone: run unconditionally at the top level, it ends the
-    body with success."""
-    return len(statement) == 1 and " ".join(statement[0][1].split()) == "exit 0"
+def _exit_status(statement: list[tuple[str, str]]) -> str | None:
+    """The status word of a lone ``exit`` (``""`` when bare), else None; at the top level it ends the body (#1622)."""
+    words = statement[0][1].split() if len(statement) == 1 else []
+    return " ".join(words[1:]) if words[:1] == ["exit"] and len(words) <= 2 else None
 
 
 # Shells GitHub Actions runs without errexit: ``pwsh`` / ``powershell`` (a Windows runner's
@@ -614,7 +613,8 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     uncalled, named = uncalled_functions(body) if readable else (set(), set())   # #1061
     grouped_pipes = {**piped_groups(body), **piped_calls(body, before)} if readable else {}   # #1061
     opaque = opaque_flags(body)
-    out: list[tuple[int, int]] = []
+    ends = [i for i, (first, k) in enumerate(refs) if code[i] and depths[i] == 0 and _exit_status(parsed[first][k]) is not None]
+    out: list[tuple[int, int]] = refs[ends[0] + 1:] if ends else []   # never reached (#1622)
     exempt: Segments = {}
     unsure: Segments = {}
     later_code = False   # a later statement runs after this one (not a lone closer)
@@ -622,7 +622,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success
     exit_reraised = False
-    for idx in range(len(refs) - 1, -1, -1):
+    for idx in range(ends[0] if ends else len(refs) - 1, -1, -1):
         first, k = refs[idx]
         own = bool(_RERAISE.search(_join(parsed[first][k])))
         later_exit = exited and not (exit_reraised or own)
@@ -663,7 +663,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
             pipestatus = True
         if code[idx] and any(seg for _, seg in raw[first][k]) and _head(raw[first][k]) not in _ENDS:
             later_code = True
-        if code[idx] and depths[idx] == 0 and _exit_zero(parsed[first][k]):
+        if code[idx] and depths[idx] == 0 and _exit_status(parsed[first][k]) == "0":
             exited, exit_reraised = True, False
         reraised = reraised or own
         exit_reraised = exit_reraised or own
