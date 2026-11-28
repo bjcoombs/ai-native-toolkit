@@ -184,9 +184,14 @@ def test_github_actions_approval_is_a_bot() -> None:
 def test_unknown_reviewer_makes_the_approval_counts_null() -> None:
     out = _counts([_pr(_review("mystery")), _pr(_review("ben"))])
     for key in ("independent_approval_count", "no_independent_approval_count",
-                "bot_only_approval_count", "stale_approval_count",
-                "approved_after_merge_count"):
+                "bot_only_approval_count"):
         assert out[key] is None, key
+    # Fresh and before the merge: whoever the unknown account is, neither count moves.
+    assert out["stale_approval_count"] == 0
+    assert out["approved_after_merge_count"] == 0
+    late = _counts([_pr(_review("mystery", commit=OLD, at=AFTER))])
+    assert late["stale_approval_count"] is None
+    assert late["approved_after_merge_count"] is None
     assert out["bot_authored_count"] == 0
 
 
@@ -201,6 +206,22 @@ def test_unknown_reviewer_beside_a_person_still_decides_independence() -> None:
 
 def test_unknown_reviewer_beside_a_stale_person_leaves_stale_null() -> None:
     out = _counts([_pr(_review("mystery"), _review("ben", commit=OLD, at=AFTER))])
+    assert out["stale_approval_count"] is None
+    assert out["approved_after_merge_count"] is None
+
+
+def test_unknown_reviewers_alone_settle_false_when_every_one_is_fresh_and_early() -> None:
+    out = _counts([_pr(_review("mystery"), _review("enigma"))],
+                  bots=FixedBots({"enigma": None}))
+    assert out["independent_approval_count"] is None
+    assert out["stale_approval_count"] == 0
+    assert out["approved_after_merge_count"] == 0
+
+
+def test_one_late_or_stale_unknown_reviewer_keeps_the_count_null() -> None:
+    """An early fresh unknown could be a bot, leaving the late stale one as the person's."""
+    pr = _pr(_review("mystery"), _review("enigma", commit=OLD, at=AFTER))
+    out = _counts([pr], bots=FixedBots({"enigma": None}))
     assert out["stale_approval_count"] is None
     assert out["approved_after_merge_count"] is None
 

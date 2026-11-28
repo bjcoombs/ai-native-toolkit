@@ -159,6 +159,8 @@ def _stale(c: Change) -> bool | None:
         return False
     if not people and not maybe:
         return False  # no qualifying approval: nothing to be stale
+    if not people and all(a.stale is False for a in maybe):
+        return False  # whichever of them are people, one is on the head
     if maybe or any(a.stale is None for a in people):
         return None
     return True
@@ -169,8 +171,13 @@ def _after_merge(c: Change) -> bool | None:
     maybe = [a for a in c.approvals if a.party is None]
     if not people and not maybe:
         return False
-    if not people or c.merged_at is None:
+    if c.merged_at is None:
         return None
+    if not people:
+        # Unknown accounts only: False when every one approved before the merge, since
+        # whichever are people, the earliest is early; one late approval could be the person's.
+        early = all(a.at is not None and a.at <= c.merged_at for a in maybe)
+        return False if early else None
     known = [a.at for a in people if a.at is not None]
     if known and min(known) <= c.merged_at:
         return False  # any other approval, unknown time or account, can only be earlier still
