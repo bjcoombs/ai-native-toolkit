@@ -62,7 +62,7 @@
         "grpa/svc1": "32c077ec246cb21e3f568f26a8c7d52e94d5f4014b2fada02bac3b72d1b982b5",
         "grpb/lib1": "32c077ec246cb21e3f568f26a8c7d52e94d5f4014b2fada02bac3b72d1b982b5"
       },
-      "revision": 1
+      "revision": 2
     },
     "core.ai_usage": {
       "repos": {

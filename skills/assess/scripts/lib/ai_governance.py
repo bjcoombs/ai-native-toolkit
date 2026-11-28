@@ -3,24 +3,28 @@
 Three readings of the committed files, each kept apart because only one of them is evidence that
 a rule holds. Nothing is executed; files are read as text, and a CI step is followed into the
 repository only through the shared CI-step follower (``lib.ci.ci_step_follower``) or, for a
-``python``, ``node``, ``ruby`` or shell script a ``run:`` line names, through the same repo-local
-reader (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout is read.
+``python``, ``node`` or shell script a ``run:`` line names, through the same repo-local reader
+(``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout is read.
 
 - **Enforced (counted).** ``enforced`` is true when a GitHub Actions workflow whose ``on:`` names
-  ``pull_request`` or ``pull_request_target`` has one step that does all three, in the step's
-  own text (local actions inlined) or in a file one of its lines leads to (``step_texts``,
-  ``enforcing_steps``), so a body read in one step and an exit in another never combine; only the
-  read may come from an ``env:`` block of the workflow or the step's own job, and a step under
-  ``continue-on-error: true`` (its own or its job's) counts only when it labels, as its exit cannot
-  turn the run red. A script a ``run:`` line names is read from the ``cd`` directory before it: it reads the pull request body or the commit
-  messages and trailers (``_READS``: ``pull_request.body``, ``gh pr view --json body``,
-  ``git log`` with a body or trailer format, ``git interpret-trailers``, the pull request commits
-  API); it names an AI disclosure or attribution marker inside a quoted literal or a ``/regex/``
-  (``_AI_MARKERS``: a tool or model name, ``AI`` as a capitalised word, an ``Assisted-by`` or
-  ``Generated-by`` trailer), so running an AI tool is not checking for one; and it fails the
-  run or labels the pull request (``_ACTS``). ``enforcing_workflows`` lists them. Null with
-  ``enforced_reason`` ``no_pr_workflows`` when no tracked workflow runs on pull requests: a bot or
-  an app could still enforce, and this reader cannot see one.
+  ``pull_request`` or ``pull_request_target`` has one step whose code reads the pull request body
+  or the commit messages and trailers, tests what it read for an AI disclosure or attribution
+  marker, and on that test turns the run red or labels the pull request. The step's code is its
+  ``run:`` and ``script:`` values (local actions inlined) and the files its lines lead to
+  (``step_texts``, ``enforcing_steps``), so a body read in one step and an exit in another never
+  combine; only the read may come from an ``env:`` block of the workflow or the step's own job.
+  The three are related by structure, not by line (``lib.ci.disclosure_reader``): shell through
+  ``shlex`` with its ``if``/``||``/``&&`` structure (``lib.ci.disclosure_shell``), Python
+  through ``ast`` and JavaScript through a small statement reader (``lib.ci.disclosure_script``).
+  The act must follow from the marker test: in its branch, right after it in its ``||``/``&&``
+  chain, or later in the same block when the test's branch leaves the run first (a guard
+  clause); an act of a command nested in that branch
+  does not. Code a reader cannot settle reads as no check, never as a guess. A step under
+  ``continue-on-error: true`` (its own or its job's) counts only when it labels, as its exit
+  cannot turn the run red. A script a ``run:`` line names is read from the ``cd`` directory
+  before it. ``enforcing_workflows`` lists them. Null with ``enforced_reason``
+  ``no_pr_workflows`` when no tracked workflow runs on pull requests: a bot or an app could still
+  enforce, and this reader cannot see one.
 - **Declared (listed, never counted).** ``policy_declared`` is true when an ``AI_POLICY.md`` sits
   at the root, in ``.github/`` or in ``docs/`` (``policy_files``), or when a pull request template
   has a checkbox whose own line names AI and disclosure wording (``disclosure_checkboxes``,
@@ -30,7 +34,8 @@ reader (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout 
   Copilot review for the whole repository: ``.github/copilot-instructions.md``, or a
   ``.github/instructions/*.md`` whose front matter ``applyTo`` is ``**`` or ``**/*`` and whose
   ``excludeAgent`` does not name ``code-review``. A file declines when one sentence outside code
-  fences, soft-wrapped lines joined (``_unwrap``), is a whole refusal (``_REFUSAL``): a negation, then review or comment on, then pull
+  fences, soft-wrapped lines joined (``_unwrap``) and split only at sentence ends (a ``;`` does not end
+  one), is a whole refusal (``_REFUSAL``): a negation, then review or comment on, then pull
   requests, the code or the repository and nothing else; a bare "Do not review." names nothing,
   so it is not one. "Do not review generated files" names a part of
   the repository, so it is not an opt-out. ``read_copilot_opt_out`` turns the files into a
@@ -43,7 +48,7 @@ reader (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout 
 
 Every value is a bool, a count, a reason code or a repo-relative path, so the block survives
 counts-only output with its paths. ``scan_ai_governance(repo_root)`` builds the block
-(``AiGovernanceBlock``). Tests: ``tests/test_ai_governance_condition.py``.
+(``AiGovernanceBlock``). Tests: ``tests/test_ai_governance_condition.py``, ``tests/test_disclosure_readers.py``.
 """
 from __future__ import annotations
 
@@ -58,6 +63,8 @@ from lib.ci.ci_matrix import jobs
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_triggers import workflow_events
+from lib.ci.disclosure_reader import JS, PYTHON, SHELL, Unit, env_names, step_acts, step_units
+from lib.ci.disclosure_terms import LABEL
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, read_config, repo_files
 from lib.scoring.level_result_types import DeclineRecord
 
@@ -76,46 +83,22 @@ INSTRUCTIONS_DIR = ".github/instructions/"
 OPT_OUT_CONDITIONS: tuple[str, ...] = ()
 
 _I = re.IGNORECASE
-_READS = re.compile(r"pull_request\.body|gh\s+pr\s+view\b[^\n]*--json\s+[\w,]*body|interpret-trailers"
-                    r"|%\(trailers|git\s+log\b[^\n]*(?:%B|%b|--format=(?:full|raw|medium))"
-                    r"|pulls\.listCommits|pull_request\.commits_url|/pulls/[^\s/]+/commits", _I)
-_AI_MARKERS = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|claude|chatgpt|gpt-?\d|gemini|codex"
-                         r"|assisted-by|generated-by|ai-assisted|ai-generated)\b)")
-_LABELS = re.compile(r"--add-label\b|\baddLabels\b|\badd-labels?\b", _I)
-# An exit that turns the run red: a non-zero code or a message (Python exits 1 on a message); an
-# exit 0, or a bare raise SystemExit, ends the run green and is not an act.
-_NONZERO = r"\s*(?:[1-9]\d*|[rbfu]{0,2}['\"])"
-_ACTS = re.compile(r"\bexit\s+[1-9]\d*\b|\bexit\s*\(" + _NONZERO + r"|setFailed\s*\(|process\.exit\s*\(\s*[1-9]"
-                   r"|sys\.exit\s*\(" + _NONZERO + r"|raise\s+SystemExit\s*\(" + _NONZERO
-                   + r"|" + _LABELS.pattern, _I)  # ::error only annotates: the step stays green
-# What a check reads a pattern with, just before the quoted marker: grep's pattern, a match call's
-# argument, =~ or ==; or just after it: `in` (Python's membership test) or `.test(` (a JS regex).
-_OPERAND_BEFORE = re.compile(r"(?:\b(?:e?grep|rg)(?:\s+-[\w-]+)*|\b(?:match|search|findall|fullmatch|includes|contains"
-                             r"|startsWith|indexOf)\s*\(\s*(?:[\w.$]+\s*,\s*)?|=~|==|-e)\s*$")
-_OPERAND_AFTER = re.compile(r"^(?:\s*(?:not\s+)?in\s+[\w$]|[gimsuy]*\s*\.test\s*\()")
-# Output calls: their words are a message, never a pattern, so they are dropped before the search.
-_OUTPUT = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*|(?:\bprint|console\.\w+|core\.\w+)\s*\((?:[^()\n]|\([^()\n]*\))*\)"
-                     r"|::(?:error|warning|notice)[^\n]*")
-_SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*(?:\./)?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
-_ECHO = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*")
-_ASSIGNED = re.compile(r"^\s*(?:-\s+)?(?:export\s+|const\s+|let\s+|var\s+)?\$?\{?([A-Za-z_]\w*)\}?\s*(?::|=(?!=))")
-# The file a read is written to: a stdout redirect, never a 2> or &> one, and never /dev/*.
-_WRITTEN = re.compile(r"(?<![\d&])>>?\s*(?!/dev/)([\w./-]+)")
+# A script a run: line names, by the reader its language goes to (Ruby has none, so it reads as no check).
+_SCRIPT_ARG = re.compile(r"\b(?:python3?|node|bash|sh)\s+(?:-\S+\s+)*(?:\./)?([\w./-]+\.(?:py|js|mjs|cjs|sh))\b")
+_LANGUAGES = {".py": PYTHON, ".js": JS, ".mjs": JS, ".cjs": JS, ".sh": SHELL}
 _CD = re.compile(r"\bcd\s+([\w./-]+)\s*(?:&&|;)")
-_YAML_COMMENT = re.compile(r"^\s*#.*$", re.MULTILINE)
 _CHECKBOX = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s+(.*)$", re.MULTILINE)
 _AI_WORD = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|chatgpt|claude|gemini|generative|language model)\b)")
 _DISCLOSURE = re.compile(r"\b(?:disclos\w*|assist\w*|generat\w*|written|authored|produced|with the help)\b", _I)
 _FENCE = re.compile(r"^\s*(```|~~~).*?^\s*\1[^\n]*$", re.MULTILINE | re.DOTALL)
 _FRONT = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
-_SENTENCE = re.compile(r"[^.!?;]+")
+# Sentence ends only: a `;` joins a scoping clause to its refusal ("Do not comment on code; focus on ...").
+_SENTENCE = re.compile(r"[^.!?]+")
 # A line that starts its own block in markdown: a list item, a heading, a quote or a table row.
 _BLOCK_START = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s|#|>|\|)")
-# A quoted literal or a /regex/: where a check names the marker it looks for.
-_QUOTED = re.compile(r"'[^'\n]*'|\"[^\"\n]*\"|`[^`\n]*`|(?<![\w.])/[^/\s][^/\n]*/")
 _REFUSAL = re.compile(
     r"^\s*(?:(?:github\s+)?copilot\s*[,:]?\s*)?(?:please\s+)?(?:you\s+)?(?:copilot\s+)?"
-    r"(?:do\s+not|don'?t|never|must\s+not|should\s+not|shall\s+not|will\s+not|won'?t|may\s+not|refuse\s+to|decline\s+to)\s+"
+    r"(?:do\s+not|don['\u2019]?t|never|must\s+not|should\s+not|shall\s+not|will\s+not|won['\u2019]?t|may\s+not|refuse\s+to|decline\s+to)\s+"
     r"(?:ever\s+)?(?:review|comment\s+on)"
     r"\s+(?:(?:any|the|this|these|our)\s+)?(?:pull\s+requests?|prs?|code|changes|contributions?|repository|repo|project"
     r"|(?:repository|project)'s\s+(?:pull\s+requests?|prs?|code|changes))"
@@ -135,58 +118,11 @@ class AiGovernanceBlock(TypedDict):
 
 
 def enforces_disclosure(text: str, env: str = "") -> bool:
-    """True when one step's ``text`` reads a pull request body or commit trailers, names an AI
-    marker and turns the run red or labels (module docstring). The read may come from ``env``, the
-    ``env:`` blocks around the step; the marker and the act must be in the step, and the marker
-    inside a quoted literal or a ``/regex/`` (``_QUOTED``) that is the operand of a test: grep's
-    pattern, a match call's argument, ``=~`` or ``==``, or followed by ``in`` or ``.test(``
-    (``_OPERAND_BEFORE``, ``_OPERAND_AFTER``). The words of output calls (``echo``, ``printf``,
-    ``print(``, ``console.*(``, ``core.*(``, ``::error``) are dropped first (``_OUTPUT``), so a log
-    or failure message naming AI does not count. The marker test must also be on a line that does
-    the read or names what holds it (``read_names``), so a test of another value, such as the
-    author's login, does not count, and the act must follow from that test, on its line or in the
-    block under it (``_acts_on``), so a skip on a match followed by an unrelated ``|| exit 1`` does
-    not count, and a step
-    that only runs an AI tool on the body (``claude --print ... || exit 1``) does not count. Whole-line YAML
-    and shell comments are dropped first."""
-    clean, env = _YAML_COMMENT.sub("", text), _YAML_COMMENT.sub("", env)
-    names = read_names(clean + "\n" + env)
-    lines = clean.splitlines()
-    acting = any(_tests_marker(_OUTPUT.sub("", line)) and (_READS.search(line) or any(
-        re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", line) for n in names)) and _acts_on(lines, i)
-        for i, line in enumerate(lines))
-    return bool((_READS.search(clean) or _READS.search(env)) and acting)
-
-
-def _acts_on(lines: list[str], i: int) -> bool:
-    """Whether the marker test on line ``i`` leads to the act: on the same line (``|| exit 1``,
-    ``if ...: sys.exit(1)``) or in the block under it, the lines indented deeper than it. An act
-    quoted in an echo or printf is a message, not an exit, so those words are dropped first."""
-    depth = len(lines[i]) - len(lines[i].lstrip())
-    block = [lines[i]]
-    for line in lines[i + 1:]:
-        if line.strip() and len(line) - len(line.lstrip()) <= depth:
-            break
-        block.append(line)
-    return _ACTS.search(_ECHO.sub("", "\n".join(block))) is not None
-
-
-def _tests_marker(line: str) -> bool:
-    return any(_AI_MARKERS.search(q.group(0)) and (_OPERAND_BEFORE.search(line[:q.start()])
-                                                   or _OPERAND_AFTER.search(line[q.end():]))
-               for q in _QUOTED.finditer(line))
-
-
-def read_names(text: str) -> set[str]:
-    """The names that hold what a line of ``text`` reads (``_READS``): the variable or key it is
-    assigned to (``BODY: ...``, ``const body = ...``, ``log = ...``) or the file it is written to
-    (``> body.json``). A marker test counts only on a line that names one, or does the read itself."""
-    names: set[str] = set()
-    for line in text.splitlines():
-        if _READS.search(line):
-            names.update(m.group(1) for m in (_ASSIGNED.match(line),) if m)
-            names.update(_WRITTEN.findall(line))
-    return names
+    """True when one step's ``text`` (a workflow step, or the code of one) reads a pull request body
+    or commit trailers, tests it for an AI marker and turns the run red or labels on that test
+    (``lib.ci.disclosure_reader.step_acts``). The read may come from ``env``, the ``env:`` blocks
+    around the step."""
+    return bool(step_acts(step_units(text), env_names(text) | env_names(env)))
 
 
 def disclosure_checkboxes(text: str) -> int:
@@ -283,29 +219,33 @@ def step_texts(text: str) -> list[Step]:
 
 
 def enforcing_steps(follower: StepFollower, reader: ReadLocal, text: str) -> int:
-    """The steps of a workflow that enforce AI disclosure on their own: the read, the marker and the
-    act all in one step and the files its lines lead to (the read may come from the ``env:`` of the
-    workflow or the step's job). A step under ``continue-on-error: true`` counts only when it labels."""
+    """The steps of a workflow that enforce AI disclosure on their own: the read, the marker test and
+    the act all in one step's code and the files its lines lead to (the read may come from the
+    ``env:`` of the workflow or the step's job). A step under ``continue-on-error: true`` counts only
+    when it labels."""
     count = 0
     for step in step_texts(text):
-        body = _followed_text(follower, reader, step.text)
-        if enforces_disclosure(body, step.env) and (not step.masked or _LABELS.search(body)):
+        acts = step_acts(step_units(step.text) + _followed_units(follower, reader, step.text),
+                         env_names(step.text) | env_names(step.env))
+        if acts and (not step.masked or LABEL in acts):
             count += 1
     return count
 
 
-def _followed_text(follower: StepFollower, reader: ReadLocal, text: str) -> str:
-    """A step's text with every file its lines lead to appended."""
-    parts = [text]
+def _followed_units(follower: StepFollower, reader: ReadLocal, text: str) -> list[Unit]:
+    """The code every line of a step leads to: the shared follower's commands as shell, and a
+    script a ``python``, ``node`` or shell line names, read from the ``cd`` directory before it."""
+    units: list[Unit] = []
     for line in text.splitlines():
         for found in follower.step(line):
-            parts.extend(found.commands)
+            if found.commands:
+                units.append(Unit(SHELL, "\n".join(found.commands)))
         cwd = _CD.search(line)
         for script in _SCRIPT_ARG.findall(line):
             body = reader(posixpath.normpath(posixpath.join(cwd.group(1) if cwd else "", script)))
             if body:
-                parts.append(body)
-    return "\n".join(parts)
+                units.append(Unit(_LANGUAGES[posixpath.splitext(script)[1]], body))
+    return units
 
 
 def scan_ai_governance(repo_root: Path) -> AiGovernanceBlock:
