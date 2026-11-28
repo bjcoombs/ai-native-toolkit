@@ -25,8 +25,9 @@ next run follows text no reviewer approved (#826, hazard H2). The hazard reads t
   that does not parse raises the hazard for that job (fail closed, #1602): its imports are
   unknown, so they are never read as owned. Each such file is named (#1608), so a repository
   that owns every path learns why it is still held. An imported file that opens with a ``---``
-  rule and never closes it reads as one with no frontmatter (``import_frontmatter``); it is
-  still a path at risk. The job's own source does not get that reading.
+  rule and never closes it reads as one with no frontmatter when no top-level line could
+  declare ``imports:`` (``shared_frontmatter``); otherwise the rest of the file is read as its
+  frontmatter. The job's own source does not get that reading.
 - **Guard.** A committed CODEOWNERS (``.github/``, then the root, then ``docs/``: the first
   GitHub finds, ``CODEOWNERS_ORDER``)
   whose last matching line names an owner (``lib.docs.ownership_parser.codeowned``). The job
@@ -67,6 +68,9 @@ CODEOWNERS_ORDER = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 Read = Callable[[str], "str | None"]
 # A gh-aw import from another repository: ``owner/repo/path@ref`` (an owner never opens with ``.``).
 _REMOTE_IMPORT = re.compile(r"[\w-][\w.-]*/[\w.-]+/[^@\s]+@[^@\s]+")
+# A line that could declare ``imports:`` at the top level, indented or not: the key (plain or
+# quoted), a complex or flow key, a merge key, an anchor, alias, tag or directive.
+_MAY_IMPORT = re.compile(r"""[ \t]*(["']?imports\b|[?{<&*!%])""")
 
 
 def frontmatter(text: str) -> str | None:
@@ -81,14 +85,23 @@ def frontmatter(text: str) -> str | None:
 def import_frontmatter(text: str) -> str | None:
     """``frontmatter`` for the agent job's own gh-aw source: an opening ``---`` with no closing
     one raises ``YamlError``, so ``local_reach`` fails closed where the other readers skip the
-    file. An imported file reads through ``frontmatter``, so a ``---`` rule that never closes
-    is no frontmatter (#1608). That is safe whichever way gh-aw reads such a file: the file
-    itself stays a path at risk that must be owned, and only imports gh-aw would not follow
-    (or a file it would reject) go unread."""
+    file. An imported file reads through ``shared_frontmatter`` instead."""
     front = frontmatter(text)
     if front is None and [line.strip() for line in text.lstrip("\ufeff").splitlines()[:1]] == ["---"]:
         raise YamlError(UNPARSABLE)
     return front
+
+
+def shared_frontmatter(text: str) -> str | None:
+    """``frontmatter`` for an imported file. An opening ``---`` that never closes (#1608) is a
+    rule with no frontmatter only when no top-level line could declare ``imports:``
+    (``_MAY_IMPORT``). Otherwise the rest of the file is read as frontmatter, so a reader that
+    ends it at the end of the file is matched: its imports are followed, or ``YamlError``."""
+    front = frontmatter(text)
+    lines = text.lstrip("\ufeff").splitlines()
+    if front is not None or [line.strip() for line in lines[:1]] != ["---"]:
+        return front
+    return "\n".join(lines[1:]) if any(_MAY_IMPORT.match(line) for line in lines[1:]) else None
 
 
 def remote_import(value: str) -> bool:
@@ -138,7 +151,7 @@ def _chain(current: str, rel: str, text: str) -> list[str]:
     """The gh-aw imports of ``current`` on ``rel``'s reach; ``YamlError`` when they are unread."""
     if not current.endswith(".md"):
         return []
-    front = import_frontmatter(text) if current == rel else frontmatter(text)
+    front = import_frontmatter(text) if current == rel else shared_frontmatter(text)
     return gh_aw_imports(current, front) if front is not None else []
 
 

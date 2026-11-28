@@ -311,11 +311,30 @@ def test_an_owned_hazard_with_every_frontmatter_read_names_no_unread_file(git_re
 
 def test_an_imported_file_opening_with_a_rule_and_no_closing_marker_has_no_frontmatter(git_repo) -> None:
     source = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports: [shared/a.md]\n")
-    files = {SOURCE: source, ".github/workflows/shared/a.md": "---\nimports: [b.md\nText after a rule.\n",
+    files = {SOURCE: source, ".github/workflows/shared/a.md": "---\nText after a rule.\n\n- a list item\n",
              ".github/CODEOWNERS": SOURCE_ONLY + "/.github/workflows/shared/a.md @o\n"}
     block = scan_agent_ops(_repo(git_repo, files))
     assert block["summary"]["agent_instruction_rewrite"] == 0
     assert block["agent_instruction_rewrite_unread_files"] == []
+
+
+def test_an_unclosed_rule_that_may_still_declare_imports_is_followed_or_named(git_repo) -> None:
+    """Read to the end of the file, an unclosed ``---`` could still declare imports: follow them
+    when they parse and name the file when they do not, so neither reading leaves it clear."""
+    shared = ".github/workflows/shared/a.md"
+    source = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports: [shared/a.md]\n")
+    owned = SOURCE_ONLY + f"/{shared} @o\n"
+    files = {SOURCE: source, shared: "---\nimports: [b.md]\n", ".github/workflows/shared/b.md": "Tone.\n",
+             ".github/CODEOWNERS": owned}
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 1  # b.md unowned
+    files[".github/CODEOWNERS"] = owned + "/.github/workflows/shared/b.md @o\n"
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 0
+    files[shared] = "---\n'imports': [b.md]\n"  # a quoted key is followed too
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 0
+    for text in ("---\nNotes.\nimports: [b.md]\n", "---\n  imports: [b.md]\n", "---\n<<: *x\n"):
+        files[shared] = text
+        block = scan_agent_ops(_repo(git_repo, files))
+        assert block["agent_instruction_rewrite_unread_files"] == [shared], text
 
 
 def test_the_four_forms_github_accepts_read_as_clear_when_owned(git_repo) -> None:
