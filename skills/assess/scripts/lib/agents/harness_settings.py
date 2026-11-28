@@ -42,7 +42,8 @@ each as a ``broad_auto_approve`` finding, the twin of Claude Code's ``broad_allo
 ``Bash(:*)``, ``Bash(**)`` or ``Bash(*:*)``, spaces ignored.
 
 A broad entry is not an encoded permission (#1618): ``allow_count`` leaves out every Claude
-``permissions.allow`` rule ``is_broad_allow`` matches and every VS Code auto-approve
+``permissions.allow`` rule ``is_broad_allow`` matches (``scoped_allow``, which
+``lib.agents.managed_settings`` shares, #1621) and every VS Code auto-approve
 ``is_broad_rule`` matches (``chat.tools.terminal.autoApprove: true`` included), so a file whose
 only allow is "allow everything" does not meet ``permissions_encoded``.
 
@@ -105,8 +106,8 @@ def is_broad_allow(rule: object) -> bool:
     return isinstance(rule, str) and bool(_BROAD_BASH.match(rule.replace(" ", "")))
 
 
-def _scoped_allow(value: Any) -> int:
-    """The allow rules that are not broad (#1618)."""
+def scoped_allow(value: Any) -> int:
+    """The allow rules that are not broad (#1618); the managed count uses it too (#1621)."""
     return sum(not is_broad_allow(r) for r in value) if isinstance(value, list) else 0
 
 
@@ -284,7 +285,7 @@ def _entry(repo_root: Path, rel: str, tool: str, tracked: frozenset[Path] | None
     if tool == "claude_code":
         permissions = data.get("permissions")
         if isinstance(permissions, dict):
-            entry["allow_count"] = _scoped_allow(permissions.get("allow"))
+            entry["allow_count"] = scoped_allow(permissions.get("allow"))
             entry["deny_count"] = _count(permissions.get("deny"))
             entry["ask_count"] = _count(permissions.get("ask"))
             mode = permissions.get("defaultMode")
