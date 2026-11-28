@@ -20,10 +20,12 @@ probe's bare ``insta`` matched ``install`` in every repository):
   package reads as ``fast-check``.
 - **JVM** (``maven_groups``, ``gradle_groups``): the ``groupId`` of a ``pom.xml``
   ``<dependency>`` (parsed with ``xml.etree``), and in a Gradle build file a quoted
-  ``group:artifact`` coordinate or a ``group:`` map entry outside comments; in a version
+  ``group:artifact`` coordinate or a ``group:`` map entry outside comments (``strip_code``, a
+  small lexer that keeps ``//`` inside a string, so a URL is not a comment); in a version
   catalog (``*.versions.toml``) a library's ``module`` or ``group``.
 - **Go** (``go_fuzz_tests``): a ``func FuzzXxx(f *testing.F)`` declaration at the start of a
-  line of a ``_test.go`` file, with block comments and raw strings blanked first.
+  line of a ``_test.go`` file, with comments removed and string literals (interpreted and raw)
+  blanked first by the same lexer.
 
 ``ARMS`` maps each name to its practice. Nothing is executed or imported. Tests:
 ``tests/test_behaviour_pins_evidence.py``.
@@ -58,9 +60,6 @@ _CARGO_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
 _NPM_TABLES = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
 _GRADLE_COORD = re.compile(r"""["']([A-Za-z0-9_.-]+):[A-Za-z0-9_.-]+""")
 _GRADLE_GROUP = re.compile(r"""\bgroup\s*[:=]\s*["']([A-Za-z0-9_.-]+)["']""")
-_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
-_LINE_COMMENT = re.compile(r"^\s*//.*$", re.M)
-_RAW_STRING = re.compile(r"`[^`]*`", re.S)
 _GO_FUZZ = re.compile(r"^func\s+Fuzz(?:[A-Z0-9_]\w*)?\s*\(\s*\w+\s+\*testing\.F\s*\)", re.M)
 
 
@@ -201,13 +200,41 @@ def gradle_groups(rel: str, text: str) -> set[str]:
             if isinstance(group, str):
                 out.add(group)
         return out
-    code = _LINE_COMMENT.sub("", _BLOCK_COMMENT.sub("", text))
+    code = strip_code(text, "\"'", blank_strings=False)
     return {m.group(1) for m in _GRADLE_COORD.finditer(code)} | {m.group(1) for m in _GRADLE_GROUP.finditer(code)}
+
+
+def strip_code(text: str, quotes: str, blank_strings: bool) -> str:
+    """``text`` with ``//`` and ``/* */`` comments removed outside string literals, read by a
+    small lexer: each of ``quotes`` opens a literal closed by the same character, a backslash
+    escaping inside any but a backtick. With ``blank_strings`` a literal's text is dropped
+    too (its quotes kept), so nothing inside a string reads as code."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if text.startswith("//", i):
+            end = text.find("\n", i)
+            i = n if end < 0 else end
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            out.append(" ")
+        elif ch in quotes:
+            j = i + 1
+            while j < n and text[j] != ch and not (ch != "`" and text[j] == "\n"):
+                j += 2 if ch != "`" and text[j] == "\\" else 1
+            out.append(ch + ("" if blank_strings else text[i + 1:j]) + ch)
+            i = j + 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
 
 
 def go_fuzz_tests(text: str) -> bool:
     """A ``_test.go`` file declares a Go fuzz test (module docstring)."""
-    return bool(_GO_FUZZ.search(_RAW_STRING.sub("``", _BLOCK_COMMENT.sub("", text))))
+    return bool(_GO_FUZZ.search(strip_code(text, "\"'`", blank_strings=True)))
 
 
 def arms(names: Iterable[str], table: Mapping[str, str]) -> set[tuple[str, str]]:

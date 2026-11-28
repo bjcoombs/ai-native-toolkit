@@ -16,9 +16,13 @@ never a substring, so a file holding the word ``install`` is not the ``insta`` c
   ``run:`` lines (``lib.ci.ci_job_commands.job_lines``, the #775 masking rule) after
   ``lib.ci.ci_step_follower.follow_workflow``, and the scripts, make recipes and local actions
   they call through ``StepFollower`` up to ``_MAX_FOLLOW`` levels. A command behind a passing
-  ``||`` fallback, an install (``cargo install cargo-fuzz``), an ``echo``, a ``--no-fuzz``
-  style flag and what a run leaves out (``--exclude fuzz``, ``--ignore=tests/fuzz``,
-  ``-k "not fuzz"``) do not count. The arm is ``scheduled-workflow``.
+  ``||`` fallback, an install (``cargo install cargo-fuzz``), a command that only names files
+  or text (``echo``, ``cd fuzz``, ``mkdir fuzz``), and a fuzz word past the program's first
+  operand (``--exclude fuzz``, ``--ignore=tests/fuzz``, ``-k "not fuzz"``) do not count. A
+  command is a fuzz run when the program or its first operand or subcommand is a fuzz word
+  (``cargo fuzz run``, ``cargo +nightly fuzz``, ``bash fuzz.sh``), a ``-fuzz`` flag is given
+  (``go test -fuzz=FuzzParse``) or a ``-k`` / ``-m`` expression selects fuzz tests
+  (``pytest -m fuzz``). A followed script under an excluded folder is not read. The arm is ``scheduled-workflow``.
 - ``fuzz_targets``: the ``libfuzzer-sys`` or ``arbitrary`` crate, or a Go ``func FuzzXxx(f
   *testing.F)`` in a ``_test.go`` file (``go-fuzz-test``).
 - ``property_tests``: ``hypothesis``, the ``proptest`` or ``quickcheck`` crate, jqwik
@@ -72,11 +76,11 @@ _FUZZ_WORDS = frozenset({"fuzz", "fuzzer", "fuzzers", "fuzzing", "cifuzz", "fuzz
 _WORDS = re.compile(r"[^a-z0-9]+")
 _NAME = re.compile(r"^name:\s*(.+?)\s*$", re.M)
 _USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(\S+)")
-_QUIET = frozenset({"echo", "printf", ":", "true"})
+# Commands whose operands only name files or text: `mkdir fuzz` and `cd fuzz` run no fuzzer.
+_QUIET = frozenset({"echo", "printf", ":", "true", "cd", "pushd", "popd", "ls", "mkdir", "rm", "cp", "mv",
+                    "touch", "cat", "test", "[", "export", "chmod", "tar", "find", "grep"})
 _MAX_FOLLOW = 3
-# Flags that leave something out of a run, and their operand: `--exclude fuzz`, `-k "not fuzz"`.
-_SELECT_OUT = frozenset({"--exclude", "--ignore", "--ignore-glob", "--deselect", "-k", "-m", "--skip"})
-_SELECT_OUT_PREFIXES = ("--no-", "--skip", "--exclude=", "--ignore", "--deselect=", "-k=", "-m=")
+_SELECTORS = frozenset({"-k", "-m"})
 
 Reader = Callable[[str, str], set[tuple[str, str]]]
 
@@ -124,19 +128,27 @@ def _reader(rel: str) -> Reader | None:
     return _go if base.endswith("_test.go") else None
 
 
+def _selects_fuzz(expr: str) -> bool:
+    """A ``-k`` / ``-m`` expression that selects fuzz tests: a fuzz word and no ``not``."""
+    words = set(_WORDS.split(expr.lower()))
+    return bool(_FUZZ_WORDS & words) and "not" not in words
+
+
 def _fuzz_command(words: list[str]) -> bool:
+    """The program, or its first operand or subcommand, is a fuzz word (``cargo fuzz run``,
+    ``cargo +nightly fuzz``, ``bash fuzz.sh``), a ``-fuzz`` flag is given (``go test
+    -fuzz=FuzzParse``), or a ``-k`` / ``-m`` expression selects fuzz tests."""
     prog = program(words)
     if not prog or installs(words) or prog[0] in _QUIET:
         return False
-    skip = False
-    for word in prog:
-        if skip:
-            skip = False
-            continue
-        if word in _SELECT_OUT:
-            skip = True
-            continue
-        if not word.startswith(_SELECT_OUT_PREFIXES) and _fuzz_word(word):
+    lead = [w for w in prog[:3] if not w.startswith("+")][:2]
+    if any(_fuzz_word(w) for w in lead if not w.startswith("-")):
+        return True
+    for i, word in enumerate(prog):
+        flag, _, value = word.partition("=")
+        if flag in ("-fuzz", "--fuzz"):
+            return True
+        if flag in _SELECTORS and _selects_fuzz(value or (prog[i + 1] if i + 1 < len(prog) else "")):
             return True
     return False
 
@@ -172,7 +184,11 @@ def scan_behaviour_pins(repo_root: Path) -> BehaviourPinsBlock:
     """Build the ``behaviour_pins`` block (module docstring)."""
     repo = repo_root.resolve()
     tracked = repo_files(repo)
-    read = local_reader(repo, tracked)
+    tracked_read = local_reader(repo, tracked)
+
+    def read(rel: str) -> str | None:
+        return None if _excluded(rel) else tracked_read(rel)
+
     follower = StepFollower(read, tracked)
     found: dict[tuple[str, str], str] = {}
     files_read = 0

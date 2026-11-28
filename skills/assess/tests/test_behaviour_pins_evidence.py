@@ -74,6 +74,9 @@ def test_a_fuzz_crate_and_a_nightly_schedule_read_scheduled_fuzzing_first(tmp_pa
     {".github/workflows/w.yml": _workflow("\n  schedule:\n    - cron: '0 0 * * *'", "make check", name="Fuzz parser")},
     {".github/workflows/w.yml": _workflow("[schedule]", "go test ./parse -run=^$ -fuzz=FuzzParse -fuzztime=5m")},
     {".github/workflows/w.yml": _workflow("[schedule, push]", "uvx --from ./python/py-fuzzer fuzz --bin x 0-500")},
+    {".github/workflows/w.yml": _workflow("[schedule]", "pytest -m fuzz")},
+    {".github/workflows/w.yml": _workflow("[schedule]", "pytest -k=fuzz tests")},
+    {".github/workflows/w.yml": _workflow("[schedule]", "bash fuzz.sh")},
     {".github/workflows/w.yml": _workflow("[schedule]", "bash scripts/nightly.sh"),
      "scripts/nightly.sh": "#!/bin/sh\nset -e\ncargo fuzz run parse\n"},
     {".github/workflows/w.yml": "name: n\non: [schedule]\njobs:\n  f:\n    runs-on: ubuntu-latest\n    steps:\n"
@@ -94,6 +97,10 @@ def test_each_form_of_a_scheduled_fuzz_workflow_counts(tmp_path: Path, files: di
     {".github/workflows/w.yml": _workflow("[schedule]", "pytest --ignore=tests/fuzz")},
     {".github/workflows/w.yml": _workflow("[schedule]", 'pytest -k "not fuzz"')},
     {".github/workflows/w.yml": _workflow("[schedule]", "pytest --deselect tests/fuzz/test_parse.py")},
+    {".github/workflows/w.yml": _workflow("[schedule]", "cd fuzz && make")},
+    {".github/workflows/w.yml": _workflow("[schedule]", "mkdir -p fuzz")},
+    {".github/workflows/w.yml": _workflow("[schedule]", "bash vendor/nightly.sh"),
+     "vendor/nightly.sh": "#!/bin/sh\ncargo fuzz run parse\n"},
 ])
 def test_a_fuzz_run_off_schedule_an_install_an_echo_or_a_masked_run_does_not_count(
         tmp_path: Path, files: dict[str, str]) -> None:
@@ -210,6 +217,11 @@ def test_a_reader_fault_reads_unavailable(tmp_path: Path, monkeypatch: pytest.Mo
                              "var s = `\nfunc FuzzStr(f *testing.F) {}\n`\nfunc TestFuzzy(t *testing.T) {}\n"},
      []),
     ({"parse/parse.go": "package parse\nfunc FuzzParse(f *testing.F) {}\n"}, []),
+    ({"parse/parse_test.go": 'package parse\nvar a = "/*"\nfunc FuzzParse(f *testing.F) {}\nvar b = "*/"\n'},
+     ["fuzz_targets"]),
+    ({"build.gradle": 'tasks.register("check") {} // testImplementation("net.jqwik:jqwik:1.8.0")\n'}, []),
+    ({"build.gradle": 'repositories { maven { url "https://repo.example/x" } }\n'
+                      'dependencies { testImplementation "net.jqwik:jqwik:1.8.0" }\n'}, ["property_tests"]),
     ({"package.json": '{"devDependencies": {"fast-check": "^3"}}'}, ["property_tests"]),
     ({"package.json": '{"devDependencies": {"@fast-check/vitest": "^0.1"}}'}, ["property_tests"]),
     ({"package.json": "[1, 2]"}, []),
