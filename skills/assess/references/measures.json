@@ -401,6 +401,52 @@
       ]
     },
     {
+      "id": "api-compat",
+      "title": "API compatibility checked by CI",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "api-compat.1",
+          "truth": [
+            "contracts",
+            "structure"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "api-compat.1:api_compat.present",
+              "signal": "api_compat.present",
+              "producer": {
+                "scan": "api_compat",
+                "collector": "core.api_compat"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "CI runs an API compatibility check: is true",
+              "title": "API compatibility checked by CI",
+              "fix": "Run a compatibility check in CI against the last release (apidiff, japicmp, api-extractor run, griffe check, cargo semver-checks, buf breaking). Or commit a test that compares the public exports with a fixed list and run the tests in CI.",
+              "why": "An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "backlog-ready",
       "title": "Backlog kept agent-ready",
       "scope": "team",
@@ -2200,10 +2246,14 @@
       "id": "contracts",
       "title": "Contracts",
       "conditions": [
+        "api-compat.1",
         "docs-kept-true.1"
       ],
-      "listed": [],
+      "listed": [
+        "api-compat.1"
+      ],
       "shared": [
+        "api-compat.1",
         "docs-kept-true.1"
       ],
       "why": "That generated output and its source agree, so an agent editing one does not quietly break the other.",
@@ -2236,6 +2286,7 @@
       "id": "structure",
       "title": "Structure",
       "conditions": [
+        "api-compat.1",
         "layer-2-design.1",
         "layer-2-design.2",
         "layer-3-linters.1",
@@ -2251,7 +2302,9 @@
         "layer-4-architecture.1",
         "layer-4-architecture.2"
       ],
-      "shared": [],
+      "shared": [
+        "api-compat.1"
+      ],
       "why": "That the code is shaped so an agent can work on one part without holding the whole repository in mind.",
       "why_source": ""
     },
@@ -2399,6 +2452,15 @@
       ],
       "conditions": [
         "docs-kept-true.1"
+      ]
+    },
+    {
+      "tags": [
+        "contracts",
+        "structure"
+      ],
+      "conditions": [
+        "api-compat.1"
       ]
     },
     {
@@ -3159,6 +3221,64 @@
         "unclassified"
       ],
       "why": "Instruction files above the repository root load in a local session but never reach a fresh clone, so an agent elsewhere works without those rules.",
+      "why_source": ""
+    },
+    {
+      "name": "api_compat",
+      "title": "API compatibility checks CI runs",
+      "summary": "Whether a GitHub Actions or GitLab CI step runs an API compatibility tool (apidiff, api-extractor, griffe check, cargo semver-checks, buf breaking, japicmp, revapi), directly or through a committed script, make recipe, Maven or Gradle build, or package.json script. Whether a test pins the public exports while CI runs tests. Tools named only in build files are listed as declared, never counted.",
+      "collector": "core.api_compat",
+      "reads": [
+        "repo_root",
+        "ci_checks"
+      ],
+      "headless_reads": null,
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "api_compat.declared.path": "path",
+          "api_compat.declared.tool": "token",
+          "api_compat.pins": "path",
+          "api_compat.present_reason": "token",
+          "api_compat.runs.path": "path",
+          "api_compat.runs.tool": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "api-compat"
+        ],
+        "conditions": [
+          "api-compat.1:api_compat.present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "tests_not_read",
+          "means": "A test pins the public exports, but whether CI runs tests is not settled (ci_checks.enforced_check_runs is null or the block is absent).",
+          "next_step": "Nothing to change: this reads as not measured until the CI test run can be read."
+        },
+        {
+          "code": "ci_not_read",
+          "means": "A compatibility tool is named in a build file, or found in a form whose exit status the step may hide, and a CI file this reader cannot follow may run it: a CI system it does not parse, a GitLab include, or a step the follower could not settle.",
+          "next_step": "Nothing to change if the tool runs; calling it from a GitHub Actions or GitLab CI step the scan reads lets it count."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "api_compat.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A public interface stays stable only when a check stops a breaking change. A compatibility tool CI runs, or a test that pins the exports, turns an agent's accidental break of a contract into a red check, not a downstream bug report.",
       "why_source": ""
     },
     {
@@ -6175,6 +6295,19 @@
       "private": false
     },
     {
+      "name": "api_compat",
+      "title": "API compatibility checks CI runs",
+      "publishes": [
+        "api_compat"
+      ],
+      "reads": [
+        "repo_root",
+        "ci_checks"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "archetype",
       "title": "Repository archetype",
       "publishes": [
@@ -6834,6 +6967,7 @@
         "agent_environment",
         "agent_ops",
         "ai_governance",
+        "api_compat",
         "backlog_ready",
         "ci_checks",
         "ci_hazards",
@@ -7427,6 +7561,7 @@
         "agent_environment",
         "agent_ops",
         "ai_governance",
+        "api_compat",
         "backlog_ready",
         "ci_checks",
         "ci_hazards",
@@ -7639,6 +7774,15 @@
       "input_class": "head_text",
       "grade": "declared",
       "null_means": ""
+    },
+    {
+      "path": "api_compat.present",
+      "title": "CI runs an API compatibility check",
+      "type": "bool",
+      "collector": "core.api_compat",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "tests_not_read or ci_not_read: a pinning test or a declared tool whose CI run cannot be settled"
     },
     {
       "path": "backlog_ready.close_open_met",

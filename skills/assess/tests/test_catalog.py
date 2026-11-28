@@ -272,7 +272,7 @@ def test_tags_list_each_condition_once_under_its_first_tag() -> None:
         assert tag["conditions"] == [lv["id"] for lv in conditions if tag["id"] in lv["truth"]]
         assert tag["shared"] == [lv["id"] for lv in conditions
                                  if tag["id"] in lv["truth"] and len(lv["truth"]) > 1]
-    assert next(t for t in catalog["tags"] if t["id"] == "contracts")["conditions"] == ["docs-kept-true.1"]
+    assert next(t for t in catalog["tags"] if t["id"] == "contracts")["conditions"] == ["api-compat.1", "docs-kept-true.1"]
 
 
 def test_tag_pairs_steps_and_links() -> None:

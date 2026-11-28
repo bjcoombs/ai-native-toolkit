@@ -343,7 +343,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "skill-script-tests": None,  # no skill holds a script: no_skill_scripts
             "model-ci-gated": None,      # no model-calling CI job detected: no_model_jobs
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
-            "secrets-guard": 0, "agent-evals": 0, "docs-kept-true": 0, "ai-policy-declared": 0,  # none of these files
+            "secrets-guard": 0, "agent-evals": 0, "docs-kept-true": 0, "ai-policy-declared": 0, "api-compat": 0,  # none of these files
             "skill-library": 0, "agent-least-privilege": None, "agent-job-write-access": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "ai-policy-enforced": None, "agent-rewrites-instructions": None, "ci-instructions-unchecked": None, "backlog-ready": 0,  # no SKILL.md; no_agent_jobs; no CI file; no issue form
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
@@ -381,7 +381,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "skill-script-tests": None,  # the capture predates skill_script_tests
         "skill-personal-data": None, "contributor-files": None,  # the capture predates both blocks
         "secrets-guard": None, "model-ci-gated": None,  # the capture predates both blocks
-        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None, "agent-evals": None, "docs-kept-true": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "ai-policy-enforced": None, "ai-policy-declared": None, "agent-rewrites-instructions": None, "ci-instructions-unchecked": None, "backlog-ready": None,  # predate all twelve
+        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None, "agent-evals": None, "docs-kept-true": None, "ci-skip-label": None, "ci-test-failures-ignored": None, "ai-policy-enforced": None, "ai-policy-declared": None, "agent-rewrites-instructions": None, "ci-instructions-unchecked": None, "backlog-ready": None, "api-compat": None,  # predate all thirteen
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]

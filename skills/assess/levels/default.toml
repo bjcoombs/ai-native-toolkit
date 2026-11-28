@@ -330,6 +330,23 @@
 #   none found and a CI file of a system this reader does not parse, unknown (ci_not_read),
 #   never unmet. A doc in a subtree such a check names is not reported stale. It gates no
 #   Step. Graded measured (head_structure), read from the committed files.
+# - API compatibility checks CI runs reads api_compat.present (lib/ci/api_compat.py, #853):
+#   a committed CI file (GitHub Actions, local actions inlined, or .gitlab-ci.yml), directly or
+#   through the shared CI-step follower (a committed script, a make recipe, a Maven goal or
+#   Gradle plugin bound to the asked task) or one root package.json script, invokes a
+#   compatibility tool: apidiff, api-extractor run (not --local), griffe check, cargo
+#   semver-checks, buf breaking, japicmp or revapi. Or a tracked test pins the public exports
+#   (a Python == comparison with __all__ on one side, read with ast; Object.keys of a module
+#   against a snapshot or literal in a JS or TS test) and CI runs tests
+#   (ci_checks.enforced_check_runs). An install, --help, a masked line (|| true,
+#   continue-on-error, allow_failure), a GitLab after_script, an idle job (when: never or
+#   manual) and a hidden job no running job extends do not count. A tool named only in a build
+#   file is declared, listed and never counted; docs never declare. Unknown with
+#   tests_not_read when a pinning test is tracked and the test run is not settled, and with
+#   ci_not_read when a declared tool may run in a CI file this reader cannot follow. An
+#   API-surface ratchet test and a migration check are known not detected. It is evidence
+#   for the architecture practice (layer 4) too, and gates no Step. Graded measured
+#   (head_structure), read from the committed files.
 # - Skill library reads skill_library.present (lib/skill_library.py, #848): at least one
 #   committed SKILL.md with clean frontmatter (a name and a description) in a known skill
 #   location, a skills/ folder at the root, in a harness folder (.claude, .agents, .gemini,
@@ -637,6 +654,17 @@ aggregation = "min"
   level = 1
   truth = ["docs", "contracts"]
   criteria = [{ signal = "doc_staleness.kept_true.present", op = "eq", value = true }]
+
+[[rows]]
+id = "api-compat"
+title = "API compatibility checked by CI"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["contracts", "structure"]
+  criteria = [{ signal = "api_compat.present", op = "eq", value = true }]
 
 [[rows]]
 id = "guardrails-stated"

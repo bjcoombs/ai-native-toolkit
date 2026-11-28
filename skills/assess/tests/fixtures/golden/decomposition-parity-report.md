@@ -4,7 +4,7 @@ _Generated <<normalized>>._
 
 **[Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 2 of 4: supervised agent PRs.**
 
-Holding: 1 of 2 Step 3 gates held · 0 of 7 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
+Holding: 1 of 2 Step 3 gates held · 0 of 8 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
 
 Blocks Step 3: CI does not turn red when a check breaks.
 
@@ -20,7 +20,7 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 Catalogue coverage: 24 not measured (needs a full run: 1, no agent jobs: 3, no CI file or root pom: 1, no manifests read: 1, no model jobs: 1, no ownership map: 1, no CI check on pull requests: 2, no workflow on pull requests: 1, no remote: 2, no skill files: 2, no skill scripts: 1, no source files: 2, no value read: 2, not a git repository: 1, waits on layer-4-architecture.1: 1, unavailable: 1, the remote's host is not GitHub or a reachable GitLab: 1) · 4 not applicable here (fewer than two agent systems: 2, no configured gate: 2) · model <<normalized>>
 
-By tag: behaviour 0 of 3 (NOT MEASURED: 4) · contracts 0 of 1 · docs 0 of 2 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 5) · agent_runtime 0 of 1 (NOT MEASURED: 4) · governance 0 of 1 (NOT MEASURED: 9) · supply_chain 0 of 0 (NOT MEASURED: 1)
+By tag: behaviour 0 of 3 (NOT MEASURED: 4) · contracts 0 of 2 · docs 0 of 2 (NOT MEASURED: 2) · structure 0 of 2 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 5) · agent_runtime 0 of 1 (NOT MEASURED: 4) · governance 0 of 1 (NOT MEASURED: 9) · supply_chain 0 of 0 (NOT MEASURED: 1)
 
 ## Where you are on the Steps
 
@@ -96,9 +96,9 @@ _Deterministic portion of the assessment: headline, metrics, hotspots, and cross
 
 ## How this was measured
 
-In place: over 1 repository, 39 scans were measured everywhere, 21 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 40 scans were measured everywhere, 21 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (60)
+### Ran (61)
 
 - `agent_ops`
 - `config_drift`
@@ -126,6 +126,7 @@ In place: over 1 repository, 39 scans were measured everywhere, 21 ran but were 
 - `ci_model_jobs`
 - `ci_hazards`
 - `ai_governance`
+- `api_compat`
 - `org_security_policy`: not measured in 1 of 1 (no_remote)
 - `github_secret_scanning`: not measured in 1 of 1 (no_remote)
 - `secrets_guard`

@@ -65,6 +65,10 @@ Also carries this tag, listed under its first tag:
 
 That generated output and its source agree, so an agent editing one does not quietly break the other.
 
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `api-compat.1` API compatibility checked by CI (shared with Structure) | `api_compat` | CI runs an API compatibility check: is true (`api_compat.present eq true`) | `measured` | yes | - | positive | - | - | An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it. | Run a compatibility check in CI against the last release (apidiff, japicmp, api-extractor run, griffe check, cargo semver-checks, buf breaking). Or commit a test that compares the public exports with a fixed list and run the tests in CI. |
+
 Also carries this tag, listed under its first tag:
 
 - `docs-kept-true.1` (Docs)
@@ -99,6 +103,10 @@ That the code is shaped so an agent can work on one part without holding the who
 | `layer-3-linters.2` Suppression ages can be read from history | `promissory_markers` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | - | A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing. | Run on a full clone so suppression ages can be measured. |
 | `layer-4-architecture.1` A boundary or ownership map names a module path | `structure_drift` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | - | positive | - | - | A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs. | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
 | `layer-4-architecture.2` 95% of production source files are 500 lines or fewer | `stats_summary` | Production source file size at the 95th percentile: is at most 500 (`stats_summary.loc_by_class.source.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | - | With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file. Generated-header files are left out; Elixir @moduledoc and @doc lines do not count. | Split the largest files along their natural seams. |
+
+Also carries this tag, listed under its first tag:
+
+- `api-compat.1` (Contracts)
 
 ### Agent context
 
@@ -186,6 +194,7 @@ Each pair of tags that share a condition, one line per condition both carry.
 
 - `behaviour` and `agent_runtime`: `agent-evals.1`
 - `contracts` and `docs`: `docs-kept-true.1`
+- `contracts` and `structure`: `api-compat.1`
 - `docs` and `agent_context`: `layer-0-instructions.2`
 - `agent_context` and `agent_runtime`: `agent-rewrites-instructions.1`
 - `agent_context` and `governance`: `backlog-ready.1`
@@ -231,6 +240,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `agent-rewrites-instructions` | An agent job can rewrite its own instructions | team | `min` | `agent-rewrites-instructions.1` |
 | `ai-policy-declared` | AI policy declared | team | `min` | `ai-policy-declared.1` |
 | `ai-policy-enforced` | AI policy enforced on pull requests | team | `min` | `ai-policy-enforced.1` |
+| `api-compat` | API compatibility checked by CI | team | `min` | `api-compat.1` |
 | `backlog-ready` | Backlog kept agent-ready | team | `min` | `backlog-ready.1`, `backlog-ready.2` |
 | `ci-instructions-unchecked` | Pull request checks skip the instruction files | team | `min` | `ci-instructions-unchecked.1` |
 | `ci-skip-label` | A label skips every CI check | team | `min` | `ci-skip-label.1` |
@@ -422,6 +432,26 @@ Instruction files above the repository root load in a local session but never re
 - Evidence: `unclassified`.
 - Not measured when:
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+
+### `api_compat`: API compatibility checks CI runs
+
+A public interface stays stable only when a check stops a breaking change. A compatibility tool CI runs, or a test that pins the exports, turns an agent's accidental break of a contract into a red check, not a downstream bug report.
+
+Whether a GitHub Actions or GitLab CI step runs an API compatibility tool (apidiff, api-extractor, griffe check, cargo semver-checks, buf breaking, japicmp, revapi), directly or through a committed script, make recipe, Maven or Gradle build, or package.json script. Whether a test pins the public exports while CI runs tests. Tools named only in build files are listed as declared, never counted.
+
+- Collector: `core.api_compat`, reading `repo_root`, `ci_checks`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `api_compat.declared.path` path, `api_compat.declared.tool` token, `api_compat.pins` path, `api_compat.present_reason` token, `api_compat.runs.path` path, `api_compat.runs.tool` token.
+- Used by: row `api-compat`.
+- Evidence: `api_compat.present` head_structure (measured).
+- Not measured when:
+  - `tests_not_read`: A test pins the public exports, but whether CI runs tests is not settled (ci_checks.enforced_check_runs is null or the block is absent). Nothing to change: this reads as not measured until the CI test run can be read.
+  - `ci_not_read`: A compatibility tool is named in a build file, or found in a form whose exit status the step may hide, and a CI file this reader cannot follow may run it: a CI system it does not parse, a GitLab include, or a step the follower could not settle. Nothing to change if the tool runs; calling it from a GitHub Actions or GitLab CI step the scan reads lets it count.
+
+Why the signals named here matter:
+
+- `api_compat.present` feeds `api-compat.1:api_compat.present`: An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it.
 
 ### `archetype`: Repository archetype
 
@@ -1279,6 +1309,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `ancestor_instruction_files` | Ancestor instruction files | `repo_root` | `ancestor_instruction_files` | no |
 | `anomalies` | Anomalies | `run_header` | `anomalies` | no |
+| `api_compat` | API compatibility checks CI runs | `repo_root`, `ci_checks` | `api_compat` | no |
 | `archetype` | Repository archetype | `repo_root` | `archetype` | no |
 | `assess_dir` | Artifact directory | `repo_root`, `run_scope` | private input | no |
 | `backlog_outcomes` | Issue tracker read (backlog-ready level 2) | `repo_root` | private input | yes |
@@ -1329,7 +1360,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
 | `keyhole_blocks` | Keyhole blocks | `keyhole`, `run_scope` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `api_compat`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
 | `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
 | `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
 | `measured_commit` | Measured commit | `repo_root` | private input | no |
@@ -1371,7 +1402,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `test_pressure_scan` | Test pressure scan | `repo_root`, `current`, `coverage_data` | private input | no |
 | `unfinalized` | Unfinalized exclusions | `assess_dir`, `superseded`, `first_flagged`, `current`, `diff`, `excludes` | private input | no |
 | `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `api_compat`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |
 | `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |
