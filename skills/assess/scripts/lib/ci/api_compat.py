@@ -79,6 +79,7 @@ _GITHUB_BODY = frozenset({"run"})
 _GITLAB_BODY = frozenset({"script", "before_script"})
 _GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
 _INCLUDE = re.compile(r"^include\s*:", re.M)
+_STATUS_VAR = re.compile(r"(?<![\w$])(\w+)=\$\?")
 _CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?\w+=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
 # The japicmp settings that make a breaking change stop the build: the Maven plugin's
 # ``breakBuildOn*`` / ``breakBuildBasedOnSemanticVersioning`` and the Gradle task's ``failOn*``.
@@ -174,18 +175,23 @@ def _after(text: str, words: list[str]) -> list[list[str]]:
     for i in range(0, len(parts), 2):
         if command_words(parts[i].strip().strip("(){} ")) == words:
             rest = parts[i + 1:]
-            if rest[:1] == ["||"]:
-                rest = rest[2:]
+            if rest[:1] == ["||"]:   # skip the whole fallback: up to the next ``;`` or ``&&`` at depth 0
+                depth, j = 0, 1
+                while j < len(rest) and not (rest[j] in (";", "&&") and depth <= 0):
+                    depth += rest[j].count("{") + rest[j].count("(") - rest[j].count("}") - rest[j].count(")")
+                    j += 1
+                rest = rest[j:]
             return [command_words(p.strip().strip("(){} ")) for p in rest[1::2]]
     return []
 
 
-def _reraises(words: list[str]) -> bool:
+def _reraises(words: list[str], held: frozenset[str] = frozenset()) -> bool:
     """A command that ends its script red: ``exit`` or ``return`` with a non-zero literal or a
-    variable other than ``$?``, or ``false`` (``then exit 1`` inside an ``if`` too)."""
+    variable other than ``$?`` or one ``held`` (assigned ``$?``), or ``false`` (``then exit 1`` inside an ``if`` too)."""
     for i, word in enumerate(words):
         code = words[i + 1].strip('"') if i + 1 < len(words) else ""
-        if word in ("exit", "return") and code not in ("", "0", "$?"):   # ``$?`` after apidiff is its 0
+        zero = code in ("", "0", "$?") or code.strip("${}") in held   # ``$?`` after apidiff is its 0
+        if word in ("exit", "return") and not zero:
             return True
         if word == "false" and i in (0, 1):
             return True
@@ -199,9 +205,10 @@ def can_stop(tool: str, words: list[str], unit: list[str]) -> bool:
     script, a followed script or recipe). The japicmp CLI exits 0 unless an ``--error-on-*``
     flag is passed. Every other tool exits non-zero on a breaking change by default."""
     if tool == "apidiff":
+        held = frozenset(_STATUS_VAR.findall("\n".join(unit)))   # ``rc=$?`` holds apidiff's 0
         first = _after(_shell(unit[0]), words) if unit else []
-        return any(_reraises(w) for w in first) or any(
-            _reraises(c["words"]) for line in unit[1:] for c in _commands(_shell(line)))
+        return any(_reraises(w, held) for w in first) or any(
+            _reraises(c["words"], held) for line in unit[1:] for c in _commands(_shell(line)))
     if tool == "japicmp":
         return any(w.startswith("--error-on-") for w in words)
     return True

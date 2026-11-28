@@ -328,6 +328,8 @@ def test_a_gradle_japicmp_task_counts_only_when_it_fails_on_modification(tmp_pat
     ("test -f go.mod || exit 1; apidiff old new",),            # the re-raise comes before apidiff
     ("apidiff old new; exit $?",),                              # $? is apidiff's own 0
     ("apidiff old new || exit 1",),                             # apidiff exits 0, so its fallback never runs
+    ("apidiff old new || { echo broke; exit 1; }",),            # nor does a grouped fallback
+    ("apidiff old new; rc=$?; exit $rc",),                      # rc holds apidiff's 0
 ])
 def test_an_exit_that_cannot_react_to_apidiff_does_not_count(tmp_path: Path, runs: tuple[str, ...]) -> None:
     assert _block(_repo(tmp_path, {WF: _workflow(*runs)}))["runs"] == []
