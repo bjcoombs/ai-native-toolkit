@@ -469,6 +469,8 @@ def test_an_inline_apidiff_test_that_cannot_fail_on_a_break_does_not_count(tmp_p
     "apidiff -incompatible old new > out.txt; if [ $(wc -l < out.txt) -gt 0 ]; then exit 1; fi",
     "apidiff -incompatible old new > out.txt; ! grep -q . out.txt || exit 1",
     "apidiff -incompatible old new > out.txt; if [ $(wc -l < out.txt) -gt 5 ]; then exit 1; fi",   # red on a large break
+    "apidiff -incompatible old new > out.txt; if [ -s out.txt ]; then { exit 1; }; fi",
+    'if [ -n "$(apidiff -incompatible old new)" ]; then { exit 1; }; fi',
 ])
 def test_a_one_line_apidiff_output_check_counts(tmp_path: Path, line: str) -> None:
     root = _repo(tmp_path, {WF: _workflow(line)})
@@ -586,6 +588,155 @@ def test_a_later_line_if_check_that_read_met_on_main_still_counts(tmp_path: Path
 ])
 def test_a_check_rescued_by_a_passing_fallback_does_not_count(tmp_path: Path, lines: tuple[str, ...]) -> None:
     """``|| true`` after ``fi`` rescues the ``false``: the step stays green on a break, in either shell."""
+    step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == []
+    script = _repo(tmp_path / "s", {"hack/api.sh": "#!/bin/sh\n" + "".join(f"{line}\n" for line in lines),
+                                    WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == []
+
+
+# --- #1617: step-level pipe checks and the inline forms -------------------------------------
+
+STEP_PIPE = "apidiff -incompatible old new | grep -q . && exit 1"
+
+
+def test_a_pipe_check_in_a_workflow_step_counts(tmp_path: Path) -> None:
+    """The step's own ``run:`` reads the pipe as a followed script does: apidiff exits 0, so the
+    pipe's ``grep`` status is the check and pipefail hides nothing it decides."""
+    assert _block(_repo(tmp_path, {WF: _workflow(STEP_PIPE)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+    block = f"      - run: |\n          {STEP_PIPE}\n"
+    assert _block(_repo(tmp_path / "b", {WF: _workflow(extra=block)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+    braced = "apidiff -incompatible old new | grep -q . && { echo broke; exit 1; }"
+    assert _block(_repo(tmp_path / "c", {WF: _workflow(braced)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+@pytest.mark.parametrize("line", [
+    f"{STEP_PIPE} || true",                                                  # masked
+    "apidiff -incompatible old new | grep -vq . && exit 1",                  # inverted
+    "apidiff -incompatible old new | grep -q . || exit 1",                   # red only when nothing changed
+    "apidiff -incompatible old new | grep -q . && echo changed",             # no re-raise
+    "apidiff -incompatible old new | cat && exit 1",                         # decides nothing
+    f"{STEP_PIPE} &",                                                        # a background job; the step exits 0
+])
+def test_a_masked_or_inverted_step_pipe_does_not_count(tmp_path: Path, line: str) -> None:
+    block = _block(_repo(tmp_path, {WF: _workflow(line)}))
+    assert block["runs"] == [] and block["present"] is False
+    masked = f"      - continue-on-error: true\n        run: {STEP_PIPE}\n"
+    assert _block(_repo(tmp_path / "m", {WF: _workflow(extra=masked)}))["runs"] == []
+    keyword = f"      - continue-on-error: true\n        run: |\n          fi; {STEP_PIPE}\n"   # a kept ``fi`` line
+    assert _block(_repo(tmp_path / "k", {WF: _workflow(extra=keyword)}))["runs"] == []
+
+
+INLINE_CHAINS = [
+    '[ -z "$(apidiff -incompatible old new)" ] || { echo broke; exit 1; }',
+    'test -n "$(apidiff -incompatible old new)" && echo broke && exit 1',
+    '[[ -n "$(apidiff -incompatible old new)" ]] && { echo broke; exit 1; }',
+]
+
+
+@pytest.mark.parametrize("line", INLINE_CHAINS)
+def test_an_inline_test_with_a_chained_re_raise_counts(tmp_path: Path, line: str) -> None:
+    root = _repo(tmp_path, {WF: _workflow(line)})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
+    script = _repo(tmp_path / "s", {"hack/api.sh": f"#!/bin/sh\n{line}\n", WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+@pytest.mark.parametrize("line", [
+    'test -n "$(apidiff -incompatible old new)" && echo broke && exit 1 || true',    # masked
+    '[ -z "$(apidiff -incompatible old new)" ] || { echo broke; exit 0; }',          # no re-raise
+    '[ -n "$(apidiff -incompatible old new)" ] && echo changed || exit 1',           # red only when nothing changed
+    'test -n "$(apidiff -incompatible old new)" || echo ok && exit 1',               # the exit does not hang on the test
+    '[ -z "$(apidiff -incompatible old new)" ] && { echo ok; exit 1; }',             # red when nothing changed
+])
+def test_an_inline_chain_that_cannot_fail_on_a_break_does_not_count(tmp_path: Path, line: str) -> None:
+    root = _repo(tmp_path, {WF: _workflow(line)})
+    block = _block(root)
+    assert block["runs"] == [] and block["present"] is False
+    script = _repo(tmp_path / "s", {"hack/api.sh": f"#!/bin/sh\n{line}\n", WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == []
+
+
+def test_an_inline_if_with_then_on_the_next_line_counts(tmp_path: Path) -> None:
+    body = '#!/bin/sh\nif [ -n "$(apidiff -incompatible old new)" ]\nthen\n  echo broke\n  exit 1\nfi\n'
+    root = _repo(tmp_path, {"hack/api.sh": body, WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "apidiff"}]
+    step = ('      - run: |\n          if [ -n "$(apidiff -incompatible old new)" ]\n          then\n'
+            '            exit 1\n          fi\n')
+    assert _block(_repo(tmp_path / "w", {WF: _workflow(extra=step)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+    masked = step.replace("      - run: |\n", "      - continue-on-error: true\n        run: |\n")
+    assert _block(_repo(tmp_path / "m", {WF: _workflow(extra=masked)}))["runs"] == []
+
+
+@pytest.mark.parametrize("body", [
+    'if [ -z "$(apidiff -incompatible old new)" ]\nthen\n  exit 1\nfi\n',          # red when nothing changed
+    'if [ -n "$(apidiff -incompatible old new)" ]\nthen\n  echo broke\nfi\nexit 1\n',  # exit after ``fi``
+    'if [ -n "$(apidiff -incompatible old new)" ]\nthen\n  false\nfi || true\n',     # rescued
+])
+def test_an_inline_if_on_later_lines_that_cannot_fail_on_a_break_does_not_count(tmp_path: Path, body: str) -> None:
+    root = _repo(tmp_path, {"hack/api.sh": f"#!/bin/sh\n{body}", WF: _workflow("hack/api.sh")})
+    assert _block(root)["runs"] == []
+    step = "      - run: |\n" + "".join(f"          {ln}\n" for ln in body.splitlines())
+    assert _block(_repo(tmp_path / "w", {WF: _workflow(extra=step)}))["runs"] == []
+
+
+def test_an_output_file_if_with_then_on_the_next_line_counts_in_a_step(tmp_path: Path) -> None:
+    step = ("      - run: |\n          apidiff -incompatible old new > out.txt\n          if [ -s out.txt ]\n"
+            "          then\n            exit 1\n          fi\n")
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+    gitlab = ("compat:\n  script:\n    - apidiff -incompatible old new > out.txt\n    - if [ -s out.txt ]\n"
+              "    - then\n    - exit 1\n    - fi\n")
+    assert _block(_repo(tmp_path / "g", {".gitlab-ci.yml": gitlab}))["runs"] == [{"path": ".gitlab-ci.yml", "tool": "apidiff"}]
+
+
+# ``exit N`` inside ``{ }`` or a ``then`` branch ends the shell before a later ``|| true`` runs;
+# each form has a twin under the next test with ``false``, which ``|| true`` does rescue.
+EXIT_PAST_FALLBACK = [
+    ("apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 1; } || true",),
+    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", "  exit 1", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]; then', "  exit 1", "fi || true"),
+    ("apidiff -incompatible old new | grep -q . && { echo broke; exit 1; } || true",),
+    ('[ -z "$(apidiff -incompatible old new)" ] || { echo broke; exit 1; } || true',),
+    ("apidiff -incompatible old new > out.txt", '[ -s out.txt ] && { echo "API break (see above)"; exit 1; } || echo "API ok"'),
+    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", '  echo "(see report)"', "  exit 1", "fi || true"),
+    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", "  echo broke; exit 1", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  echo broke && exit 1", "fi || true"),
+]
+
+
+@pytest.mark.parametrize("lines", EXIT_PAST_FALLBACK)
+def test_an_exit_in_a_group_or_then_branch_ends_the_shell_past_a_later_fallback(
+        tmp_path: Path, lines: tuple[str, ...]) -> None:
+    step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+    script = _repo(tmp_path / "s", {"hack/api.sh": "#!/bin/sh\n" + "".join(f"{line}\n" for line in lines),
+                                    WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+@pytest.mark.parametrize("lines", [
+    *[tuple(line.replace("exit 1", "false") for line in form) for form in EXIT_PAST_FALLBACK],
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  if true; then echo x; fi", "  false", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  [ -s other.txt ] && exit 1", "  false", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  false", "else", "  exit 1", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  ( exit 1 )", "fi || true"),           # a subshell
+    ("apidiff -incompatible old new > out.txt; grep -q . out.txt && ( echo broke; exit 1 ) || true",),
+    ("apidiff -incompatible old new > out.txt; grep -q . out.txt && { ( exit 1 ); } || true",),   # a subshell in a group
+    ('if [ -n "$(apidiff -incompatible old new)" ]; then ( exit 1 )', "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  [ -s other.txt ] || exit 1", "  false", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  echo broke; ( exit 1 )", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  echo x", "elif true", "then", "  exit 1", "fi"),   # elif's exit
+    ('if [ -n "$(apidiff -incompatible old new)" ]; then', "  echo x", "elif true", "then", "  exit 1", "fi"),
+    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", "  echo x", "elif true", "then", "  exit 1", "fi"),
+    ('test -n "$(apidiff -incompatible old new)" && echo broke && { false && exit 1; } || true',),   # false skips the exit
+    ('test -n "$(apidiff -incompatible old new)" && echo broke && echo false; true',),   # ``false`` is echo's argument
+    ('test -n "$(apidiff -incompatible old new)" && echo exit 1',),
+    ("apidiff -incompatible old new > out.txt; grep -q . out.txt && echo false",),
+    ('[ -z "$(apidiff -incompatible old new)" ] || { echo "{"; false; } || true',),   # a quoted brace
+    ('apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo "}"; false; } || true',),
+    ("apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 0; } || true",),
+])
+def test_a_rescued_multi_line_check_does_not_count(tmp_path: Path, lines: tuple[str, ...]) -> None:
     step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
     assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == []
     script = _repo(tmp_path / "s", {"hack/api.sh": "#!/bin/sh\n" + "".join(f"{line}\n" for line in lines),
