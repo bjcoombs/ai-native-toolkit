@@ -47,6 +47,12 @@ words what it finds. Its parts:
 - **Pinned unit.** A per-viewer ``localStorage`` key, read and written inside try/catch; the
   page opens on the ownership root without it.
 - **Order.** Units and repositories are listed by label, never by rank.
+- **Page text talks about the repositories, not the tool.** No toolkit issue number, bug,
+  limitation or roadmap item reaches the page, comments in the script included. Each rendered
+  section that shows a not-measured reading carries ``CONFIRM`` once (``measuredNote``), and a hover
+  that reads one carries it on the line before the needs: what not measured means, that a full assessment run on the
+  repository settles most readings, and that a reason naming the platform or its settings also
+  needs access to the hosting settings. Tests: ``tests/test_fleet_page_text.py``.
 
 ``renderPage(bundle, state, targets, canSet, extra)`` returns the HTML of the whole app and
 ``cellTitle(bundle, repo, cell, level)`` a heatmap cell's hover text (``level`` the selected
@@ -89,6 +95,17 @@ SCRIPT = r"""
 (function () {
   "use strict";
   var PIN_KEY = "fleet-view:pinned";
+  // How a not-measured reading is settled, in plain words: every section and hover showing one says it.
+  var CONFIRM = "Not measured means this run could not read it, never that it is unmet. "
+    + "A full assessment run on the repository settles most readings; one whose reason names the "
+    + "platform or its settings (such as needs_platform) also needs that run to have access to the "
+    + "repository's hosting settings.";
+  function measuredNote(html) {
+    // once per section, in its visible text: a condition's hover lines, listed in the drill-down,
+    // may carry it already; a cell's title attribute does not count, since it shows only on hover
+    var shown = html.replace(/<[^>]*>/g, " ");
+    return /not measured/i.test(shown) && shown.indexOf(esc(CONFIRM)) < 0 ? html + "<p class=\"muted\">" + esc(CONFIRM) + "</p>" : html;
+  }
   function esc(s) {
     return String(s === null || s === undefined ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -107,7 +124,7 @@ SCRIPT = r"""
   }
   function unitOf(bundle, view, key) { return units(bundle, view).filter(function (u) { return u.key === key; })[0]; }
   function outLink(url, text) {
-    // A link to another artifact of a sharded fleet (#950): the plan writes only claude.ai URLs.
+    // A link to another artifact of a sharded fleet: the plan writes only claude.ai URLs.
     if (!url || url.indexOf("https://claude.ai/") !== 0) { return esc(text) + " <span class=\"muted\">(not published yet)</span>"; }
     return "<a href=\"" + esc(url) + "\" target=\"_blank\" rel=\"noopener\">" + esc(text) + "</a>";
   }
@@ -252,7 +269,9 @@ SCRIPT = r"""
         + ", reads " + cell.signal + (cell.value !== null && cell.value !== undefined ? " (measured " + cell.value + ")" : ""));
     }
     if (cell.why) { lines.push("Why: " + cell.why); }
-    lines.push(needs(bundle, repo, plain, plain, ""));
+    var last = needs(bundle, repo, plain, plain, "");
+    if (/not measured/i.test(lines.join("\n") + last)) { lines.push(CONFIRM); }  // the needs line stays last
+    lines.push(last);
     return lines.join("\n");
   }
   function cellClass(bundle, cell) {
@@ -513,7 +532,7 @@ SCRIPT = r"""
   function packs(bundle) {
     if (!bundle.packs || !bundle.packs.length) { return ""; }
     return "<h2>Practice packs</h2><p class=\"muted\">Each pack applied to every repository. A repository where a "
-      + "pack check could not be read counts as not measured, never as not met.</p>" + bundle.packs.map(function (p) {
+      + "pack check could not be read is left out of the measured count, never counted as not met.</p>" + bundle.packs.map(function (p) {
         var head = "<h3>Pack " + esc(p.name) + " (version " + esc(p.version) + ")</h3>";
         if (!p.practices.length) { return head + "<p>This pack adds checks only, no practice to score.</p>"; }
         return head + "<ul>" + p.practices.map(function (q) {
@@ -541,7 +560,7 @@ SCRIPT = r"""
       + "</strong> (" + esc(u.kind) + ") <button class=\"pin\" data-act=\"pin\">Open on this unit next time</button></p>"
       + (bundle.shard ? "<p class=\"muted\">One page of a sharded fleet: " + esc(bundle.shard.label) + ". "
         + outLink(bundle.shard.index_url, "Fleet index") + " lists every page.</p>" : "");
-    return head + SECTIONS.map(function (f) { return f(bundle, state, targets, canSet, extra); }).join("");
+    return head + SECTIONS.map(function (f) { return measuredNote(f(bundle, state, targets, canSet, extra)); }).join("");
   }
   function readPin(bundle) {
     try {
