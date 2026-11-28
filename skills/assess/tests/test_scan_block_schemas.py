@@ -21,6 +21,7 @@ from lib.ci.ci_checks import CiChecksBlock
 from lib.counts_only.content_free import counts_only_scans
 from lib.testing.coverage_gate import CoverageGateBlock
 from lib.hosting.delivery import DeliveryBlock
+from lib.hosting.deploy_controls import DeployControlsBlock
 from lib.instructions.guardrails import GuardrailsBlock
 from lib.scoring.layer_grades import LayerGradesBlock
 from lib.fleet.fleet_schema import build_schema as build_row_schema
@@ -32,7 +33,7 @@ TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": 
          "delivery": DeliveryBlock, "guardrails": GuardrailsBlock,
          "agent_consistency": AgentConsistencyBlock, "layer_grades": LayerGradesBlock,
          "agent_outcome": AgentOutcomeBlock, "concurrency": ConcurrencyBlock,
-         "review_reality": ReviewRealityBlock}
+         "review_reality": ReviewRealityBlock, "deploy_controls": DeployControlsBlock}
 
 
 @pytest.mark.parametrize("name", sorted(BLOCK_SCHEMAS))
@@ -141,6 +142,20 @@ def test_delivery_blocks_validate_and_unavailable_needs_a_reason() -> None:
         jsonschema.validate({"available": False}, described_block("delivery"))
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({**full, "merged_count": "five"}, described_block("delivery"))
+
+
+def test_deploy_controls_blocks_validate_and_null_counts_carry_a_reason() -> None:
+    full = {"available": True, "provider": "github", "configured": False,
+            "production_environments": 2, "unreviewed_count": 1, "self_review_allowed_count": 0}
+    tier = {**full, "provider": "gitlab", "unreviewed_count": None, "unreviewed_count_reason": "no_access",
+            "self_review_allowed_count": None, "self_review_allowed_count_reason": "no_access"}
+    _validate({"deploy_controls": full})
+    _validate({"deploy_controls": tier})
+    _validate(counts_only_scans({"deploy_controls": tier}))
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**full, "provider": "bitbucket"}, described_block("deploy_controls"))
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**full, "production_environments": None}, described_block("deploy_controls"))
 
 
 def test_coverage_gate_blocks_validate_full_and_counts_only(repo: Path) -> None:

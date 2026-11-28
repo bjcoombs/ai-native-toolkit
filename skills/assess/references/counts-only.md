@@ -423,6 +423,15 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `delivery.reason` | dropped |
 
+## deploy_controls
+
+| Field | Kept as |
+|---|---|
+| `deploy_controls.reason` | reason code |
+| `deploy_controls.provider` | token |
+| `deploy_controls.unreviewed_count_reason` | token |
+| `deploy_controls.self_review_allowed_count_reason` | token |
+
 ## doc_claims
 
 | Field | Kept as |

@@ -59,6 +59,12 @@ window_days = 90
 wip = 3
 mode = "propose"
 
+# Production deployment environments (issue #1666), read by `lib/hosting/deploy_controls.py`,
+# not here: names (matched without regard to case) replacing the default `production` and
+# `prod`. An empty, blank or malformed list keeps the default.
+[change_controls]
+environments = ["live"]
+
 # Central guardrails (issue #1153): read this machine's Claude Code managed settings
 # for the agent permissions practice, as `assess_core.py --managed-settings` does. A
 # single-repository option: /fleet and assess_signals.py never read it.

@@ -731,6 +731,23 @@ Run plumbing: no row or finding reads this scan.
 - Not measured when:
   - `platform_only`: The block exists only on the platform: without --platform it is left out. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
 
+### `deploy_controls`: Production deployment reviewers
+
+A reviewed change can still reach production through a deployment no second person approved; this counts the production environments an agent or a person can deploy to alone.
+
+Production deployment environments, how many need no reviewer and how many let the person who started a deployment approve it, read through gh or glab.
+
+- Collector: `core.deploy_controls`, reading `repo_root`.
+- Network: yes, GitHub or GitLab (with --platform).
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `deploy_controls.provider` token, `deploy_controls.reason` reason, `deploy_controls.self_review_allowed_count_reason` token, `deploy_controls.unreviewed_count_reason` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
+  - `network`: A headless run without --platform makes no GitHub or GitLab read. Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in.
+  - `no_remote`: The repository has no GitHub or GitLab remote, so there are no deployment environments to read. Nothing to change if the repository is local only.
+
 ### `derived_findings`: Keyhole blocks: derived_findings
 
 Run plumbing: no row or finding reads this scan.
@@ -1387,6 +1404,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `current` | Complexity stats (this run) | `assess_dir` | private input | no |
 | `decline` | Declined optional tools | `assess_dir`, `plugin_version` | `decline_markers`, `reoffer_mutation`, `decline_disclosures` | no |
 | `delivery` | Delivery figures | `merged_sample`, `review_reality`, `fleet_config`, `gitlab_note_facts` | `delivery` | yes |
+| `deploy_controls` | Production deployment reviewers | `repo_root` | `deploy_controls` | yes |
 | `diff` | Stats diff against the prior run | `prior`, `current`, `excluded_as_generated` | private input | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `doc_graph` | Doc graph | `repo_root`, `excludes`, `scope`, `working_notes` | `doc_graph` | no |

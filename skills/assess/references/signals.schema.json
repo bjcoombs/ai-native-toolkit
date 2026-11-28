@@ -114,6 +114,7 @@
           "coverage_report",
           "dead_code",
           "delivery",
+          "deploy_controls",
           "derived_findings",
           "diff",
           "doc_claims",
@@ -1185,6 +1186,78 @@
             "unconfirmed_ai_accounts": {
               "type": "integer",
               "description": "Distinct sampled accounts that are name-only AI matches awaiting confirmation in [identities] (#883): change authors, and on GitLab note authors. A non-zero count is why the share it would decide reads null."
+            }
+          }
+        },
+        "deploy_controls": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: network (a headless run without --platform makes no GitHub or GitLab read); no_remote (the repository has no GitHub or GitLab remote, so there are no deployment environments to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "description": "Whether production deployment environments require a reviewer (lib/hosting/deploy_controls.py, #1666), read through gh or glab. Production environments are those [change_controls] environments names, else any named production or prod. A platform block: a refused environment list is available false with a reason, never zeros; a count the tier or token cannot read is null with its reason code.",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the block is unavailable."
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab"
+              ],
+              "description": "The platform read."
+            },
+            "configured": {
+              "type": "boolean",
+              "description": "True when [change_controls] environments named the production environments, false when the default names applied."
+            },
+            "production_environments": {
+              "type": "integer",
+              "description": "Production environments found; 0 means none, which a reader takes as not applicable, never unmet."
+            },
+            "unreviewed_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Production environments a deployment reaches with no required reviewer; null when the protection settings could not be read."
+            },
+            "unreviewed_count_reason": {
+              "type": "string",
+              "description": "Why unreviewed_count is null (a reason code)."
+            },
+            "self_review_allowed_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Reviewed production environments where the person who started the deployment may approve it (GitHub prevent_self_review false; GitLab allow_pipeline_trigger_approve_deployment true); null when not read."
+            },
+            "self_review_allowed_count_reason": {
+              "type": "string",
+              "description": "Why self_review_allowed_count is null (a reason code)."
             }
           }
         },
