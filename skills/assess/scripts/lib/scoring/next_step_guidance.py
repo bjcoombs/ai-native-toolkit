@@ -470,9 +470,10 @@ _WORDING: dict[str, Wording] = {
         "files, each agent workflow, its gh-aw `.lock.yml`, the local workflows and actions it "
         "runs, and the CODEOWNERS file itself. Also give an owner to each committed file a gh-aw "
         "source's frontmatter `imports:` names, and to each file those import. "
-        "Require code-owner review on the default branch.",
+        "Require code-owner review on the default branch. Make each gh-aw file in "
+        "`agent_instruction_rewrite_unread_files` readable: a closing `---`, `imports:` a YAML list.",
         "No agent job that can write files runs while an instruction file, its own workflow, its "
-        "`.lock.yml`, a file it imports or the CODEOWNERS file has no CODEOWNERS owner."),
+        "`.lock.yml`, a file it imports or the CODEOWNERS file has no owner or an unreadable import list."),
     "ci_hazards.skip_labels": _flag_count(
         "Drop the label condition from the jobs' `if:` lines, or keep it only on jobs that check "
         "nothing; scope a skip with a `paths` filter so the checks still run on code changes.",

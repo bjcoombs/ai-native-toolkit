@@ -42,7 +42,9 @@ This module scans the repo-observable subset of those guardrails:
   ``.lock.yml``, a local reusable workflow or local action that workflow runs, a file its
   gh-aw frontmatter ``imports:`` names (#1600), or the CODEOWNERS file itself has no CODEOWNERS
   owner, with their workflow files in
-  ``agent_instruction_rewrite_files`` (``lib.agents.agent_instruction_rewrite``). A hazard that
+  ``agent_instruction_rewrite_files`` and the gh-aw files on the way whose frontmatter does not
+  parse in ``agent_instruction_rewrite_unread_files`` (#1608;
+  ``lib.agents.agent_instruction_rewrite``). A hazard that
   holds the ``ci_runs_tests`` Step gate; null with a sibling ``_reason`` as above.
 
 Only **git-tracked** artifacts count toward the summary booleans, mirroring the
@@ -473,7 +475,7 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
     reader = _Signs(repo_root, repo_files(repo_root))  # reads committed files inside the checkout
     fronts = {j["path"]: _frontmatter(reader.read(j["path"]) or "")
               for j in agent_jobs if j["path"].endswith(".md")}
-    rewrite, rewrite_files, rewrite_reason = instruction_rewrite(
+    rewrite, rewrite_files, rewrite_unread, rewrite_reason = instruction_rewrite(
         agent_jobs, fronts, reader.files, reader.read, jobs_unread)
     summary["agent_instruction_rewrite"] = rewrite
     if rewrite_reason is not None:
@@ -499,6 +501,7 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
         "agent_workflows_unread": unread,
         "agent_jobs": agent_jobs,
         "agent_instruction_rewrite_files": rewrite_files,
+        "agent_instruction_rewrite_unread_files": rewrite_unread,
         "managed": managed,
         "summary": summary,
     }

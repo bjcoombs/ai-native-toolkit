@@ -279,10 +279,76 @@ def test_an_imported_file_whose_frontmatter_does_not_parse_raises_it(git_repo) -
     files = {SOURCE: source, ".github/workflows/shared/a.md": "---\nimports: [b.md\n---\nText.\n",
              ".github/CODEOWNERS": OWNERS}
     assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 1
-    files[".github/workflows/shared/a.md"] = "---\nimports: [b.md]\nText with no closing marker.\n"
-    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 1
     files[".github/workflows/shared/a.md"] = "---\nimports: [b.md]\n---\nText.\n"
     assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 0
+
+
+def test_the_hazard_names_each_file_whose_frontmatter_it_could_not_read(git_repo) -> None:
+    source = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports: [shared/a.md, shared/b.md]\n")
+    files = {SOURCE: source, ".github/workflows/shared/a.md": "---\nimports: [c.md\n---\nText.\n",
+             ".github/workflows/shared/b.md": "---\nimports: *x\n---\nText.\n",
+             ".github/CODEOWNERS": OWNERS}
+    block = scan_agent_ops(_repo(git_repo, files))
+    assert block["summary"]["agent_instruction_rewrite"] == 1
+    assert block["agent_instruction_rewrite_files"] == [SOURCE]
+    assert block["agent_instruction_rewrite_unread_files"] == [".github/workflows/shared/a.md",
+                                                               ".github/workflows/shared/b.md"]
+    kept = counts_only({"agent_ops": block})["agent_ops"]
+    assert kept["agent_instruction_rewrite_unread_files"] == block["agent_instruction_rewrite_unread_files"]
+    entry = next(h for h in _level(dict(block))["hazards"]  # type: ignore[arg-type]
+                 if h["id"] == "agent-rewrites-instructions.1")
+    assert "agent_instruction_rewrite_unread_files readable" in entry["fix"]
+    bad_source = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports: [shared/a.md\n")
+    block = scan_agent_ops(_repo(git_repo, {SOURCE: bad_source}))
+    assert block["agent_instruction_rewrite_unread_files"] == [SOURCE]
+
+
+def test_an_owned_hazard_with_every_frontmatter_read_names_no_unread_file(git_repo) -> None:
+    block = scan_agent_ops(_repo(git_repo, {WORKFLOW: SCHEDULED_WRITER}))
+    assert block["summary"]["agent_instruction_rewrite"] == 1
+    assert block["agent_instruction_rewrite_unread_files"] == []
+
+
+def test_an_imported_file_opening_with_a_rule_and_no_closing_marker_has_no_frontmatter(git_repo) -> None:
+    source = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports: [shared/a.md]\n")
+    files = {SOURCE: source, ".github/workflows/shared/a.md": "---\nText after a rule.\n\n- a list item\n",
+             ".github/CODEOWNERS": SOURCE_ONLY + "/.github/workflows/shared/a.md @o\n"}
+    block = scan_agent_ops(_repo(git_repo, files))
+    assert block["summary"]["agent_instruction_rewrite"] == 0
+    assert block["agent_instruction_rewrite_unread_files"] == []
+
+
+def test_an_unclosed_rule_that_may_still_declare_imports_is_followed_or_named(git_repo) -> None:
+    """Read to the end of the file, an unclosed ``---`` could still declare imports: follow them
+    when they parse and name the file when they do not, so neither reading leaves it clear."""
+    shared = ".github/workflows/shared/a.md"
+    source = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports: [shared/a.md]\n")
+    owned = SOURCE_ONLY + f"/{shared} @o\n"
+    files = {SOURCE: source, shared: "---\nimports: [b.md]\n", ".github/workflows/shared/b.md": "Tone.\n",
+             ".github/CODEOWNERS": owned}
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 1  # b.md unowned
+    files[".github/CODEOWNERS"] = owned + "/.github/workflows/shared/b.md @o\n"
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 0
+    files[shared] = "---\n'imports': [b.md]\n"  # a quoted key is followed too
+    assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 0
+    for text in ("---\nNotes.\nimports: [b.md]\n", "---\n  imports: [b.md]\n", "---\n<<: *x\n"):
+        files[shared] = text
+        block = scan_agent_ops(_repo(git_repo, files))
+        assert block["agent_instruction_rewrite_unread_files"] == [shared], text
+
+
+def test_the_four_forms_github_accepts_read_as_clear_when_owned(git_repo) -> None:
+    ended = GH_AW_PR.replace("create-pull-request:\n---", "create-pull-request:\n...\n---")
+    for base, imports in ((GH_AW_PR, "imports: null\n"), (GH_AW_PR, "imports:\t[shared/a.md]\n"),
+                          (ended, "imports: [shared/a.md]\n")):
+        source = base.replace("engine: claude\n", f"engine: claude\n{imports}")
+        files = {SOURCE: source, ".github/workflows/shared/a.md": "Write plainly.\n", ".github/CODEOWNERS": OWNERS}
+        block = scan_agent_ops(_repo(git_repo, files))
+        assert block["summary"]["agent_instruction_rewrite"] == 0, imports
+        assert block["agent_instruction_rewrite_unread_files"] == [], imports
+    early = GH_AW_PR.replace("engine: claude\n", "engine: claude\n...\n")  # text past the end
+    files = {SOURCE: early, ".github/CODEOWNERS": OWNERS}
+    assert scan_agent_ops(_repo(git_repo, files))["agent_instruction_rewrite_unread_files"] == [SOURCE]
 
 
 def test_a_workflow_folder_note_with_an_unclosed_rule_does_not_break_the_scan(git_repo) -> None:

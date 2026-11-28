@@ -16,7 +16,7 @@ whys.agent_ops = "Committed allowlists, hooks, sandbox rules and routines make a
 shapes = [
   { path = "agent_ops", type = "lib.counts_only.block_shapes:AgentOpsBlock" },
 ]
-revision = 5
+revision = 6
 unknown_reasons = [
   { code = "agent_workflows_unread", block = "agent_ops", means = "A workflow calls an unread reusable workflow in another repository whose path names an agent. Agent work: a scheduled or event-triggered caller, and no local agent workflow. Job scope: a caller on any trigger without a read-only scope, and no local agent job that settles it.", next_step = "Nothing to change: this reads as not measured until that workflow can be read." },
   { code = "no_agent_jobs", block = "agent_ops", means = "With agent_job_count at 0, no committed workflow job runs an agent, so there is no agent job scope to read.", next_step = "Nothing to change." },
@@ -42,6 +42,7 @@ unknown_reasons = [
   "agent_ops.summary.agent_job_write_access_reason" = "token"
   "agent_ops.summary.agent_instruction_rewrite_reason" = "token"
   "agent_ops.agent_instruction_rewrite_files" = "path"
+  "agent_ops.agent_instruction_rewrite_unread_files" = "path"
 
 [[entries]]
 id = "core:agent_ops.summary.permissions_encoded"
@@ -151,4 +152,4 @@ title = "An agent job can rewrite its own instructions"
 key = "agent-rewrites-instructions.1:agent_ops.summary.agent_instruction_rewrite"
 why = "An agent job that can push files can change AGENTS.md, CLAUDE.md or its own workflow, so the next run follows instructions no reviewer approved. CI then checks changes against rules the agent wrote for itself."
 why_source = "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners"
-fix = "Give AGENTS.md, CLAUDE.md, each agent workflow listed and its gh-aw .lock.yml an owner in CODEOWNERS. Do the same for the local workflows, actions and committed gh-aw imports it reaches, at any depth. Give the CODEOWNERS file an owner too. Require code-owner review on the default branch."
+fix = "Give AGENTS.md, CLAUDE.md, each agent workflow, its .lock.yml, the local workflows, actions and gh-aw imports it reaches at any depth, and CODEOWNERS itself an owner. Require code-owner review on the default branch. Make each file in agent_instruction_rewrite_unread_files readable."

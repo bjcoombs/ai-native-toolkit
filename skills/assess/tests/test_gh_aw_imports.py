@@ -30,6 +30,13 @@ from lib.pack_yaml import YamlError
     ("tools: {github: {\n  toolsets: [repos]}}\nimports: [a.md]\nengine: claude\n", ["a.md"]),
     ("on:\n  schedule: daily\nimports:\n  - a.md  # house style\nengine: claude\n", ["a.md"]),
     ("imports: [\"a\\u0040b.md\"]\n", ["a@b.md"]),
+    ("imports: null\n", []),                               # #1608: an explicit null
+    ("imports: ~  # none yet\n", []),
+    ("imports:\t[a.md]\n", ["a.md"]),                       # a tab after the key's colon
+    ("engine:\tclaude\nimports:\n  - path:\ta.md\n", ["a.md"]),
+    ("imports: [{path:\ta.md}]\n", ["a.md"]),
+    ("imports: [a.md]\n...\n", ["a.md"]),                   # a document-end line
+    ("imports:\n  - a.md\n...  # end\n\n", ["a.md"]),
 ])
 def test_imports_reads_each_yaml_list_form(front: str, expected: list[str]) -> None:
     assert imports(front) == expected
@@ -68,6 +75,17 @@ def test_imports_reads_each_yaml_list_form(front: str, expected: list[str]) -> N
     "imports:\n  - {path: a.md, , x: 1}\n",  # an empty middle flow key
     "imports:\n  - path: a.md\n   x: 1\n",  # a key out of line with its mapping
     "imports:\n  - [a.md]\n",               # a flow list inside a block list
+    "imports: null\n  - a.md\n",            # a null with items under it (#1608)
+    "imports: nullish\n",                   # a scalar, not a null
+    "imports:\t*shared\n",                  # an alias after a tab
+    "imports:\t&x [a.md]\n",                # an anchor after a tab
+    "imports:\t'a.md\n",                    # an unclosed quote after a tab
+    "imports: [a.md]\n...\nimports: [b.md]\n",  # text past the document end
+    "...\nimports: [a.md]\n",               # a document end before the imports
+    "imports: [a.md]\n... trailing\n",      # a document-end line with text on it
+    "imports: [a.md]\n  ...\n",             # an indented document-end marker
+    "imports: [a:\tb.md]\n",                 # a flow pair after a tab, not a path
+    "imports:\n  - a:\tb.md\n",            # a block pair after a tab with no path key
 ])
 def test_imports_raises_on_what_it_does_not_follow(front: str) -> None:
     with pytest.raises(YamlError):
