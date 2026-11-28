@@ -471,10 +471,11 @@ _WORDING: dict[str, Wording] = {
     "agent_ops.summary.agent_instruction_rewrite": _flag_count(
         "Add a CODEOWNERS line with an owner for `AGENTS.md`, `CLAUDE.md`, the other instruction "
         "files, each agent workflow, its gh-aw `.lock.yml`, the local workflows and actions it "
-        "runs, and the CODEOWNERS file itself. "
+        "runs, and the CODEOWNERS file itself. Give each committed file its gh-aw frontmatter "
+        "`imports:` names, and each file those import, an owner as well. "
         "Require code-owner review on the default branch.",
         "No agent job that can write files runs while an instruction file, its own workflow, its "
-        "`.lock.yml` or the CODEOWNERS file has no CODEOWNERS owner."),
+        "`.lock.yml`, a file it imports or the CODEOWNERS file has no CODEOWNERS owner."),
     "ci_hazards.skip_labels": _flag_count(
         "Drop the label condition from the jobs' `if:` lines, or keep it only on jobs that check "
         "nothing; scope a skip with a `paths` filter so the checks still run on code changes.",

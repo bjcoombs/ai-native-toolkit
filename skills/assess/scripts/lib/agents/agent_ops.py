@@ -39,8 +39,9 @@ This module scans the repo-observable subset of those guardrails:
 - ``agent_instruction_rewrite`` (#858): agent jobs that can write files (a ``contents`` write,
   or gh-aw ``safe-outputs`` that land file changes) while the root ``AGENTS.md`` or
   ``CLAUDE.md``, a committed instruction file, the job's own workflow and its gh-aw
-  ``.lock.yml``, a local reusable workflow or local action that workflow runs, or the
-  CODEOWNERS file itself has no CODEOWNERS owner, with their workflow files in
+  ``.lock.yml``, a local reusable workflow or local action that workflow runs, a file its
+  gh-aw frontmatter ``imports:`` names (#1600), or the CODEOWNERS file itself has no CODEOWNERS
+  owner, with their workflow files in
   ``agent_instruction_rewrite_files`` (``lib.agents.agent_instruction_rewrite``). A hazard that
   holds the ``ci_runs_tests`` Step gate; null with a sibling ``_reason`` as above.
 
@@ -93,7 +94,7 @@ from lib.ci.ci_step_paths import inside, local_workflow, read_action
 from lib.ci.ci_triggers import workflow_events
 from lib.instructions.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
 from lib.counts_only.block_shapes import AgentJob, AgentWorkflow
-from lib.agents.agent_instruction_rewrite import instruction_rewrite
+from lib.agents.agent_instruction_rewrite import frontmatter as _frontmatter, instruction_rewrite
 from lib.agents.agent_job_scope import gh_aw_job, merge_readings, summarize, workflow_jobs
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
 from lib.history.git_churn import is_tracked, tracked_files
@@ -245,15 +246,6 @@ _AGENT_NAME = re.compile(r"claude|codex|gemini|copilot|opencode|agent|llm|gpt|(?
 _SKIP_KEYS = frozenset({"if", "name", "description"})
 _REMOTE_WORKFLOW = re.compile(r"""^["']?[\w.-]+/[\w.-]+/\.github/workflows/""")
 _WORKFLOWS = ".github/workflows/"
-
-
-def _frontmatter(text: str) -> str | None:
-    """A gh-aw source's YAML frontmatter, or None when ``text`` has none."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return None
-    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
-    return "\n".join(lines[1:end]) if end is not None else None
 
 
 def _kinds(events: list[str], gh_aw: bool) -> tuple[bool, bool]:
