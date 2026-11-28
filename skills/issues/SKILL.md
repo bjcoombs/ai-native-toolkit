@@ -189,7 +189,8 @@ before the two consumers"). No hierarchy is created without a reason.
 
 Record the size of each issue left whole as a comment whose first line is the definition of
 ready's size marker, then the same one-line reason, so the Readiness Check and the refiner read
-one size. The newest marker wins, so a resize is a new comment:
+one size. Skip the comment when the newest marker, or a body `Size:` line with no marker after it,
+already records the same points. The newest marker wins, so a resize is a new comment:
 
 ```bash
 gh issue comment <N> --body "$(printf '<!-- refine:size %s -->\n%s' <P> '<one-line reason>')"
@@ -276,7 +277,7 @@ the issue `needs-triage`.
 
 ### Triage Report
 
-Apply the label verdicts from steps 1 to 4 in one sequential write per issue (never parallel
+Apply the label verdicts from steps 1 to 4 and the Readiness Check in one sequential write per issue (never parallel
 background writes), then **report and STOP** (mirrors `/tm` planning):
 
 ```bash
