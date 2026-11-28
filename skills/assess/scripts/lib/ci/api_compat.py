@@ -615,9 +615,9 @@ def _gitlab_jobs(tree: IndentTree) -> tuple[dict[int, frozenset[str]], set[int]]
 
 
 def _dropped_if(lines: list[str], unmasked: list[str], tree: IndentTree, i: int) -> bool:
-    """Whether a blanked line is kept as written: a ``fi``, or a lone ``if`` test whose next line survives (lib/docs)."""
+    """Whether a blanked line is kept as written: ``fi``/``elif``/``else``, or a lone ``if`` test whose next line survives (lib/docs)."""
     text, nxt = ci_line_text(lines[i]).lstrip(), i + 1
-    return re.match(r"fi\b", text) is not None or (text.startswith("if ") and nxt < len(unmasked)
+    return re.match(r"(?:fi|elif|else)\b", text) is not None or (text.startswith("if ") and nxt < len(unmasked)
                                                    and bool(unmasked[nxt].strip()) and tree.body(nxt) == tree.body(i))
 
 
