@@ -1068,10 +1068,10 @@ It shows how many recently merged changes had a review and an approval, which is
 
 Review and approval shares over the sampled merged changes, read through gh or glab.
 
-- Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`.
+- Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`, `review_rules`.
 - Network: yes, GitHub or GitLab (with --platform).
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.bot_sequence` token, `review_reality.reason` drop, `review_reality.sequence` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.bot_sequence` token, `review_reality.merge_queue_source` token, `review_reality.reason` drop, `review_reality.sequence` token.
 - Used by: row `layer-7-review`.
 - Evidence: `review_reality.approved_share` platform (verified), `review_reality.reviewed_share` platform (verified).
 - Not measured when:
@@ -1082,6 +1082,20 @@ Why the signals named here matter:
 
 - `review_reality.reviewed_share` feeds `layer-7-review.2:review_reality.reviewed_share`: Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader.
 - `review_reality.approved_share` feeds `layer-7-review.2:review_reality.approved_share`: An explicit approval records that someone accepted the change, not just that it was looked at.
+
+### `review_rules`: Merge and review rules kept as code
+
+A rule kept as code is a rule an agent can read before it opens a change, and a reviewer can check it against the code. A merge queue, an approval policy or an owners file says who must look at a change before it lands.
+
+Merge and review rules a repository commits outside branch protection: a merge queue (a merge_group trigger or a Mergify queue), a policy-bot approval policy, Prow OWNERS files, a committed ruleset or protection export that requires review, and a review rubric directory a pull request workflow names. Each file is parsed, never matched as text, and OWNERS files naming one owner for everything do not count. Evidence only: it adds an evidence line to the review condition while that condition is met, and its merge queue fills review_reality.merge_queue when the platform rules cannot be read.
+
+- Collector: `core.review_rules`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `review_rules.arms` token, `review_rules.reason` drop, `review_rules.rules.arm` token, `review_rules.rules.path` path, `review_rules.unsettled` path.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
 
 ### `runtime`: Keyhole blocks: runtime
 
@@ -1404,7 +1418,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
 | `keyhole_blocks` | Keyhole blocks | `keyhole`, `run_scope` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `api_compat`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `repo_guards`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `behaviour_pins`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `api_compat`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `repo_guards`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `behaviour_pins`, `review_rules`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
 | `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
 | `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
 | `measured_commit` | Measured commit | `repo_root` | private input | no |
@@ -1423,7 +1437,8 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `repo_guards` | Ratchets and repo-owned guards | `repo_root` | `repo_guards` | no |
 | `review_automation` | AI review committed in CI | `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci` | `review_automation` | no |
 | `review_evidence` | Review evidence | `review_automation`, `review_reality` | `review_evidence` | no |
-| `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts` | `review_reality` | yes |
+| `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts`, `review_rules` | `review_reality` | yes |
+| `review_rules` | Merge and review rules kept as code | `repo_root` | `review_rules` | no |
 | `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot`, `prior_level` | no |
 | `run_id` | Run id | - | private input | no |
 | `run_scope` | Run scope | `repo_root`, `requested_scope` | private input | no |
@@ -1447,7 +1462,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `test_pressure_scan` | Test pressure scan | `repo_root`, `current`, `coverage_data` | private input | no |
 | `unfinalized` | Unfinalized exclusions | `assess_dir`, `superseded`, `first_flagged`, `current`, `diff`, `excludes` | private input | no |
 | `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `api_compat`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `repo_guards`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `behaviour_pins`, `owner_exclusions` | `unit_levels` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ai_governance`, `api_compat`, `backlog_ready`, `ci_checks`, `ci_hazards`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `repo_guards`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_library`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `behaviour_pins`, `review_rules`, `owner_exclusions` | `unit_levels` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |
 | `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |

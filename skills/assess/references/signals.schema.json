@@ -137,6 +137,7 @@
           "review_automation",
           "review_evidence",
           "review_reality",
+          "review_rules",
           "runtime",
           "secrets_guard",
           "shared_tooling",
@@ -1401,6 +1402,20 @@
                 "null"
               ],
               "description": "review_required and approved_share under 0.2; null as for hollow_required_review."
+            },
+            "merge_queue": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "GitHub only (#856): merges to the default branch go through a queue. True from the rules' merge_queue rule; where the rules or the protection could not be read, from a committed merge queue (review_rules); null when neither settles it."
+            },
+            "merge_queue_source": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "ruleset (the platform's rules) or committed (the review_rules block); null when merge_queue is null."
             },
             "sequence": {
               "type": "array",

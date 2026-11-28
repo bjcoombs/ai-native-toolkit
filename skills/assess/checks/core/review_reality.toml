@@ -9,7 +9,7 @@ summary = "Review and approval shares over the sampled merged changes, read thro
 callable = "lib.hosting.review_reality:review_reality_from_sample"
 offline_callable = "lib.hosting.review_reality:review_reality_from_sample"
 publishes = ["review_reality"]
-reads = ["merged_sample", "gitlab_note_facts"]
+reads = ["merged_sample", "gitlab_note_facts", "review_rules"]
 stage = "read_side"
 network = true
 platform_pass = true
@@ -18,7 +18,7 @@ whys.review_reality = "It shows how many recently merged changes had a review an
 shapes = [
   { path = "review_reality", type = "lib.counts_only.block_shapes:ReviewRealityBlock" },
 ]
-revision = 2
+revision = 3
 unknown_reasons = [
   { code = "network", means = "A headless run without --platform makes no GitHub or GitLab read.", next_step = "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in." },
   { code = "no_remote", means = "The repository has no GitHub or GitLab remote, so there are no merged changes to read.", next_step = "Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes." },
@@ -27,6 +27,7 @@ unknown_reasons = [
   "review_reality.reason" = "drop"
   "review_reality.sequence" = "token"
   "review_reality.bot_sequence" = "token"
+  "review_reality.merge_queue_source" = "token"
 
 [[entries]]
 id = "core:review_reality.reviewed_share"

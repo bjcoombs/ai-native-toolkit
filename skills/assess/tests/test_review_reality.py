@@ -110,6 +110,7 @@ def test_review_reality_unreviewed_required_review_is_hollow(world) -> None:
         "approved_share": 0.0, "bot_review_share": 0.0, "self_merged_share": 1.0,
         "review_required": True, "hollow_required_review": True,
         "required_approval_bypassed": True,
+        "merge_queue": False, "merge_queue_source": "ruleset",
         "sequence": ["unreviewed"] * 10, "bot_sequence": ["none"] * 10,
     }
     # The ruleset already said yes: the protection read is skipped.
@@ -339,3 +340,53 @@ def test_review_reality_sequence_is_merge_order_and_matches_the_shares(world) ->
     assert block["bot_review_share"] == 0.4  # the marker never changes a share
     text = json.dumps(block)
     assert "SECRET" not in text and "bob" not in text.lower() and "reviewbot" not in text
+
+
+# --- #856: a committed merge queue fills merge_queue when the platform rules are unread ---
+
+MERGE_QUEUE_WORKFLOW = "name: ci\non:\n  pull_request:\n  merge_group:\njobs:\n  t:\n    runs-on: x\n"
+
+
+def _commit_merge_queue(world) -> None:
+    path = world.root / ".github" / "workflows" / "ci.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(MERGE_QUEUE_WORKFLOW, encoding="utf-8")
+    _git(world.root, "add", ".")
+
+
+def test_a_merge_group_workflow_drives_merge_queue_when_protection_is_unreadable(world) -> None:
+    _commit_merge_queue(world)
+    world.fail_with("gh: Resource not accessible by integration (HTTP 403)")
+    world.serve("prs.json", [_pr(n) for n in range(3)])
+    block = scan_review_reality(world.root)
+    assert block["review_required"] is None
+    assert (block["merge_queue"], block["merge_queue_source"]) == (True, "committed")
+
+
+def test_the_platform_rules_win_over_the_committed_merge_queue(world) -> None:
+    _commit_merge_queue(world)
+    world.serve("branchrules.json", [{"type": "merge_queue", "parameters": {}}])
+    world.fail_with("gh: Resource not accessible by integration (HTTP 403)")
+    world.serve("prs.json", [_pr(n) for n in range(3)])
+    block = scan_review_reality(world.root)
+    assert (block["merge_queue"], block["merge_queue_source"]) == (True, "ruleset")
+
+
+def test_without_a_committed_queue_unreadable_rules_leave_merge_queue_unknown(world) -> None:
+    world.fail_with("gh: Resource not accessible by integration (HTTP 403)")
+    world.serve("prs.json", [_pr(n) for n in range(3)])
+    block = scan_review_reality(world.root)
+    assert (block["merge_queue"], block["merge_queue_source"]) == (None, None)
+
+
+@pytest.mark.parametrize(("ruleset_queue", "required", "committed", "expected"), [
+    (True, False, False, (True, "ruleset")),
+    (None, None, True, (True, "committed")),
+    (False, None, True, (True, "committed")),   # the protection read was refused
+    (False, False, True, (None, None)),          # rules say no; classic protection is not read for it
+    (False, True, False, (False, "ruleset")),
+    (None, None, False, (None, None)),
+])
+def test_merge_queue_reads_the_platform_first(ruleset_queue, required, committed, expected) -> None:
+    from lib.hosting.review_reality import merge_queue
+    assert merge_queue(ruleset_queue, required, committed) == expected

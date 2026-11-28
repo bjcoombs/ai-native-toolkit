@@ -342,7 +342,15 @@
         "grpa/svc1": "8aca5e17956a7c0c307b5cb2b13d28124e55f7f22dd16895321fa54558bcfa0c",
         "grpb/lib1": "8aca5e17956a7c0c307b5cb2b13d28124e55f7f22dd16895321fa54558bcfa0c"
       },
-      "revision": 2
+      "revision": 3
+    },
+    "core.review_rules": {
+      "repos": {
+        "grpa/sub/deep/svc2": "750183782161f3627ac5172c9b53f796fb2b7a85334c591fed4750a3cb9ebac2",
+        "grpa/svc1": "750183782161f3627ac5172c9b53f796fb2b7a85334c591fed4750a3cb9ebac2",
+        "grpb/lib1": "750183782161f3627ac5172c9b53f796fb2b7a85334c591fed4750a3cb9ebac2"
+      },
+      "revision": 1
     },
     "core.run_header": {
       "repos": {

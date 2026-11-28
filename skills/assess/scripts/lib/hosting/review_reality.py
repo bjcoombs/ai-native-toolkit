@@ -21,6 +21,8 @@ Block (``review_reality`` in run-context.json)::
                                           # each with required_approving_review_count >= 1
      "hollow_required_review": bool | None,  # review_required and reviewed_share < 0.2
      "required_approval_bypassed": bool | None,  # review_required and approved_share < 0.2
+     "merge_queue": bool | None,          # GitHub only (#856): merges go through a queue
+     "merge_queue_source": str | None,    # "ruleset" (platform) or "committed" (review_rules)
      "sequence": [str],      # one token per sampled change, oldest merge first (#943)
      "bot_sequence": [str]}  # "bot", "none" or "unknown" per change, same order
 
@@ -108,7 +110,12 @@ null when neither says yes and one was refused. `hollow_required_review` is
 `required_approval_bypassed` is the same test on `approved_share`, so it fires
 where an AI reviewer comments on every change but nobody approves. Both are null
 when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
-rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
+rules are read as they stand now, so `oldest_merged_days_ago` travels with them. `merge_queue`
+(#856, GitHub only; absent on GitLab) is True from `ruleset` when the effective rules carry a
+`merge_queue` rule. Where the rules or the protection could not be read, a committed merge
+queue (`lib/ci/review_rules.py`: a `merge_group` workflow trigger or a Mergify `queue_rules`)
+makes it True from `committed`; it is False (`ruleset`) only when the rules were read with no
+queue and none is committed, else null with a null source. Counts, shares and booleans only: no title or login reaches
 the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
 sample's merged merge requests (`scan_gitlab_review_reality(project, mrs, notes=...)`) and
@@ -139,6 +146,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from lib.ci.review_rules import committed_merge_queue, scan_review_rules
 from lib.fleet_config import FleetConfig
 from lib.hosting.gh_cli import GhUnavailable, gh_api, unavailable
 from lib.hosting.gitlab_cli import GitlabProject, branch_pattern, branch_protection, glab_api
@@ -222,18 +230,29 @@ def _approvals(params: Any) -> int:
     return n if isinstance(n, int) else 0
 
 
-def _ruleset_requires(slug: str, ref: str) -> bool | None:
+def _branch_rules(slug: str, ref: str) -> list[Any] | None:
+    """The default branch's effective rules (rulesets, inherited ones included), or None."""
     try:
         rules = gh_api(f"repos/{slug}/rules/branches/{ref}")
     except GhUnavailable:
         return None
-    if not isinstance(rules, list):
+    return rules if isinstance(rules, list) else None
+
+
+def _ruleset_requires(rules: list[Any] | None) -> bool | None:
+    if rules is None:
         return None
     return any(
         isinstance(r, dict) and r.get("type") == "pull_request"
         and _approvals(r.get("parameters")) >= 1
         for r in rules
     )
+
+
+def _ruleset_queue(rules: list[Any] | None) -> bool | None:
+    if rules is None:
+        return None
+    return any(isinstance(r, dict) and r.get("type") == "merge_queue" for r in rules)
 
 
 def _protection_requires(slug: str, ref: str) -> bool | None:
@@ -247,32 +266,58 @@ def _protection_requires(slug: str, ref: str) -> bool | None:
     return _approvals(protection.get("required_pull_request_reviews")) >= 1
 
 
-def review_required(slug: str) -> bool | None:
-    """Whether the default branch requires an approving review.
+def branch_rules(slug: str) -> tuple[bool | None, bool | None]:
+    """``(review_required, ruleset merge queue)`` for the default branch.
 
-    True when the effective branch rules (rulesets, including inherited ones)
-    carry a ``pull_request`` rule, or classic protection sets
+    ``review_required`` is True when the effective branch rules (rulesets, including
+    inherited ones) carry a ``pull_request`` rule, or classic protection sets
     ``required_approving_review_count``, of 1 or more. False when both were read
     and neither does. None when neither says True and one could not be read.
-    The protection read is skipped once the rules say True.
+    The protection read is skipped once the rules say True. The merge queue is
+    whether those rules carry a ``merge_queue`` rule, None when they were not read (#856).
     """
     try:
         repo = gh_api(f"repos/{slug}")
     except GhUnavailable:
-        return None
+        return None, None
     branch = repo.get("default_branch") if isinstance(repo, dict) else None
     if not isinstance(branch, str) or not branch:
-        return None
+        return None, None
     ref = quote(branch, safe="")
-    by_ruleset = _ruleset_requires(slug, ref)
+    rules = _branch_rules(slug, ref)
+    queue = _ruleset_queue(rules)
+    by_ruleset = _ruleset_requires(rules)
     if by_ruleset:
-        return True
+        return True, queue
     by_protection = _protection_requires(slug, ref)
     if by_protection:
-        return True
+        return True, queue
     if by_ruleset is None or by_protection is None:
-        return None
-    return False
+        return None, queue
+    return False, queue
+
+
+def review_required(slug: str) -> bool | None:
+    """Whether the default branch requires an approving review (``branch_rules``)."""
+    return branch_rules(slug)[0]
+
+
+def merge_queue(ruleset_queue: bool | None, required: bool | None,
+                committed: bool) -> tuple[bool | None, str | None]:
+    """``(merge_queue, merge_queue_source)`` (#856): the platform's answer, else the committed one.
+
+    True from ``ruleset`` when the effective rules carry a ``merge_queue`` rule. Where the
+    rules or the protection could not be read (``ruleset_queue`` or ``required`` None), a
+    committed merge queue (``lib.ci.review_rules``: a ``merge_group`` trigger or a Mergify
+    ``queue_rules``) reads True from ``committed``. False only when the rules were read with no
+    queue and none is committed; otherwise None, never a false no."""
+    if ruleset_queue:
+        return True, "ruleset"
+    if committed and (ruleset_queue is None or required is None):
+        return True, "committed"
+    if ruleset_queue is False and not committed:
+        return False, "ruleset"
+    return None, None
 
 
 def _flag(required: bool | None, share: float | None, total: int) -> bool | None:
@@ -294,7 +339,8 @@ def _days_ago(stamp: Any, now: datetime) -> int | None:
 
 def summarize(prs: list[dict[str, Any]], required: bool | None,
               bots: BotClassifier | None = None,
-              now: datetime | None = None) -> dict[str, Any]:
+              now: datetime | None = None,
+              queue: tuple[bool | None, str | None] = (None, None)) -> dict[str, Any]:
     """The available block from sampled pull requests (pure except bot probes)."""
     bots = bots or BotClassifier()
     now = now or datetime.now(timezone.utc)
@@ -319,6 +365,8 @@ def summarize(prs: list[dict[str, Any]], required: bool | None,
         "review_required": required,
         "hollow_required_review": _flag(required, reviewed_share, total),
         "required_approval_bypassed": _flag(required, approved_share, total),
+        "merge_queue": queue[0],
+        "merge_queue_source": queue[1],
         "sequence": [change_state(a, r) for a, r in zip(approved_flags, reviewed_flags)][::-1],
         "bot_sequence": [bot_token(v) for v in verdicts][::-1],
     }
@@ -472,9 +520,12 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
 
 
 def review_reality_from_sample(sample: SampleOrReason,
-                               notes: NoteFactsOrReason = None) -> dict[str, Any]:
+                               notes: NoteFactsOrReason = None,
+                               review_rules: object = None) -> dict[str, Any]:
     """The ``review_reality`` registry entry: the block from the shared ``merged_sample``
-    and, on GitLab, the ``gitlab_note_facts`` read from it.
+    and, on GitLab, the ``gitlab_note_facts`` read from it. ``review_rules`` is the
+    committed-rules block (``lib.ci.review_rules``), whose merge queue fills
+    ``merge_queue`` when the platform rules could not be read (#856).
 
     An unavailable sample is returned as the block, reason and all."""
     if not isinstance(sample, MergedSample):
@@ -484,7 +535,10 @@ def review_reality_from_sample(sample: SampleOrReason,
         return scan_gitlab_review_reality(sample.gitlab, changes, notes=notes)
     if sample.github is None:
         return unavailable("no_remote: the sample names no repository")
-    return summarize(changes, review_required(sample.github.slug), sample.bots)
+    required, ruleset_queue = branch_rules(sample.github.slug)
+    committed = committed_merge_queue(review_rules if isinstance(review_rules, dict) else None)
+    return summarize(changes, required, sample.bots,
+                     queue=merge_queue(ruleset_queue, required, committed))
 
 
 def scan_review_reality(repo_root: Path, history_window: str | None = None,
@@ -494,4 +548,5 @@ def scan_review_reality(repo_root: Path, history_window: str | None = None,
     draws the sample and its GitLab note facts, then :func:`review_reality_from_sample`."""
     today = run_date or datetime.now(timezone.utc).date().isoformat()
     sample = merged_sample(repo_root, history_window, today)
-    return review_reality_from_sample(sample, gitlab_note_facts(sample, fleet_config))
+    return review_reality_from_sample(sample, gitlab_note_facts(sample, fleet_config),
+                                      scan_review_rules(repo_root))

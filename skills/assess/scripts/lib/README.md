@@ -185,14 +185,14 @@ New code imports the new path.
 - **`ci/`**: CI configuration read offline, the `ci` group (#1392, #1393): the committed CI
   files read line by line (continuations, matrices, expressions, triggers), GitLab `include:`
   items resolved offline and the merged line view, and the blocks built from them: CI checks
-  and their state, lint gates and lint inputs, model-backed jobs, review automation and
-  shared tooling. The step-following modules read what one step runs: the shared CI-step
+  and their state, lint gates and lint inputs, model-backed jobs, review automation, merge and review rules kept as code (#856, with
+  the strict YAML reader `yaml_tree`) and shared tooling. The step-following modules read what one step runs: the shared CI-step
   follower (`ci_step_follower`, with its path and safe-read half `ci_step_paths` and its make,
   Gradle and Maven readers `ci_build_follower`, #845) that the older followers go through, action inputs,
   composite actions, compound and shell statements, masking and its exemptions, scripts a
   step calls, unsure lines, and the check, lint and type-check command classifier with its
   lint vocabulary. `ci_workflow` emits the gate workflow and moved with the `report` group.
-  Files: `__init__.py`, `agent_evals.py`, `api_compat.py`, `check_command.py`, `ci_action_inputs.py`, `ci_build_follower.py`, `ci_check_state.py`, `ci_checks.py`, `ci_composite.py`, `ci_compound.py`, `ci_continuations.py`, `ci_exempt.py`, `ci_expressions.py`, `ci_hazards.py`, `ci_include_items.py`, `ci_includes.py`, `ci_job_commands.py`, `ci_kept_types.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_masking.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_path_filters.py`, `ci_scripts.py`, `ci_shell_text.py`, `ci_statements.py`, `ci_step_follower.py`, `ci_step_paths.py`, `ci_triggers.py`, `ci_unsure.py`, `disclosure_reader.py`, `disclosure_script.py`, `disclosure_shell.py`, `disclosure_terms.py`, `docs_kept_true.py`, `lint_vocabulary.py`, `merged_ci.py`, `repo_guards.py`, `review_automation.py`, `shared_tooling.py`.
+  Files: `__init__.py`, `agent_evals.py`, `api_compat.py`, `check_command.py`, `ci_action_inputs.py`, `ci_build_follower.py`, `ci_check_state.py`, `ci_checks.py`, `ci_composite.py`, `ci_compound.py`, `ci_continuations.py`, `ci_exempt.py`, `ci_expressions.py`, `ci_hazards.py`, `ci_include_items.py`, `ci_includes.py`, `ci_job_commands.py`, `ci_kept_types.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_masking.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_path_filters.py`, `ci_scripts.py`, `ci_shell_text.py`, `ci_statements.py`, `ci_step_follower.py`, `ci_step_paths.py`, `ci_triggers.py`, `ci_unsure.py`, `disclosure_reader.py`, `disclosure_script.py`, `disclosure_shell.py`, `disclosure_terms.py`, `docs_kept_true.py`, `lint_vocabulary.py`, `merged_ci.py`, `repo_guards.py`, `review_automation.py`, `review_rules.py`, `shared_tooling.py`, `yaml_tree.py`.
 - **`complexity/`**: the complexity treemap renderer, `scc` coverage, the Dart scanner and
   the stats sidecar (its rows, cross-run diff and diff reliability), plus the generated- and
   raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`, `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`, `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.

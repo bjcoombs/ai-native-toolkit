@@ -244,6 +244,9 @@ class ReviewRealityBlock(TypedDict):
     # Per-change tokens, oldest merge first (#943); absent in blocks written before it.
     sequence: NotRequired[list[str]]
     bot_sequence: NotRequired[list[str]]
+    # GitHub only (#856): merges go through a queue, from the rules or the committed queue.
+    merge_queue: NotRequired[bool | None]
+    merge_queue_source: NotRequired[str | None]
 
 
 # -- structure_drift -------------------------------------------------------------

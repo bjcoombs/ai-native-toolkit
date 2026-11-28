@@ -493,6 +493,14 @@ REVIEW_REALITY: JsonDict = {
         "required_approval_bypassed": _field(
             {"type": ["boolean", "null"]},
             "review_required and approved_share under 0.2; null as for hollow_required_review."),
+        "merge_queue": _field({"type": ["boolean", "null"]},
+                              "GitHub only (#856): merges to the default branch go through a queue. "
+                              "True from the rules' merge_queue rule; where the rules or the "
+                              "protection could not be read, from a committed merge queue "
+                              "(review_rules); null when neither settles it."),
+        "merge_queue_source": _field({"type": ["string", "null"]},
+                                     "ruleset (the platform's rules) or committed (the review_rules "
+                                     "block); null when merge_queue is null."),
         "sequence": _field(_TOKENS, "One token per sampled change, oldest merge first: approved, "
                                     "reviewed, unreviewed or unknown, read with the predicates "
                                     "behind approved_share and reviewed_share (#943)."),

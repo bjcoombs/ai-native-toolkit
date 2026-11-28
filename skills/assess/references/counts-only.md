@@ -855,6 +855,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `review_reality.reason` | dropped |
 | `review_reality.sequence` | token |
 | `review_reality.bot_sequence` | token |
+| `review_reality.merge_queue_source` | token |
+
+## review_rules
+
+| Field | Kept as |
+|---|---|
+| `review_rules.reason` | dropped |
+| `review_rules.arms` | token |
+| `review_rules.rules.arm` | token |
+| `review_rules.rules.path` | path (hashed when hashing is on) |
+| `review_rules.unsettled` | path (hashed when hashing is on) |
 
 ## run_header
 
