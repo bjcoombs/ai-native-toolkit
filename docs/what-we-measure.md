@@ -1087,7 +1087,7 @@ Why the signals named here matter:
 
 A rule kept as code is a rule an agent can read before it opens a change, and a reviewer can check it against the code. A merge queue, an approval policy or an owners file says who must look at a change before it lands.
 
-Merge and review rules a repository commits outside branch protection: a merge queue (a merge_group trigger or a Mergify queue), a policy-bot approval policy, Prow OWNERS files, a committed ruleset or protection export that requires review, and a review rubric directory a pull request workflow names. Each file is parsed, never matched as text, and OWNERS files naming one owner for everything do not count. Evidence only: it adds an evidence line to the review condition while that condition is met, and its merge queue fills review_reality.merge_queue when the platform rules cannot be read.
+Merge and review rules a repository commits outside branch protection. It reads a merge queue, a policy-bot policy, Prow OWNERS files and a committed ruleset that requires review. It also reads a review guide folder that a pull request workflow names. Each file is parsed, not matched as text. OWNERS files that name one owner for everything do not count. Evidence only: it adds an evidence line to the review condition while that condition is met.
 
 - Collector: `core.review_rules`, reading `repo_root`.
 - Network: no.

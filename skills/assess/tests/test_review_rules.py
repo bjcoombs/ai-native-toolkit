@@ -169,16 +169,16 @@ def test_a_ruleset_counts_only_when_active_and_requiring_review(
 @pytest.mark.parametrize(("files", "expected"), [
     ({".github/review-rubrics/api.md": "x", ".github/workflows/r.yml":
       _workflow("pull_request", "review --rubric .github/review-rubrics/api.md")},
-     [("review_rubric", ".github/review-rubrics")]),
+     [("review_guide", ".github/review-rubrics")]),
     ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat ./docs/rubrics/*")},
-     [("review_rubric", "docs/rubrics")]),
+     [("review_guide", "docs/rubrics")]),
     ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml":
       _workflow("pull_request", "echo hi") + "# reads docs/rubrics\n"}, []),
     ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("schedule", "cat docs/rubrics/a.md")}, []),
     ({"docs/rubrics/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat docs/rubrics-old/a")}, []),
     ({"docs/guides/a.md": "x", ".github/workflows/r.yml": _workflow("pull_request", "cat docs/guides/a.md")}, []),
 ])
-def test_a_rubric_directory_counts_when_a_pull_request_workflow_names_it(
+def test_a_review_guide_directory_counts_when_a_pull_request_workflow_names_it(
         tmp_path: Path, files: dict[str, str], expected: list[tuple[str, str]]) -> None:
     assert _rules(_repo(tmp_path, files)) == expected
 

@@ -16,12 +16,13 @@ git-tracked files, each parsed, never matched as text:
   for everything (after expanding a root ``OWNERS_ALIASES``) do not count: with Prow's implicit
   self-approval that owner reviews nothing. ``catch_all_owners`` is then true;
 - ``ruleset_json``: a committed ruleset or classic branch-protection export
-  (``lib.hosting.config_drift.find_snapshots``, the shapes the drift scan reads) that requires
+  (``lib.hosting.config_snapshots.find_snapshots``, the shapes the drift scan reads) that requires
   an approving review or a merge queue. A ruleset counts only with ``enforcement: active`` and
   a branch target; ``evaluate`` and ``disabled`` rulesets do not, and one with no
   ``enforcement`` is unsettled. The ref scope is not read (a known limit);
-- ``review_rubric``: a tracked directory whose name is a review rubric (``rubrics``,
-  ``review-guidelines``, ``review_checklist`` ...) that a workflow running on proposed changes
+- ``review_guide``: a tracked directory whose name marks review guidance (``review-guidelines``,
+  ``review_checklist``, ``code-review-criteria``, or a folder of grading sheets such as
+  ``rubrics``) that a workflow running on proposed changes
   (``review_automation.runs_on_changes``) names as a path. Comment text never counts.
 
 Committed config is evidence, not proof the app or rule is live: the block moves no tally or
@@ -48,11 +49,11 @@ from lib.ci.review_automation import runs_on_changes
 from lib.ci.shared_tooling import workflow_events
 from lib.ci.yaml_tree import Value, parse
 from lib.history.git_churn import tracked_files
-from lib.hosting.config_drift import find_snapshots
+from lib.hosting.config_snapshots import find_snapshots
 from lib.pack_yaml import YamlError, strip_comment
 from lib.run_context_types_review_rules import ReviewRule, ReviewRulesBlock
 
-ARMS = ("merge_queue", "policy_bot", "prow_owners", "ruleset_json", "review_rubric")
+ARMS = ("merge_queue", "policy_bot", "prow_owners", "ruleset_json", "review_guide")
 MERGIFY_FILES = (".mergify.yml", ".mergify/config.yml", ".github/mergify.yml")
 POLICY_FILE = ".policy.yml"
 OWNERS = "OWNERS"
@@ -62,7 +63,7 @@ MAX_BYTES = 1_000_000
 _WORKFLOWS = ".github/workflows/"
 _RULESETS = ".github/rulesets/"
 _EXCLUDED_DIRS = frozenset({"vendor", "third_party", "third-party", "testdata", "fixtures", "node_modules"})
-_RUBRIC_DIR = re.compile(
+_GUIDE_DIR = re.compile(
     r"(?:[a-z0-9]+[-_.])*(?:code[-_]?)?review[-_]?"
     r"(?:rubrics?|guidelines?|rules|criteria|checklists?|standards?)"
     r"|(?:[a-z0-9]+[-_.])*rubrics?")
@@ -243,17 +244,17 @@ class _Scan:
                     doc.get("required_pull_request_reviews")) >= 1:
                 self.credit("ruleset_json", rel)
 
-    def rubrics(self, workflows: list[tuple[str, str]]) -> None:
+    def guides(self, workflows: list[tuple[str, str]]) -> None:
         dirs = sorted({p for r in self.tracked for p in _parents(r)
-                       if _RUBRIC_DIR.fullmatch(PurePosixPath(p).name.lower())})
+                       if _GUIDE_DIR.fullmatch(PurePosixPath(p).name.lower())})
         if not dirs:
             return
         texts = ["\n".join(strip_comment(line) for line in text.splitlines())
                  for _, text in workflows if runs_on_changes(text)]
-        for rubric in dirs:
-            named = re.compile(r"(?<![\w./-])(?:\./)?" + re.escape(rubric) + r"(?![\w.-])")
+        for guide in dirs:
+            named = re.compile(r"(?<![\w./-])(?:\./)?" + re.escape(guide) + r"(?![\w.-])")
             if any(named.search(text) for text in texts):
-                self.credit("review_rubric", rubric)
+                self.credit("review_guide", guide)
 
 
 def _approvals(params: Any) -> int:
@@ -296,7 +297,7 @@ def scan_review_rules(repo_root: Path) -> ReviewRulesBlock:
     scan.policy_bot()
     scan.prow_owners()
     scan.rulesets()
-    scan.rubrics(workflows)
+    scan.guides(workflows)
     rules = sorted(scan.rules, key=lambda r: (ARMS.index(r["arm"]), r["path"]))
     arms = [arm for arm in ARMS if any(r["arm"] == arm for r in rules)]
     unsettled = sorted(scan.unsettled)

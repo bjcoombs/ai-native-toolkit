@@ -12,7 +12,7 @@ class ReviewRule(TypedDict):
     """One committed file that keeps a merge or review rule as code.
 
     ``arm`` is one of ``lib.ci.review_rules.ARMS``; ``path`` is the file, relative to the
-    repository root (for ``review_rubric``, the rubric directory a workflow names).
+    repository root (for ``review_guide``, the directory a workflow names).
     """
 
     arm: str
