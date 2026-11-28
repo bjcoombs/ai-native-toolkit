@@ -61,7 +61,7 @@ INCLUDE_TEST = "include:\n  - project: grp/ci-templates\n    file: /templates/te
       IncludeItem("component", "gl.test/g/c@1", (), None, 6),
       IncludeItem("project", "p/q", ("/f.yml",), None, 7)]),
     ("include:\n  - component: gl.test/g/c@1\n    inputs:\n      project: not/a-source\n",
-     [IncludeItem("component", "gl.test/g/c@1", (), None, 2)]),
+     [IncludeItem("component", "gl.test/g/c@1", (), None, 2, inputs=(("project", "not/a-source"),))]),
 ])
 def test_include_items(text: str, items: list[IncludeItem]) -> None:
     assert include_items(text) == (items, True, 0)

@@ -66,7 +66,10 @@ sources, so they never enter `ci_includes` or `ci_source_ids`. `workflow_events(
 reads the top-level `on:` through `ci_triggers.workflow_events`, the one shared `on:`
 reader (#1036), keeping event-shaped names; None when there is none it can read.
 `ON_KEY` (the `on:` key, YAML 1.1 `true:` included) is shared with `agent_harness`.
-`include_lines` and `component_source` expose the include-section reader to `ci_includes`.
+`include_lines` and `component_source` expose the include-section reader to `ci_includes`;
+`strip_comment` exposes the comment stripper to `ci_include_inputs` (#1339). A ref holding
+`$[[ inputs.<name> ]]` reads here as `ref_variable` (its value is set by whoever includes the
+file); `ci_includes` resolves it from the include's inputs before reading the clone.
 """
 from __future__ import annotations
 
@@ -197,6 +200,12 @@ def include_lines(text: str) -> list[tuple[int, str, bool]]:
 def component_source(raw: str) -> str:
     """A component reference's ``group/project/name`` (``_component_source``)."""
     return _component_source(raw)
+
+
+def strip_comment(line: str) -> str:
+    """``line`` without a trailing unquoted ``# comment`` (``_strip_comment``), for
+    ``lib/ci/ci_include_inputs.py`` (#1339)."""
+    return _strip_comment(line)
 
 
 def _include_lines(text: str) -> list[tuple[int, str, bool]]:
