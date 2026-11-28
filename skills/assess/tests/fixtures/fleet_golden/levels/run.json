@@ -137,6 +137,10 @@
       "revision": 1
     },
     {
+      "id": "core.deploy_controls",
+      "revision": 1
+    },
+    {
       "id": "core.diff",
       "revision": 1
     },

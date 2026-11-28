@@ -6,7 +6,8 @@ published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
 here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
 ``delivery`` (#715), ``review_reality`` (#943), ``guardrails`` (#767), ``agent_consistency`` (#768),
-``agent_outcome`` (#1085), ``concurrency`` (#985) and ``layer_grades`` (#620, #821).
+``agent_outcome`` (#1085), ``concurrency`` (#985), ``deploy_controls`` (#1666) and
+``layer_grades`` (#620, #821).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -20,7 +21,7 @@ a field of the block's TypedDict, and that real documents validate.
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
 `delivery` (#779), `review_reality` (#943), `guardrails` (#767), `agent_consistency` (#768) and
-`agent_outcome` (#1085) and `concurrency` (#985), read
+`agent_outcome` (#1085), `concurrency` (#985) and `deploy_controls` (#1666), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -670,6 +671,39 @@ LAYER_GRADES: JsonDict = {
     },
 }
 
+_COUNT_OR_NULL: JsonDict = {"type": ["integer", "null"]}
+_CODE: JsonDict = {"type": "string"}
+
+DEPLOY_CONTROLS: JsonDict = {
+    "description": (
+        "Whether production deployment environments require a reviewer "
+        "(lib/hosting/deploy_controls.py, #1666), read through gh or glab. Production environments "
+        "are those [change_controls] environments names, else any named production or prod. A "
+        "platform block: a refused environment list is available false with a reason, never zeros; "
+        "a count the tier or token cannot read is null with its reason code."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "reason": _field({"type": "string"}, "Why the block is unavailable."),
+        "provider": _field({"type": "string", "enum": ["github", "gitlab"]}, "The platform read."),
+        "configured": _field({"type": "boolean"},
+                             "True when [change_controls] environments named the production "
+                             "environments, false when the default names applied."),
+        "production_environments": _field(
+            _INT, "Production environments found; 0 means none, which a reader takes as not "
+                  "applicable, never unmet."),
+        "unreviewed_count": _field(
+            _COUNT_OR_NULL, "Production environments a deployment reaches with no required "
+                            "reviewer; null when the protection settings could not be read."),
+        "unreviewed_count_reason": _field(_CODE, "Why unreviewed_count is null (a reason code)."),
+        "self_review_allowed_count": _field(
+            _COUNT_OR_NULL, "Reviewed production environments where the person who started the "
+                            "deployment may approve it (GitHub prevent_self_review false; GitLab "
+                            "allow_pipeline_trigger_approve_deployment true); null when not read."),
+        "self_review_allowed_count_reason": _field(
+            _CODE, "Why self_review_allowed_count is null (a reason code)."),
+    },
+}
+
 BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "agent_consistency": AGENT_CONSISTENCY,
     "agent_outcome": AGENT_OUTCOME,
@@ -678,6 +712,7 @@ BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "concurrency": CONCURRENCY,
     "coverage_gate": COVERAGE_GATE,
     "delivery": DELIVERY,
+    "deploy_controls": DEPLOY_CONTROLS,
     "guardrails": GUARDRAILS,
     "review_reality": REVIEW_REALITY,
     "layer_grades": LAYER_GRADES,

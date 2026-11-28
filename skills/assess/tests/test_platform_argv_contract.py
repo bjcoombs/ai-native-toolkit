@@ -40,6 +40,7 @@ case "$all" in
   "api repos/acme/widget") echo '{"default_branch":"main","security_and_analysis":{"secret_scanning":{"status":"enabled"}}}'; exit 0 ;;
   "api repos/acme/.github") echo '{"private":false}'; exit 0 ;;
   "api repos/acme/widget/rules/branches/main") echo '[]'; exit 0 ;;
+  "api repos/acme/widget/environments?"*) echo '{"total_count":1,"environments":[{"name":"production","protection_rules":[]}]}'; exit 0 ;;
   "api graphql"*) echo '{"data":{"repository":{"issues":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}'; exit 0 ;;
   "api repos/acme/widget/branches/main/protection") echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1 ;;
 esac
@@ -55,6 +56,8 @@ case "$*" in
   *"/notes?"*) echo '[{"system":false,"author":{"username":"bob"},"body":"ok","created_at":"2026-11-01T01:00:00Z"}]'; exit 0 ;;
   *"approval_rules"*) echo '[{"rule_type":"regular","approvals_required":1,"applies_to_all_protected_branches":true}]'; exit 0 ;;
   *"/issues?"*) echo '[]'; exit 0 ;;
+  *"projects/grp%2Fapp/environments?"*) echo '[{"name":"production"}]'; exit 0 ;;
+  *"projects/grp%2Fapp/protected_environments?"*) echo '[]'; exit 0 ;;
   *"protected_branches"*) echo '[{"name":"main"}]'; exit 0 ;;
   *"projects/grp%2Fapp") echo '{"default_branch":"main"}'; exit 0 ;;
   *"projects/grp%2Fapp/ci/lint?"*) echo '{"valid":true,"merged_yaml":"t:\n  script:\n    - make\n"}'; exit 0 ;;
@@ -138,7 +141,8 @@ def test_every_github_platform_read_names_its_target(stubs: Path, tmp_path: Path
     assert [c for c in calls if not _names_target(c, "acme/widget")] == []
     joined = [" ".join(c) for c in calls]
     for needle in ("--json mergedAt", "--json author,", "api users/", "rules/branches",
-                   "/protection", "api repos/acme/.github/contents", "api graphql"):
+                   "/protection", "api repos/acme/.github/contents", "api graphql",
+                   "/environments?"):
         assert any(needle in c for c in joined), needle
     assert all(c[0] == "gh" for c in calls)
 
@@ -157,6 +161,7 @@ def test_every_gitlab_platform_read_names_its_target(stubs: Path, tmp_path: Path
     assert [c for c in calls if not _names_target(c, "grp/app")] == []
     joined = [" ".join(c) for c in calls]
     for needle in ("merge_requests?state=merged", "/approvals", "/notes?", "approval_rules",
-                   "protected_branches", "projects/grp%2Fapp/ci/lint?content_ref=", "/issues?updated_after="):
+                   "protected_branches", "projects/grp%2Fapp/ci/lint?content_ref=", "/issues?updated_after=",
+                   "/protected_environments?"):
         assert any(needle in c for c in joined), needle
     assert all(c[0] == "glab" for c in calls)

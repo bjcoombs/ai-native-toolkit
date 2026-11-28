@@ -74,6 +74,7 @@ from lib.run_context_types_api_compat import ApiCompatBlock
 from lib.backlog_ready_outcomes import BacklogReadyOutcomesBlock
 from lib.contributor_files import ContributorFilesBlock
 from lib.hosting.org_security_policy import OrgSecurityPolicyBlock
+from lib.hosting.deploy_controls import DeployControlsBlock
 from lib.hosting.github_secret_scanning import GithubSecretScanningBlock
 from lib.keyhole.liveness_scan import ObservabilityBlock
 from lib.testing.mutation_cap import MutationNotRunCap
@@ -182,6 +183,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("backlog_ready", BacklogReadyOutcomesBlock),
     ("org_security_policy", OrgSecurityPolicyBlock),
     ("github_secret_scanning", GithubSecretScanningBlock),
+    ("deploy_controls", DeployControlsBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
     ("guardrails", GuardrailsBlock),

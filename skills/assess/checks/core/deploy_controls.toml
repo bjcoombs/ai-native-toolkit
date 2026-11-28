@@ -1,0 +1,29 @@
+# Check manifest fragment: the deploy_controls collector. Layout and merge order:
+# skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.deploy_controls"
+kind = "collector"
+title = "Production deployment reviewers"
+summary = "Production deployment environments, how many need no reviewer and how many let the person who started a deployment approve it, read through gh or glab."
+issues = [1666]
+callable = "lib.hosting.deploy_controls:scan_deploy_controls"
+publishes = ["deploy_controls"]
+reads = ["repo_root"]
+stage = "read_side"
+network = true
+platform_pass = true
+headless = { deploy_controls = "registered" }
+whys.deploy_controls = "A reviewed change can still reach production through a deployment no second person approved; this counts the production environments an agent or a person can deploy to alone."
+shapes = [
+  { path = "deploy_controls", type = "lib.hosting.deploy_controls:DeployControlsBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "no_remote", means = "The repository has no GitHub or GitLab remote, so there are no deployment environments to read.", next_step = "Nothing to change if the repository is local only." },
+]
+  [entries.privacy]
+  "deploy_controls.reason" = "reason"
+  "deploy_controls.provider" = "token"
+  "deploy_controls.unreviewed_count_reason" = "token"
+  "deploy_controls.self_review_allowed_count_reason" = "token"
