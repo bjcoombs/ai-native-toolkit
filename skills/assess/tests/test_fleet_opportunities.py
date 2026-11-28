@@ -192,7 +192,7 @@ def test_ties_follow_maturity_model_row_order() -> None:
 
 def test_a_step_gate_condition_is_named() -> None:
     m = model()
-    m["steps"] = [{"step": 3, "name": "Unattended agent PRs",
+    m["steps"] = [{"step": 3, "name": "Unattended agent changes",
                    "gates": [{"id": "ci_runs_tests", "row": "ci", "level": 1}]}]
     lift = _opps(fleet(), m)["biggest_lift"]
     assert lift is not None and (lift["gate"], lift["step"]) == ("ci_runs_tests", 3)

@@ -180,11 +180,11 @@ def test_readiness_prefers_headline_lines_then_badge(tmp_path: Path, capsys: pyt
     assert _run(repo, "readiness", capsys=capsys) == "not known\n"
     (assess / "badge.json").write_text(json.dumps({"message": "Step 4 · all gates held"}), encoding="utf-8")
     assert _run(repo, "readiness", capsys=capsys) == "Step 4 · all gates held\n"
-    context = {"headline": {"lines": ["Step 3 · Unattended agent PRs · contracts in place",
+    context = {"headline": {"lines": ["Step 3 · Unattended agent changes · contracts in place",
                                       "Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced"]}}
     (assess / "run-context.json").write_text(json.dumps(context), encoding="utf-8")
     assert _run(repo, "readiness", capsys=capsys) == (
-        "Step 3 · Unattended agent PRs · contracts in place / "
+        "Step 3 · Unattended agent changes · contracts in place / "
         "Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced\n"
     )
     (assess / "assess-report.md").unlink()

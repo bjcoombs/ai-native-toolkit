@@ -11,6 +11,7 @@ import pytest
 import lib.scoring.level_tally as lt
 from lib.ci.ci_hazards import NO_CI_FILES, NO_PR_CHECKS, check_jobs, ignores_test_failures, job_skip_labels, scan_ci_hazards
 from lib.counts_only.content_free import counts_only
+from cumulative_gates_fixture import step3_signals
 
 GATED = """name: checks
 on:
@@ -47,8 +48,7 @@ def _repo(tmp_path: Path, files: dict[str, str]) -> Path:
 
 
 def _held(block: dict[str, object]) -> lt.LevelResult:
-    data = {"layer_grades": {"instruction_file_present": True}, "ci_checks": {"enforced_check_runs": True},
-            "ci_hazards": block}
+    data = {**step3_signals(), "ci_hazards": block}  # every Step 3 gate met but for the hazard (#1641)
     return lt.level_result(lt.default_model(), data)
 
 

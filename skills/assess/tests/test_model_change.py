@@ -20,6 +20,7 @@ from lib.model_change import (CUSTOM_NOT_DRAWN, across_models, custom_run, model
                               model_name, previous_levels_version, units_label)
 from lib.prior_level import write_prior_level
 from lib.profiles import ModelChoice, resolve
+from cumulative_gates_fixture import STEP3_FILES
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
 
 DEFAULT_VERSION = default_model()["version"]
@@ -184,6 +185,9 @@ def test_two_runs_of_one_profile_compare_their_gates(name: str, ci2: Path) -> No
     workflow = ci2 / ".github" / "workflows" / "ci.yml"
     text = workflow.read_text(encoding="utf-8")
     workflow.unlink()
+    for rel, body in STEP3_FILES.items():  # the other Step 3 gates (#1641), so CI is the one that moves
+        (ci2 / rel).parent.mkdir(parents=True, exist_ok=True)
+        (ci2 / rel).write_text(body, encoding="utf-8", newline="\n")
     _commit(ci2, "2026-11-03T10:00:00Z", "no CI")
     first = build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True, model=choice)
     assert first["level"]["step"] == 2
@@ -285,6 +289,9 @@ def test_two_profile_runs_compare_on_the_committed_record_alone(name: str, ci2: 
     workflow = ci2 / ".github" / "workflows" / "ci.yml"
     text = workflow.read_text(encoding="utf-8")
     workflow.unlink()
+    for rel, body in STEP3_FILES.items():  # the other Step 3 gates (#1641), so CI is the one that moves
+        (ci2 / rel).parent.mkdir(parents=True, exist_ok=True)
+        (ci2 / rel).write_text(body, encoding="utf-8", newline="\n")
     _commit(ci2, "2026-11-03T10:00:00Z", "no CI")
     first = build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True, model=choice)
     assert first["level"]["step"] == 2

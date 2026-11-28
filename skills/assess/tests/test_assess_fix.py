@@ -3,9 +3,15 @@
 Each case builds a small git repository, runs the fix with no pull request, and reads the Step
 again from fresh scans, as a re-run of ``/assess`` would. The issue's success criteria:
 
-- a Step 1 fixture with tests and no instruction file reads Step 2 after ``--fix``;
+- a Step 1 fixture with tests and no instruction file gains a ``CLAUDE.md`` naming its check
+  command after ``--fix``;
 - a fixture whose CI does not run the tests gains a job for its CI system and the gate holds;
 - no existing file is overwritten.
+
+Under the cumulative Steps (#1641) the instructions gate reads ``layer-0-instructions`` up to
+level 2, whose claims criterion reads not measured on a file that makes no checkable claim
+(#827), so the starter ``CLAUDE.md`` alone leaves that gate not measured and the fix says so;
+the Step 3 gates with no starter file (review, linters, secrets guard) are manual steps.
 
 Delivery is tested with a recorded runner, so no case pushes or calls a host CLI.
 """
@@ -53,7 +59,8 @@ PYTHON = {
     "src/pkg/__init__.py": "def add(a, b):\n    return a + b\n",
     "tests/test_add.py": "from pkg import add\n\n\ndef test_add():\n    assert add(1, 2) == 3\n",
 }
-WITH_INSTRUCTIONS = {**PYTHON, "CLAUDE.md": "# pkg\n\nRun `pytest`.\n",
+# a named check command and one claim the repository keeps: the instructions gate holds (#1641)
+WITH_INSTRUCTIONS = {**PYTHON, "CLAUDE.md": "# pkg\n\nRun `python -m pytest`.\nThe suite has 1 module in `tests/*.py`.\n",
                      ".claude/settings.json": '{"permissions": {"deny": ["Bash(git push origin main)"]}}\n'}
 
 
@@ -61,15 +68,24 @@ def _step(repo: Path) -> int | None:
     return level_result(default_model(), cli.read_scans(repo))["step"]
 
 
-def test_step_1_with_tests_reads_step_2_after_fix(tmp_path: Path) -> None:
+def _states(repo: Path) -> dict[str, str]:
+    return {c["id"]: c["state"] for c in level_result(default_model(), cli.read_scans(repo))["conditions"]}
+
+
+def test_step_1_with_tests_gains_an_instruction_file_naming_its_check(tmp_path: Path) -> None:
     repo = _repo(tmp_path, PYTHON)
     assert _step(repo) == 1
     report = cli.fix(repo, starter=False, open_pr=False)
     assert [f["path"] for f in report["files"]] == ["CLAUDE.md", ".claude/settings.json"]
-    assert all(p["held_after"] for p in report["gates"])
-    assert (report["step_before"], report["step_after"]) == (1, 2)
-    assert _step(repo) == 2  # the re-run reads the gate held
     assert "pytest" in (repo / "CLAUDE.md").read_text(encoding="utf-8")
+    # the file and its check command are in place; with no claim to check, the gate reads not
+    # measured (#827, #1641), never held, and the report says to rerun /assess for the blocker
+    states = _states(repo)
+    assert states["layer-0-instructions.1"] == "met" and states["layer-0-instructions.2"] == "not_measured"
+    instructions = next(p for p in report["gates"] if p["gate"] == "instructions")
+    assert not instructions["held_after"] and "rerun `/assess`" in (instructions["manual"] or "")
+    assert next(p for p in report["gates"] if p["gate"] == "guardrail")["held_after"]
+    assert (report["step_before"], report["step_after"]) == (1, 1)
     delivery = report["delivery"]
     assert (delivery["mode"], delivery["reason"]) == ("local_branch", "committed_locally")
     assert delivery["branch"] == "assess/fix-instructions"
@@ -85,8 +101,11 @@ def test_ci_that_does_not_run_tests_gains_a_test_job(tmp_path: Path) -> None:
     assert _step(repo) == 2
     report = cli.fix(repo, starter=False, open_pr=False)
     assert report["facts"]["ci_system"] == "github" and report["facts"]["ci_basis"] == "tracked"
-    assert [f["path"] for f in report["files"]] == [".github/workflows/tests.yml"]
-    assert report["gates"][0]["held_after"] and _step(repo) == 3
+    assert [f["path"] for f in report["files"] if f["path"]] == [".github/workflows/tests.yml"]
+    assert report["gates"][0]["gate"] == "ci_runs_tests" and report["gates"][0]["held_after"]
+    # the other Step 3 gates have no starter file: each is a manual step, so the Step stays 2
+    assert [p["gate"] for p in report["gates"][1:]] == ["review", "linters", "secrets_guard"]
+    assert all(p["manual"] for p in report["gates"][1:]) and _step(repo) == 2
     assert (repo / ".github/workflows/lint.yml").read_text(encoding="utf-8") == lint
 
 
@@ -95,8 +114,8 @@ def test_gitlab_remote_gets_a_gitlab_job(tmp_path: Path) -> None:
     _git(repo, "remote", "add", "origin", "git@gitlab.example.com:team/pkg.git")
     report = cli.fix(repo, starter=False, open_pr=False)
     assert report["facts"]["ci_basis"] == "remote"
-    assert [f["path"] for f in report["files"]] == [".gitlab-ci.yml"]
-    assert report["gates"][0]["held_after"] and _step(repo) == 3
+    assert [f["path"] for f in report["files"] if f["path"]] == [".gitlab-ci.yml"]
+    assert report["gates"][0]["gate"] == "ci_runs_tests" and report["gates"][0]["held_after"]
 
 
 def test_existing_gitlab_ci_is_kept_and_the_include_is_the_manual_step(tmp_path: Path) -> None:
@@ -104,7 +123,7 @@ def test_existing_gitlab_ci_is_kept_and_the_include_is_the_manual_step(tmp_path:
     repo = _repo(tmp_path, {**WITH_INSTRUCTIONS, ".gitlab-ci.yml": gitlab})
     report = cli.fix(repo, starter=False, open_pr=False)
     assert (repo / ".gitlab-ci.yml").read_text(encoding="utf-8") == gitlab
-    assert [f["path"] for f in report["files"]] == [".gitlab/ci/tests.yml"]
+    assert [f["path"] for f in report["files"] if f["path"]] == [".gitlab/ci/tests.yml"]
     proof = report["gates"][0]
     assert not proof["held_after"] and "include" in (proof["manual"] or "")
     assert "manual step" in cli.render(report)
@@ -128,15 +147,19 @@ def test_starter_scaffolds_every_gate_on_an_empty_directory(tmp_path: Path) -> N
     assert report["delivery"]["reason"] == "not_a_git_repo"
 
 
-def test_starter_in_a_new_git_repository_reaches_the_top_step_and_then_has_nothing_to_do(tmp_path: Path) -> None:
+def test_starter_in_a_new_git_repository_holds_each_gate_it_writes_and_names_the_rest(tmp_path: Path) -> None:
     repo = tmp_path / "new"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
     report = cli.fix(repo, starter=True, language="python", check_command="pytest", open_pr=False)
-    assert report["step_after"] == 4 and all(p["held_after"] for p in report["gates"])
+    held = {p["gate"] for p in report["gates"] if p["held_after"]}
+    assert {"ci_runs_tests", "coverage_gate", "agent_permissions", "guardrail"} <= held
+    # no starter file for these: each names its task as a manual step (#1641)
+    manual = {p["gate"] for p in report["gates"] if not p["held_after"]}
+    assert {"review", "linters", "secrets_guard", "boundaries"} <= manual
+    assert all(p["manual"] for p in report["gates"] if not p["held_after"])
     again = cli.fix(repo, starter=True, open_pr=False)
-    assert again["nothing_to_do"] and again["files"] == []
-    assert "Nothing to do" in cli.render(again)
+    assert not any(f["state"] == "written" for f in again["files"])  # nothing is written twice
 
 
 class _Recorder:
@@ -288,7 +311,7 @@ def test_an_ignored_settings_file_is_named_and_left_out_of_the_commit(tmp_path: 
     report = cli.fix(repo, starter=False, open_pr=False)
     guard = next(p for p in report["gates"] if p["gate"] == "guardrail")
     assert not guard["held_after"] and "git add -f .claude/settings.json" in (guard["manual"] or "")
-    assert next(p for p in report["gates"] if p["gate"] == "instructions")["held_after"]
+    assert next(f for f in report["files"] if f["gate"] == "instructions")["state"] == "written"
     committed = subprocess.run(["git", "-C", str(repo), "show", "--name-only", "--format=", "HEAD"],
                                capture_output=True, text=True, encoding="utf-8", errors="replace",
                                check=True).stdout.split()

@@ -24,11 +24,12 @@ Each file is built from what the repository already has, read by the existing de
 | `ci_runs_tests` | `.github/workflows/tests.yml`, or a `tests` job in `.gitlab-ci.yml` |
 | `coverage_gate` | `.github/workflows/coverage.yml`, or a `coverage` job, at 50 percent (pytest-cov, cargo-llvm-cov, c8) |
 | guardrail | `.claude/settings.json` with the deny rule, when no permission rule is committed |
+| any other gate (`review`, `linters`, `secrets_guard`, `wide_review`, `agent_permissions`, `boundaries`) | no file: the report names the gate's task as a manual step |
 
 It never overwrites a file. An existing one is reported as a conflict, with the text to add by hand. An existing `.gitlab-ci.yml` is left as it is: the job goes in `.gitlab/ci/<name>.yml` and the manual step is the `include:` line.
 
 ## Proof and delivery
 
-The script stages the files, reads the Step again and reports, per gate, whether it now holds or the one manual step left: an `include:` line, a check command to name, or a coverage threshold for a language with no coverage form it knows. Exit 0 means every targeted gate holds; exit 1 means a manual step is left.
+The script stages the files, reads the Step again and reports, per gate, whether it now holds or the one manual step left: an `include:` line, a check command to name, a coverage threshold for a language with no coverage form it knows, or the task for a gate with no starter file. The `instructions` gate also reads the instruction file's checkable claims (`layer-0-instructions` level 2), so a new `CLAUDE.md` that makes no claim reads not measured. The manual step is to add one claim the scan can check, such as a count ("The suite has 12 modules in `tests/*.py`."), a pin ("Python 3.12 is pinned in `.python-version`.") or an enforcement claim ("CI runs `scripts/check.sh`.").
 
 When the tree was clean before the run (the assessment's own `.assess/` output aside; it is never committed), it commits the files to a new local `assess/fix-<gate>` branch, leaves the checkout on that branch, and ends its report with the command to push it and open the pull request. On a dirty tree it commits nothing and the files stay staged. With `--pr` it also pushes and opens the pull (merge) request, but only when `gh` or `glab` is authenticated for `origin` and the run started on the default branch's tip. Off that tip, with or without `--pr`, the report says "run from <default> to open a fix PR" and prints no push command, so no other branch's commits reach a fix PR. Relay the report to the user as written.

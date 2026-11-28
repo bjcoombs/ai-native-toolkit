@@ -74,7 +74,7 @@ def test_the_summary_carries_no_count():
     assert headline(_level(step=4, next_step=None), default_model())["summary"] == "Step 4 · all gates held"
     assert headline(_level(step=1, next_step={"step": 2, "blockers": [
         {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "unmet"}]}),
-        default_model())["summary"] == "Step 1 · next: instruction file"
+        default_model())["summary"] == "Step 1 · next: instruction file with a check command"
 
 
 def test_the_summary_names_the_step_one_change_away():
@@ -86,7 +86,7 @@ def test_the_summary_names_the_step_one_change_away():
     level = lt.level_result(model, signals)
     assert (level["step"], level["ceiling_step"]) == (1, 3)
     # the ci row's one condition is listed, not counted, so no practice is fully in place (#1334)
-    assert headline(level, model)["summary"] == "Step 1 · one change from Step 3: instruction file"
+    assert headline(level, model)["summary"] == "Step 1 · one change from Step 3: instruction file with a check command"
     assert one_change_ceiling(level, model["steps"]) == 3
     blocks = next(f["text"] for f in card_facts(level, model, None) if f["fact_id"] == "blocks")
     assert blocks.endswith("; that one change reaches Step 3.")
@@ -98,7 +98,7 @@ def test_the_summary_leads_with_the_practices_fully_in_place_before_the_next_gat
     level = lt.level_result(model, {**_fresh(10), "layer_grades": {"instruction_file_present": False}})
     assert [e["row"] for e in level["in_place"] if e["top"]] == ["fresh", "new-0"]
     summary = headline(level, model)["summary"]
-    assert summary == "Step 1 · 2 practices fully in place · next: instruction file"
+    assert summary == "Step 1 · 2 practices fully in place · next: instruction file with a check command"
     assert summary.index("2 practices fully in place") < summary.index("next:")
 
 
@@ -106,7 +106,7 @@ def test_no_one_change_step_without_a_jump_or_with_an_unread_gate():
     model = _laddered()
     plain = lt.level_result(model, {**_fresh(90), "layer_grades": {"instruction_file_present": False}})
     assert one_change_ceiling(plain, model["steps"]) is None  # ceiling is the next Step
-    assert headline(plain, model)["summary"] == "Step 1 · next: instruction file"  # nothing at its top level
+    assert headline(plain, model)["summary"] == "Step 1 · next: instruction file with a check command"  # nothing at its top level
     unread = _level(step=1, ceiling_step=3, held_above=["ci_runs_tests"], next_step={"step": 2, "blockers": [
         {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "not_measured",
          "reason": "needs_full_run"}]})
@@ -240,7 +240,10 @@ CI2 = {
                        "        self.assertTrue(True)\n",
     ".github/workflows/ci.yml": "name: ci\non: [pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
                                "    steps:\n      - uses: actions/checkout@v4\n      - run: make test\n",
-    "CLAUDE.md": "# Project\n\nBefore every commit run `make test` and fix any failure.\n",
+    # a check command and one claim the repository keeps, so the instructions gate (layer-0-instructions
+    # up to level 2, #1641) is measured: no claim to check reads not measured (#827)
+    "CLAUDE.md": "# Project\n\nBefore every commit run `make test` and fix any failure.\n"
+                 "The suite has 1 module in `tests/*.py`.\n",
 }
 
 

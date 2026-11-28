@@ -117,8 +117,13 @@ def test_a_units_own_reading_replaces_the_repository_reading() -> None:
 
 
 def test_an_inherited_condition_holds_a_step_gate() -> None:
+    # the instructions gate reads layer-0-instructions up to level 2 (#1641): the root file names
+    # its check, keeps its claim and holds the budget, and the unit inherits all three
     repo = {**REPO, "layer_grades": {"available": True, "instruction_file_present": True,
-                                     "instruction_presence": "root"}}
+                                     "instruction_presence": "root"},
+            "agent_environment": {"available": True, "check": {"named_total": 1}},
+            "instruction_claims": {"total": 1, "verified": 1, "failed": 0},
+            "nested_instructions": {"available": True, "budget": {"claude_code": {"files": ["CLAUDE.md"], "lines": 9}}}}
     block = _levels({"available": True, "unit_count": 1, "units": [_reading("a", {})]}, repo)
     unit = block["units"][0]
     assert unit["inherited"][:1] == ["layer-0-instructions.1"]
@@ -189,8 +194,13 @@ def test_counts_only_drops_unit_paths_and_keeps_the_numbers(run: dict[str, Any])
 
 
 def test_the_root_unit_reads_the_repository_level(tmp_path: Path) -> None:
+    # the instructions gate reads layer-0-instructions up to level 2 (#1641): the root file names
+    # its check, keeps its claim and holds the budget, and the unit inherits all three
     repo = {**REPO, "layer_grades": {"available": True, "instruction_file_present": True,
-                                     "instruction_presence": "root"}}
+                                     "instruction_presence": "root"},
+            "agent_environment": {"available": True, "check": {"named_total": 1}},
+            "instruction_claims": {"total": 1, "verified": 1, "failed": 0},
+            "nested_instructions": {"available": True, "budget": {"claude_code": {"files": ["CLAUDE.md"], "lines": 9}}}}
     root = _reading(".", {"layer_grades": {"available": True, "instruction_file_present": True}},
                     own=("layer-0-instructions.1",))
     unit = _levels({"available": True, "unit_count": 1, "units": [root]}, repo)["units"][0]

@@ -447,12 +447,13 @@ def _gate_conditions(states: dict[str, str]) -> list[dict]:
 
 def _loss_ctx(lost: list[str] | None, states: dict[str, str] | None = None,
               held: list[str] | None = None) -> dict:
-    """A run that lost ``lost`` since a committed baseline holding ``held`` (default:
-    instructions plus every lost gate)."""
+    """A run that lost ``lost`` since a committed baseline holding ``held`` (default: the Step 2
+    gate and the Step 3 gates other than CI, #1641, plus every lost gate)."""
     ctx = _ctx([])
     ctx["since_last_run"] = {"available": True, "first_run": False, "gates_lost": lost}
     ctx["level"] = {"step": 2, "conditions": _gate_conditions(states or {})}
-    held = held if held is not None else ["instructions", *(lost or [])]
+    held = held if held is not None else list(dict.fromkeys(
+        ["instructions", "review", "linters", "secrets_guard", *(lost or [])]))
     ctx["prior_level"] = {"baseline": {"run_id": "r", "head_sha": "a" * 40, "held_gates": held}}
     return ctx
 

@@ -193,10 +193,13 @@ def _run(project: Path, tmp_path: Path, status: str = "201", **env: str) -> subp
 
 
 def _make_project(repo: Path, include: str) -> Path:
-    """A small Python project at Step 3: instructions, and CI running pytest."""
+    """A small Python project at Step 2 holding the CI gate: instructions naming the check with one
+    claim the project keeps, and CI running pytest. Step 3 also needs review, a linter and a
+    secrets guard (#1641), which this project does not have."""
     repo.mkdir(parents=True, exist_ok=True)
     _git(repo, "init", "-q", "-b", "main")
-    (repo / "AGENTS.md").write_text("Run `pytest` before committing.\n", encoding="utf-8")
+    (repo / "AGENTS.md").write_text("Run `python -m pytest` before committing.\n"
+                                    "The suite has 1 module in `tests/*.py`.\n", encoding="utf-8")
     (repo / "src").mkdir()
     (repo / "src" / "calc.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
     (repo / "tests").mkdir()
@@ -220,7 +223,7 @@ def test_fixture_passes_on_the_baseline_and_fails_when_ci_stops_running_tests(pr
     # The first run has no baseline: nothing to lose, so it passes and writes one.
     first = _run(project, tmp_path / "a")
     assert first.returncode == 0, first.stdout + first.stderr
-    assert "Step 3 of 4" in first.stdout
+    assert "Step 2 of 4" in first.stdout
     assert "RESULT: PASS" in first.stdout
     baseline = json.loads((project / ".assess" / "prior-level.json").read_text(encoding="utf-8"))
     assert "ci_runs_tests" in baseline["baseline"]["held_gates"]
@@ -237,7 +240,7 @@ def test_fixture_passes_on_the_baseline_and_fails_when_ci_stops_running_tests(pr
     lost = _run(project, tmp_path / "c")
     assert lost.returncode == 1, lost.stdout + lost.stderr
     assert "FAIL gate lost: ci_runs_tests" in lost.stdout
-    assert "(Step 3 -> Step 2)" in lost.stdout
+    assert "-> Step" not in lost.stdout  # the CI gate is a Step 3 gate: losing it alone moves no Step
     assert "RESULT: FAIL" in lost.stdout
 
     # The same loss with the input turned off is a warn line and a pass.

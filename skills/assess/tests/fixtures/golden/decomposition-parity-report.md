@@ -2,17 +2,17 @@
 
 _Generated <<normalized>>._
 
-**[Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 2 of 4: supervised agent PRs.**
+**[Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 1 of 4: assisted.**
 
-Holding: 1 of 2 Step 3 gates held · 0 of 10 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
+Holding: 0 of 1 Step 2 gates held · 0 of 10 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
 
-Blocks Step 3: CI does not turn red when a check breaks.
+Blocks Step 2: no committed instruction file names the agent's check and makes a claim that holds.
 
 Since last run: gate changes [not known](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#not-measured); closed actions not known (no baseline is committed yet, and this run's result cannot be recorded as one).
 
-Start here: [Make CI turn red when a check breaks](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates)
+Start here: [Commit an AGENTS.md or CLAUDE.md that names the command an agent runs and makes one claim the scan can check](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates)
 
-Done when: the next `/assess` run reads that CI turns red on a broken check.
+Done when: the next `/assess` run reads that the instruction file names a check, and its claims hold.
 
 _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md) explains [Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step), [gate](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#gate), [practice](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#practice), [level](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#level), [evidence grade](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) and [truth tag](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#truth-tag) in a sentence or two each._
 
@@ -24,11 +24,11 @@ By tag: behaviour 0 of 3 (NOT MEASURED: 4) · contracts 0 of 2 · docs 0 of 2 (N
 
 ## Where you are on the Steps
 
-In place: Step 2 of 4, Supervised agent PRs: an agent opens pull requests, a person reviews each one.
+In place: Step 1 of 4, Assisted: an agent can read and help with your code.
 
 [![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
 
-Step 3, Unattended agent PRs, opens when CI turns red on a broken check.
+Step 2, Supervised agent changes, opens when the instruction file names a check, and its claims hold.
 
 ## Evidence behind the Step
 

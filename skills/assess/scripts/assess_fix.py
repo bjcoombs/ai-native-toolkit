@@ -57,8 +57,12 @@ from lib.run.signals import collect
 from lib.starter_delivery import Runner, deliver, ignored, is_git_repo, run, stage, tree_clean
 from lib.starter_files import GUARDRAIL, detect_facts, plan_files, write_files
 
-# The blocks the Step gates, the guardrail and the fact detectors read.
-SCANS = ("layer_grades", "ci_checks", "coverage_gate", "agent_environment", "agent_ops")
+# The scans whose blocks the Step gates, the guardrail and the fact detectors read: the cumulative
+# gates (#1641) also read the instruction claims and budget, review evidence, the secrets guard
+# and the boundary map (``structure_drift_block`` spreads ``structure_drift``). Wide review reads
+# ``review_reality``, a platform read this offline path never makes, so it reads not measured.
+SCANS = ("layer_grades", "ci_checks", "coverage_gate", "agent_environment", "agent_ops", "instruction_claims",
+         "nested_instructions", "review_evidence", "secrets_guard", "structure_drift_block")
 GUARDRAIL_TASK = "commit a deny rule in `.claude/settings.json`"
 _LRU = type(functools.lru_cache(maxsize=1)(lambda: None))
 

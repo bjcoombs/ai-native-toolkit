@@ -51,7 +51,7 @@ names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.
 | `AI-Native` | the Step name |
 
 The last four are the retired maturity band labels (`RETIRED_LABELS`); the Step names
-(1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops) replace them.
+(1 Assisted, 2 Supervised agent changes, 3 Unattended agent changes, 4 Autonomous loops) replace them.
 
 **Opening line.** Every `## ` section of the fleet `report.md` and every heading of a team
 next-steps page (`teams.md` and `teams/<group>.md`) opens with a line that starts

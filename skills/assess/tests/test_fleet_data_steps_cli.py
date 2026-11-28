@@ -2,7 +2,8 @@
 
 The estate is three levels deep (group, subgroup, repository) and built from the
 #744 contract files (``test_level_tally``): ``grp/sub/alpha`` and ``grp/sub/ci2`` have
-tests, CI running them and an instruction file; ``grp/nci`` has no CI. ``alpha`` also
+tests, CI running them and an instruction file; ``grp/nci`` has no CI. ``alpha`` also holds
+the other Step 3 gates (#1641: review, a linter and a secrets guard), as ``ci2`` does, and
 commits ``[checks] exclude`` for the coverage gate's condition, so it holds Step 3 and
 the coverage gate keeps it from Step 4 while the exclusion stands.
 """
@@ -18,6 +19,7 @@ import pytest
 
 from lib.scoring.level_signals import DEFAULT_LEVELS
 from test_fleet_cli import fleet_cli
+from cumulative_gates_fixture import STEP3_FILES
 from test_level_tally import CIWF, CLMD, FL5, _commit
 
 CONFIG = """\
@@ -26,8 +28,8 @@ exclude = [
   { id = "layer-6-coverage.1", kind = "measured_elsewhere", reason = "Coverage is enforced in the release pipeline." },
 ]
 """
-REPOS = {"grp/sub/alpha": {**FL5, **CIWF, **CLMD, ".assess/config.toml": CONFIG},
-         "grp/sub/ci2": {**FL5, **CIWF, **CLMD}, "grp/nci": FL5}
+REPOS = {"grp/sub/alpha": {**FL5, **CIWF, **CLMD, **STEP3_FILES, ".assess/config.toml": CONFIG},
+         "grp/sub/ci2": {**FL5, **CIWF, **CLMD, **STEP3_FILES}, "grp/nci": FL5}
 
 
 @pytest.fixture(scope="module")
@@ -72,7 +74,7 @@ def test_an_owner_exclusion_reaches_both_files_and_holds_the_step(estate, flags)
     assert levels[repo["key"]]["excluded"] == [{"id": "layer-6-coverage.1", "kind": "measured_elsewhere",
                                                "source": "repo"}]
     assert repo["step"] == 3 and repo["next_step"]["step"] == 4
-    (gate,) = [b for b in repo["next_step"]["blockers"] if b["kind"] == "gate"]
+    (gate,) = [b for b in repo["next_step"]["blockers"] if b["kind"] == "gate" and b["gate"] == "coverage_gate"]
     assert (gate["gate"], gate["state"], gate["disposition"]) == (
         "coverage_gate", "not_applicable", "excluded_by_owner")
     reason = "Coverage is enforced in the release pipeline." if flags == ["--full"] else None

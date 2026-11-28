@@ -13,8 +13,8 @@
 <text x="452.8" y="76.0" font-size="11" text-anchor="middle" class="t-muted">Level 4</text>
 <text x="268.0" y="95.0" font-size="12" text-anchor="end" class="t-fg">Agent instructions</text>
 <rect x="280.0" y="82.0" width="16.0" height="16.0" rx="2" class="f-ev-listed s-rule" stroke-width="1" data-category="listed" data-practice="Agent instructions" data-level="1" data-category-label="Met, listed from config or a declaration, not counted"><title>Agent instructions level 1: Met, listed from config or a declaration, not counted</title></rect>
-<rect x="277.0" y="79.0" width="22.0" height="22.0" rx="3" fill="none" class="s-fg" stroke-width="2" data-gate="layer-0-instructions.1"/>
 <rect x="334.9" y="82.0" width="16.0" height="16.0" rx="2" class="f-ev-measured s-rule" stroke-width="1" data-category="measured" data-practice="Agent instructions" data-level="2" data-category-label="Met, measured from the code or its history"><title>Agent instructions level 2: Met, measured from the code or its history</title></rect>
+<rect x="331.9" y="79.0" width="22.0" height="22.0" rx="3" fill="none" class="s-fg" stroke-width="2" data-gate="layer-0-instructions.2"/>
 <rect x="389.8" y="82.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet" data-practice="Agent instructions" data-level="3" data-category-label="Not met yet"><title>Agent instructions level 3: Not met yet</title></rect>
 <text x="268.0" y="119.0" font-size="12" text-anchor="end" class="t-fg">CI and the agent's local check</text>
 <rect x="280.0" y="106.0" width="16.0" height="16.0" rx="2" class="f-ev-verified s-rule" stroke-width="1" data-category="verified" data-practice="CI and the agent&#x27;s local check" data-level="1" data-category-label="Met, verified by a run or the platform"><title>CI and the agent's local check level 1: Met, verified by a run or the platform</title></rect>

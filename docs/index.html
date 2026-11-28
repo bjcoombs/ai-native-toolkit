@@ -86,7 +86,7 @@ body { margin: 0; }
   <section>
     <h2>The ladder</h2>
     <p>Every repository sits on one of four Steps. Each Step is a level of trust you can give an agent. Between Steps is a gate: one concrete thing your repository must enforce before the next level of trust is safe.</p>
-    <div class="card ladder" role="img" aria-label="Four Steps of agent autonomy. Step 1 Assisted, gate: an instruction file is committed. Step 2 Supervised agent PRs, gate: CI turns red on a broken check. Step 3 Unattended agent PRs, gate: a coverage gate is enforced. Step 4 Autonomous loops. Example marker on Step 2, next gate CI turns red on a broken check.">
+    <div class="card ladder" role="img" aria-label="Four Steps of agent autonomy. Step 1 Assisted, gate: an instruction file is committed. Step 2 Supervised agent changes, gate: CI turns red on a broken check. Step 3 Unattended agent changes, gate: a coverage gate is enforced. Step 4 Autonomous loops. Example marker on Step 2, next gate CI turns red on a broken check.">
       <svg viewBox="0 0 640 430" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Sans, system-ui, sans-serif">
         <style>
           .rung { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
@@ -112,27 +112,27 @@ body { margin: 0; }
         <text class="desc" x="100" y="63">Agents run longer loops on their own.</text>
         <!-- gate 3 to 4 -->
         <path class="arrow" d="M120 120 v-30 m-6 8 l6 -8 l6 8"/>
-        <text class="gate" x="140" y="111">gate: a coverage gate is enforced</text>
+        <text class="gate" x="140" y="111">gates: coverage gate, wide review, agent permissions, boundary map</text>
 
         <!-- Step 3 -->
         <rect class="rung" x="40" y="126" width="560" height="66" rx="8"/>
         <text class="num" x="62" y="169">3</text>
-        <text class="name" x="100" y="154">Unattended agent PRs</text>
-        <text class="desc" x="100" y="175">Agents open pull requests nobody has to watch.</text>
+        <text class="name" x="100" y="154">Unattended agent changes</text>
+        <text class="desc" x="100" y="175">Agents make changes nobody has to watch.</text>
         <!-- gate 2 to 3, the next one -->
         <path class="arrow-next" d="M120 232 v-30 m-7 9 l7 -9 l7 9"/>
-        <text class="gate-next" x="140" y="223">next gate: CI turns red on a broken check</text>
+        <text class="gate-next" x="140" y="223">next gates: CI runs tests, review evidence, linter, secrets guard</text>
 
         <!-- Step 2, you are here -->
         <rect class="here" x="40" y="238" width="560" height="66" rx="8"/>
         <text class="num" x="62" y="281">2</text>
-        <text class="name" x="100" y="266">Supervised agent PRs</text>
-        <text class="desc" x="100" y="287">An agent opens pull requests; a person reviews each one.</text>
+        <text class="name" x="100" y="266">Supervised agent changes</text>
+        <text class="desc" x="100" y="287">An agent makes changes; a person reviews each one.</text>
         <rect class="pin" x="490" y="256" width="96" height="26" rx="13"/>
         <text class="pin-t" x="538" y="273" text-anchor="middle">YOU ARE HERE</text>
         <!-- gate 1 to 2 -->
         <path class="arrow" d="M120 344 v-30 m-6 8 l6 -8 l6 8"/>
-        <text class="gate" x="140" y="335">gate: an instruction file an agent reads is committed</text>
+        <text class="gate" x="140" y="335">gate: the instruction file names a check, and its claims hold</text>
 
         <!-- Step 1 -->
         <rect class="rung" x="40" y="350" width="560" height="66" rx="8"/>
@@ -148,8 +148,8 @@ body { margin: 0; }
     <h2>What the report says first</h2>
     <p>One short card, before anything else. Each fact appears once: where you are, what holds, what blocks the next Step, what moved, and the one command to run.</p>
     <div class="card summary" aria-label="Example report top card">
-      <div>Step 2 of 4: supervised agent PRs.</div>
-      <div>Holding: 1 of 2 Step 3 gates held · 1 of 3 measured catalogue conditions met, 0 verified.</div>
+      <div>Step 2 of 4: supervised agent changes.</div>
+      <div>Holding: 4 of 5 Step 3 gates held · 5 of 7 measured catalogue conditions met, 0 verified.</div>
       <div>Blocks Step 3: CI does not turn red when a check breaks.</div>
       <div>Since last run: 1 action closed.</div>
       <div>Start here: add <code>pytest</code> to the <code>test</code> job in <code>.github/workflows/ci.yml</code></div>

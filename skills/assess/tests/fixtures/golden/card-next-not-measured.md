@@ -1,6 +1,6 @@
-**[Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 2, Step 3 not measured · Step 2 of 4: supervised agent PRs.**
+**[Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 2, Step 3 not measured · Step 2 of 4: supervised agent changes.**
 
-Holding: 1 of 2 Step 3 gates held at `600cca4` · 1 of 2 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
+Holding: 4 of 5 Step 3 gates held at `600cca4` · 1 of 2 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
 
 Step 3 not measured: the CI runs tests gate, not measured here (needs a full run).
 

@@ -24,7 +24,10 @@ from lib.top_card import (GATE_GAP, GATE_TASK, STEP_GATES_URL, card_lines, card_
                           in_place_section, read_first_action)
 
 MODEL = default_model()
-GATE_ROWS = {"layer-0-instructions.1", "layer-5-ci.1", "layer-6-coverage.1"}
+# The conditions the default model's Step 4 gates read (#1641: cumulative foundations).
+GATE_ROWS = {"layer-0-instructions.1", "layer-0-instructions.2", "layer-5-ci.1", "layer-7-review.1",
+             "layer-3-linters.1", "secrets-guard.1", "layer-6-coverage.1", "layer-7-review.2",
+             "layer-8-agent-ops.1", "layer-4-architecture.1"}
 SHA = "600cca4ec653552f2e82d19d4dfd54fcab703ca4"
 ACTION = {"start": '`rg -n "noqa: E402" skills/assess/scripts/assess_report.py`',
           "done_when": "cd skills/assess && uv run --locked ruff check . passes"}
@@ -52,13 +55,13 @@ def _level(step: int | None, next_step: Any = None, conditions: list[dict[str, A
 def _top(advisory: int = 2) -> dict[str, Any]:
     conds = [_cond(c, grade="verified") for c in sorted(GATE_ROWS)]
     # unmet conditions no gate waits on are advisories; an uncounted or unmeasured one is not
-    conds += [_cond(f"layer-3-linters.{n}", "unmet") for n in range(1, advisory + 1)]
+    conds += [_cond(f"layer-2-design.{n}", "unmet") for n in range(1, advisory + 1)]
     conds += [_cond("layer-9-x.1", "unmet", counted=False), _cond("layer-8-y.1", "not_measured")]
     return _level(4, None, conds)
 
 
 def _below() -> dict[str, Any]:
-    conds = [_cond("layer-0-instructions.1"), _cond("layer-5-ci.1"), _cond("layer-6-coverage.1", "unmet")]
+    conds = [_cond(c, "unmet" if c == "layer-6-coverage.1" else "met") for c in sorted(GATE_ROWS)]
     return _level(3, {"step": 4, "blockers": [{"kind": "gate", "gate": "coverage_gate",
                                                "condition": "layer-6-coverage.1", "state": "unmet"}]}, conds)
 
@@ -85,7 +88,7 @@ def test_the_top_step_card_holds_the_step_and_counts_advisories() -> None:
     text = "\n".join(lines)
     assert lines[0] == "Holding Step 4 of 4 · 2 advisories, none blocks the Step."
     assert text.count("Holding Step 4 of 4") == 1 and text.count("none blocks the Step") == 1
-    assert lines[1] == "Holding: 3 of 3 gates held at `600cca4` · 3 of 5 measured catalogue conditions met, 3 verified."
+    assert lines[1] == "Holding: 9 of 9 gates held at `600cca4` · 10 of 12 measured catalogue conditions met, 10 verified."
     assert lines[2:] == [FIRST_RUN, f"Start here: {ACTION['start']}",
                          "Done when: cd skills/assess && uv run --locked ruff check . passes."]
 
@@ -97,8 +100,8 @@ def test_the_top_step_lead_with_no_or_one_advisory(k: int, tail: str) -> None:
 
 def test_below_the_top_step_the_blocking_gate_leads_and_names_the_sibling() -> None:
     lines = card_lines(_below(), MODEL, KNOWN, ROLLUP, None, ACTION)  # type: ignore[arg-type]
-    assert lines[0] == "Step 3 of 4: unattended agent PRs."
-    assert lines[1] == "Holding: 2 of 3 Step 4 gates held · 2 of 3 measured catalogue conditions met, 0 verified."
+    assert lines[0] == "Step 3 of 4: unattended agent changes."
+    assert lines[1] == "Holding: 8 of 9 Step 4 gates held · 9 of 10 measured catalogue conditions met, 0 verified."
     gate_lines = [line for line in lines if "gate" in line.lower() and not line.startswith("Holding")]
     assert gate_lines[0] == ("Blocks Step 4: no coverage gate is enforced. "
                              "`skills/assess` already does this; copy it.")
@@ -114,7 +117,7 @@ def test_a_gate_not_measured_carries_the_headline_note() -> None:
     level = _below()
     level["next_step"]["blockers"][0].update(state="not_measured", reason="needs_full_run")
     lines = card_lines(level, MODEL, KNOWN)  # type: ignore[arg-type]
-    assert lines[0] == "Step 3, Step 4 not measured · Step 3 of 4: unattended agent PRs."
+    assert lines[0] == "Step 3, Step 4 not measured · Step 3 of 4: unattended agent changes."
     assert lines[2] == "Step 4 not measured: the coverage gate, not measured here (needs a full run)."
     assert lines[-2].endswith("(not measured here: needs a full run)")
 
@@ -219,9 +222,10 @@ def test_the_card_lines_are_plain_english() -> None:
 
 def test_the_facts() -> None:
     assert top_step(MODEL) == 4 and top_step({**MODEL, "steps": []}) is None
-    assert step_gate_ids(MODEL, 4) == ["instructions", "ci_runs_tests", "coverage_gate"]
+    assert step_gate_ids(MODEL, 4) == ["instructions", "ci_runs_tests", "review", "linters", "secrets_guard",
+                                       "coverage_gate", "wide_review", "agent_permissions", "boundaries"]
     assert step_gate_ids(MODEL, 9) == [] and step_name(MODEL, 9) == ""
-    assert step_name(MODEL, 3) == "Unattended agent PRs"
+    assert step_name(MODEL, 3) == "Unattended agent changes"
     assert advisories(_top(2), MODEL) == 2 and advisories(None, MODEL) == 0
     assert [b["gate"] for b in blocking_gates(_below())] == ["coverage_gate"]
     assert blocking_gates(_top()) == [] and blocking_gates("x") == []
