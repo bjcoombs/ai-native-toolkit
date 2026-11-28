@@ -16,8 +16,10 @@ one ``unassigned`` shard (``UNASSIGNED``), which is planned only when it holds a
 Shards are ordered by key, ``unassigned`` last.
 
 **A shard's bundle** (``shard_bundle``) is the run's bundle cut to the shard: its repositories;
-in the ownership view the top-level unit, every unit below it and every unit above one of the
-shard's repositories (so the root and its roll-up are in every shard); in the system view every
+in the ownership view the top-level unit, every unit below it, every unit above one of the
+shard's repositories and every root (so the root and its roll-up are in every shard, the
+``unassigned`` one too when none of its repositories has an ownership unit: the page opens on the
+root); in the system view every
 system unit above one of the shard's repositories. ``opportunities.biggest_lift.repos`` and each
 ``opportunities.shared_templates[].repos`` keep only the shard's repositories, while their
 counts stay the fleet's: those lists are what made one ``runs`` document too large (#947).
@@ -57,6 +59,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Final, TypedDict
 
@@ -146,10 +149,16 @@ class ShardPlan(TypedDict):
     index: IndexDoc | None
 
 
+_FOLDER_ESCAPE: Final = re.compile(r"~[0-9A-F]{2}|[A-Z:]")
+
+
 def shard_folder(key: str) -> str:
-    """``key`` as one folder name: its document id, with ``:`` (not allowed on Windows) escaped as
-    ``~3A``, which ``doc_id`` never writes, so the name stays one-to-one with the key."""
-    return doc_id(key).replace(":", "~3A")
+    """``key`` as one folder name: its document id, with ``:`` (not allowed on Windows) and every
+    upper-case letter escaped as ``~XX`` (``A`` is ``~41``), which ``doc_id`` never writes. The name
+    stays one-to-one with the key, and two names never differ by case alone, so two keys never
+    share a folder on a case-insensitive file system (the hex in an escape is always upper case)."""
+    return _FOLDER_ESCAPE.sub(lambda m: m.group() if m.group().startswith("~") else f"~{ord(m.group()):02X}",
+                              doc_id(key))
 
 
 def empty_registry() -> ShardRegistry:
@@ -206,8 +215,10 @@ def _shard_units(bundle: Mapping[str, Any], key: str, repos: list[Mapping[str, A
         keep: set[str] = set()
         for repo in repos:
             keep.update(_ancestors(_unit_of(repo, v["view"]), units))
-        if v["view"] == OWNERSHIP and key != UNASSIGNED:
-            keep |= _subtree(key, units) | set(_ancestors(key, units))
+        if v["view"] == OWNERSHIP:  # every root, so a shard whose repositories have no unit still opens
+            keep |= {k for k, u in units.items() if u.get("parent") is None}
+            if key != UNASSIGNED:
+                keep |= _subtree(key, units) | set(_ancestors(key, units))
         out[v["view"]] = keep
     return out
 

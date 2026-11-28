@@ -178,6 +178,32 @@ def _drill(name: str, states: list[dict[str, Any]], bundle: dict[str, Any] | Non
     return pages
 
 
+def test_a_held_condition_names_the_next_condition_as_next() -> None:
+    """#1635 (6): grp/sub/proj2 reads level 1 of 2, so its cell's next condition is level 2. Selecting
+    level 1 shows "Next condition: ..., level 2"; selecting level 2 shows it as "Condition"."""
+    base = {"unit": "grp/sub", "repo": "grp/sub/proj2", "tag": "docs"}
+    held, unheld = _drill("full", [{**base, "cond": {"row": 0, "level": 1}}, {**base, "cond": {"row": 0, "level": 2}}])
+    assert "<strong>Instruction docs, level 1</strong>: held" in held
+    assert "<li>Next condition: Instruction docs, level 2, reads docs.grade" in held
+    assert "<li>Condition: Instruction docs, level 2, reads docs.grade" in unheld and "Next condition" not in unheld
+    hover = {(t["repo"], t["row"]): t["title"] for t in _drawn("full")["titles"]}[("grp/sub/proj2", 0)]
+    assert "Condition: Instruction docs, level 2" in hover and "Next condition" not in hover  # no selection
+
+
+def test_the_hover_and_the_tag_tier_word_the_next_step_from_one_function() -> None:
+    """#1635 (7): the next Step's needs are worded once in the script, so the hover's line and the
+    tag tier's line cannot drift: the tag tier's last line is the hover's last line, as HTML."""
+    script, _ = _parts(fx.goldens()["expected-full.html"])
+    assert script.count('" needs: "') == 1 and script.count("No measured Step for this repository") == 1
+    hover = {t["repo"]: t["title"].splitlines()[-1] for t in _drawn("full")["titles"]}
+    assert hover["grp/sub/proj2"] == "Step 3 · Docs and CI needs: ci"
+    for repo, unit in (("grp/sub/proj2", "grp/sub"), ("grp/other/proj3", "grp/other")):
+        page = _drill("full", [{"unit": unit, "repo": repo, "tag": "docs"}])[0]
+        found = re.search(r"<p>([^<]*(?:<code>[^<]*</code>[^<]*)*)</p></div>$", page)
+        assert found is not None, repo
+        assert re.sub(r"</?code>", "", found.group(1)) == hover[repo], repo
+
+
 def test_the_drill_runs_org_unit_repository_tag_condition_and_stays_byte_identical() -> None:
     """#1625: from the org, a unit, a repository, its Docs tag (met and unmet counts, each condition
     with its state and the next Step's needs), then one condition's state, reading and needs."""
