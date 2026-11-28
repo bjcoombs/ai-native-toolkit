@@ -12,8 +12,8 @@ run covers the Windows branches:
   ``headless_layers.promissory_markers`` maps to the ``no_rg`` code.
 - ``missing_packages`` names the layer 2-4 Python packages that do not import,
   and ``pip_hint`` gives the no-uv install line for them, after a pointer
-  (``NO_UV_POINTER``) to the one line for every /assess and /fleet package
-  (``NO_UV_PACKAGES``) in ``docs/windows.md`` (#1492).
+  (``NO_UV_POINTER``, the absolute URL ``NO_UV_URL``) to the one line for every
+  /assess and /fleet package (``NO_UV_PACKAGES``) in ``docs/windows.md`` (#1492).
 - ``require_packages`` is the hard form for a script that cannot run without
   its packages (the SVG renderers, issue #752): it prints the install line and
   exits 1 before the first third-party import, so no traceback reaches the user.
@@ -29,8 +29,8 @@ for `rg.exe`, last path in sorted order), since a user-scope winget install may 
 `rg not on PATH` that `headless_layers.promissory_markers` maps to `no_rg`.
 `missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
 do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
-stderr. Both hints name only the missing packages and point (`NO_UV_POINTER`) at the
-"Without uv" section of `docs/windows.md`, which holds the one line for every /assess and
+stderr. Both hints name only the missing packages and point (`NO_UV_POINTER`, an absolute URL, since
+the hint prints in the user's own repository) at the "Without uv" section of `docs/windows.md`, which holds the one line for every /assess and
 /fleet package (`NO_UV_PACKAGES`, #1492); `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
 exit codes do not change. `require_packages` is the hard form (#752): `complexity-treemap.py`
 and `doc-graph-svg.py` call it before their first third-party import, so a run without uv
@@ -66,9 +66,12 @@ LAYER_PACKAGES: tuple[tuple[str, str], ...] = (
 NO_UV_PACKAGES: tuple[str, ...] = (
     "networkx", "grimp", "lizard==1.23.0", "squarify", "matplotlib", "numpy",
 )
+# The hint is printed in the user's own repository, and a standalone skill ZIP
+# has no docs/, so the pointer is the absolute URL of the section.
 NO_UV_DOC = "docs/windows.md"
 NO_UV_SECTION = "Without uv"
-NO_UV_POINTER = f'The line for every /assess and /fleet package is under "{NO_UV_SECTION}" in {NO_UV_DOC}.'
+NO_UV_URL = f"https://github.com/bjcoombs/ai-native-toolkit/blob/main/{NO_UV_DOC}#without-uv"
+NO_UV_POINTER = f"The line for every /assess and /fleet package is at {NO_UV_URL}."
 
 Which = Callable[[str], "str | None"]
 FindSpec = Callable[[str], "object | None"]

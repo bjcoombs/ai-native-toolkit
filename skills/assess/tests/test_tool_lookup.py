@@ -154,7 +154,11 @@ REPO = Path(__file__).resolve().parents[3]
 
 def test_no_uv_packages_cover_the_layer_packages() -> None:
     assert {req for _, req in LAYER_PACKAGES} <= set(NO_UV_PACKAGES)
-    assert NO_UV_DOC in NO_UV_POINTER and NO_UV_SECTION in NO_UV_POINTER
+    # An absolute URL: the hint prints in the user's repository, and a
+    # standalone ZIP has no docs/.
+    assert "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/windows.md#without-uv" in NO_UV_POINTER
+    assert NO_UV_SECTION.lower().replace(" ", "-") in NO_UV_POINTER
+    assert NO_UV_DOC in NO_UV_POINTER
 
 
 def test_the_doc_the_hints_name_shows_the_full_no_uv_line() -> None:

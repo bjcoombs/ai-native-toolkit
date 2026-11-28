@@ -194,6 +194,8 @@ with `-p no:xdist`, or with make:
 make check XDIST="-p no:xdist"
 ```
 
+or, per suite:
+
 ```bash
 uv --directory skills/assess run --locked pytest -v -p no:xdist
 uv --directory scripts run --locked pytest -v -p no:xdist
