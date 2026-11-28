@@ -1067,9 +1067,9 @@ Why the signals named here matter:
 
 It shows how many recently merged changes had a review and an approval, which is how far a second reader reaches into what agents and people merge.
 
-Review and approval shares over the sampled merged changes, read through gh or glab.
+Review and approval shares, and approval-integrity counts, over the sampled merged changes, read through gh or glab.
 
-- Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`, `review_rules`.
+- Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`, `review_rules`, `fleet_config`.
 - Network: yes, GitHub or GitLab (with --platform).
 - Headless: reported by headless and fleet runs.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.bot_sequence` token, `review_reality.merge_queue_source` token, `review_reality.reason` drop, `review_reality.sequence` token.
@@ -1438,7 +1438,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `repo_guards` | Ratchets and repo-owned guards | `repo_root` | `repo_guards` | no |
 | `review_automation` | AI review committed in CI | `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci` | `review_automation` | no |
 | `review_evidence` | Review evidence | `review_automation`, `review_reality` | `review_evidence` | no |
-| `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts`, `review_rules` | `review_reality` | yes |
+| `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts`, `review_rules`, `fleet_config` | `review_reality` | yes |
 | `review_rules` | Merge and review rules kept as code | `repo_root` | `review_rules` | no |
 | `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot`, `prior_level` | no |
 | `run_id` | Run id | - | private input | no |

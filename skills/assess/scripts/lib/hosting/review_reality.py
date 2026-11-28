@@ -24,7 +24,20 @@ Block (``review_reality`` in run-context.json)::
      "merge_queue": bool | None,          # GitHub only (#856): merges go through a queue
      "merge_queue_source": str | None,    # "ruleset" (platform) or "committed" (review_rules)
      "sequence": [str],      # one token per sampled change, oldest merge first (#943)
-     "bot_sequence": [str]}  # "bot", "none" or "unknown" per change, same order
+     "bot_sequence": [str],  # "bot", "none" or "unknown" per change, same order
+     # approval integrity (#1664), counts of sampled changes, each int | None:
+     "independent_approval_count", "no_independent_approval_count",
+     "bot_only_approval_count", "stale_approval_count",  # stale: null on GitLab
+     "approved_after_merge_count", "self_merged_unapproved_count", "bot_authored_count"}
+
+The approval-integrity counts come from ``lib/hosting/approval_integrity.py``, whose
+docstring defines them: an approval by a person other than the author (bots and
+``[identities]`` bots and agents excluded), a bot-only approval, an approval on an older
+commit than the head, one after the merge, a self-merge without a person's approval, and a
+bot author. ``approved_share`` is unchanged by them and still counts a bot's approval (#1660
+question 4). They read the same sample fields, so they add no listing; an approver the comment pass
+has not classified costs one bot probe from the shared ``MAX_LOGIN_PROBES`` budget, and an
+account whose bot status cannot be learned (past that cap too) makes the count it decides null.
 
 ``sequence`` reads each change with the predicates behind the shares: ``approved``
 (counted by ``approved_share``), ``reviewed`` (counted by ``reviewed_share`` but not
@@ -95,6 +108,8 @@ history_window=None, run_date=None)` draws the sample itself. It
 emits `review_reality: {available, merged_count, oldest_merged_days_ago,
 reviewed_share, approved_share, bot_review_share, self_merged_share,
 review_required, hollow_required_review, required_approval_bypassed, sequence, bot_sequence}` (the two token lists, oldest merge first, feed the review strip in `lib/assess_diagrams_review.py`, #943).
+It also carries the seven approval-integrity counts of `lib/hosting/approval_integrity.py`
+(#1664), with `[identities]` read from `fleet_config`.
 `reviewed_share` counts a review in any state by any account other than the
 author; `approved_share` counts only `APPROVED` ones;
 `bot_review_share` counts a comment by a bot other than `github-actions` (nothing
@@ -147,14 +162,19 @@ from typing import Any
 from urllib.parse import quote
 
 from lib.ci.review_rules import committed_merge_queue, scan_review_rules
+from lib.agent_identity import AuthorMatcher
 from lib.fleet_config import FleetConfig
+from lib.history.ai_usage import matcher_from_config
+from lib.hosting.approval_integrity import github_counts, gitlab_counts
 from lib.hosting.gh_cli import GhUnavailable, gh_api, unavailable
 from lib.hosting.gitlab_cli import GitlabProject, branch_pattern, branch_protection, glab_api
 from lib.hosting.merged_sample import (
     PR_FIELDS as PR_FIELDS,  # re-exported: the fields the sample reads
     STATUS_BOTS, BotClassifier, MergedSample, SampleOrReason, merged_sample, parse_time,
 )
-from lib.hosting.gitlab_notes import NoteFacts, NoteFactsOrReason, gitlab_note_facts
+from lib.hosting.gitlab_notes import (
+    NoteFacts, NoteFactsOrReason, classifier_from_config, gitlab_note_facts,
+)
 from lib.hosting.merged_sample import login as _login
 
 # Under this share of reviewed merges, a required-review rule is hollow.
@@ -338,8 +358,10 @@ def _days_ago(stamp: Any, now: datetime) -> int | None:
 def summarize(prs: list[dict[str, Any]], required: bool | None,
               bots: BotClassifier | None = None,
               now: datetime | None = None,
-              queue: tuple[bool | None, str | None] = (None, None)) -> dict[str, Any]:
-    """The available block from sampled pull requests (pure except bot probes)."""
+              queue: tuple[bool | None, str | None] = (None, None),
+              matcher: AuthorMatcher | None = None) -> dict[str, Any]:
+    """The available block from sampled pull requests (pure except bot probes).
+    ``matcher`` carries ``[identities]`` for the approval-integrity counts."""
     bots = bots or BotClassifier()
     now = now or datetime.now(timezone.utc)
     total = len(prs)
@@ -367,6 +389,7 @@ def summarize(prs: list[dict[str, Any]], required: bool | None,
         "merge_queue_source": queue[1],
         "sequence": [change_state(a, r) for a, r in zip(approved_flags, reviewed_flags)][::-1],
         "bot_sequence": [bot_token(v) for v in verdicts][::-1],
+        **github_counts(prs, bots, matcher or AuthorMatcher()),
     }
 
 
@@ -458,10 +481,12 @@ def _approved_by_other(approvals: Any, author: str | None) -> bool:
 
 def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, Any]],
                                now: datetime | None = None,
-                               notes: NoteFactsOrReason = None) -> dict[str, Any]:
+                               notes: NoteFactsOrReason = None,
+                               fleet_config: FleetConfig | None = None) -> dict[str, Any]:
     """The ``review_reality`` block for a GitLab project's sampled merge requests
     (see module docstring). ``notes``: one ``NoteFacts`` per merge request, in order
-    (``gitlab_notes.gitlab_note_facts``); None reads no note evidence."""
+    (``gitlab_notes.gitlab_note_facts``); None reads no note evidence. ``fleet_config``
+    carries ``[identities]`` for the approval-integrity counts."""
     now = now or datetime.now(timezone.utc)
     enc = project.encoded
     if isinstance(notes, dict):
@@ -470,6 +495,7 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
         notes if notes is not None and len(notes) == len(mrs) else [None] * len(mrs))
     reviewed: list[bool | None] = []
     approved_flags: list[bool] = []
+    approvals_read: list[Any] = []
     try:
         approved = self_merged = 0
         ages: list[int] = []
@@ -481,6 +507,7 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
             merger = _username(mr.get("merge_user")) or _username(mr.get("merged_by"))
             approvals = glab_api(project, f"projects/{enc}/merge_requests/{iid}/approvals")
             by_other = _approved_by_other(approvals, author)
+            approvals_read.append(approvals)
             approved += by_other
             approved_flags.append(by_other)
             fact = facts[len(reviewed)] if len(reviewed) < len(facts) else None
@@ -514,29 +541,34 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
         "required_approval_bypassed": bypassed,
         "sequence": [change_state(a, r) for a, r in zip(approved_flags, reviewed)][::-1],
         "bot_sequence": [bot_token(v) for v in bots][::-1],
+        **gitlab_counts(mrs, approvals_read, classifier_from_config(fleet_config)),
     }
 
 
 def review_reality_from_sample(sample: SampleOrReason,
                                notes: NoteFactsOrReason = None,
-                               review_rules: object = None) -> dict[str, Any]:
+                               review_rules: object = None,
+                               fleet_config: FleetConfig | None = None) -> dict[str, Any]:
     """The ``review_reality`` registry entry: the block from the shared ``merged_sample``
     and, on GitLab, the ``gitlab_note_facts`` read from it. ``review_rules`` is the
     committed-rules block (``lib.ci.review_rules``), whose merge queue fills
-    ``merge_queue`` when the platform rules could not be read (#856).
+    ``merge_queue`` when the platform rules could not be read (#856). ``fleet_config``
+    carries ``[identities]`` for the approval-integrity counts (#1664).
 
     An unavailable sample is returned as the block, reason and all."""
     if not isinstance(sample, MergedSample):
         return sample
     changes = list(sample.changes)
     if sample.gitlab is not None:
-        return scan_gitlab_review_reality(sample.gitlab, changes, notes=notes)
+        return scan_gitlab_review_reality(sample.gitlab, changes, notes=notes,
+                                          fleet_config=fleet_config)
     if sample.github is None:
         return unavailable("no_remote: the sample names no repository")
     required, ruleset_queue = branch_rules(sample.github.slug)
     committed = committed_merge_queue(review_rules if isinstance(review_rules, dict) else None)
     return summarize(changes, required, sample.bots,
-                     queue=merge_queue(ruleset_queue, required, committed))
+                     queue=merge_queue(ruleset_queue, required, committed),
+                     matcher=matcher_from_config(fleet_config))
 
 
 def scan_review_reality(repo_root: Path, history_window: str | None = None,
@@ -547,4 +579,4 @@ def scan_review_reality(repo_root: Path, history_window: str | None = None,
     today = run_date or datetime.now(timezone.utc).date().isoformat()
     sample = merged_sample(repo_root, history_window, today)
     return review_reality_from_sample(sample, gitlab_note_facts(sample, fleet_config),
-                                      scan_review_rules(repo_root))
+                                      scan_review_rules(repo_root), fleet_config)

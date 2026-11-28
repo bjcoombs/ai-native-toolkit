@@ -1432,6 +1432,55 @@
                 "type": "string"
               },
               "description": "One token per sampled change, in the order of sequence: bot, none or unknown (review-bot output, #943)."
+            },
+            "independent_approval_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Sampled changes approved by a person other than the author (bots, [identities] bots and agents excluded; lib/hosting/approval_integrity.py, #1664); null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
+            },
+            "no_independent_approval_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Sampled changes without an approval by a person other than the author; null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
+            },
+            "bot_only_approval_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Sampled changes approved by another account, every one of them a bot; null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
+            },
+            "stale_approval_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Sampled changes whose approvals by people all name a commit other than the head (always null on GitLab, which gives no reviewed commit); null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
+            },
+            "approved_after_merge_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Sampled changes whose earliest approval by a person came after the merge (null on GitLab where no approval time is given); null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
+            },
+            "self_merged_unapproved_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Sampled changes merged by their author without an approval by a person; null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
+            },
+            "bot_authored_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Sampled changes authored by a bot; null when an account whose bot status is unknown, a missing commit or an unreadable time decides it."
             }
           }
         },

@@ -112,6 +112,10 @@ def test_review_reality_unreviewed_required_review_is_hollow(world) -> None:
         "required_approval_bypassed": True,
         "merge_queue": None, "merge_queue_source": None,
         "sequence": ["unreviewed"] * 10, "bot_sequence": ["none"] * 10,
+        "independent_approval_count": 0, "no_independent_approval_count": 10,
+        "bot_only_approval_count": 0, "stale_approval_count": 0,
+        "approved_after_merge_count": 0, "self_merged_unapproved_count": 10,
+        "bot_authored_count": 0,
     }
     # The ruleset already said yes: the protection read is skipped.
     assert not any("/protection" in c for c in world.calls())
@@ -391,3 +395,37 @@ def test_without_a_committed_queue_unreadable_rules_leave_merge_queue_unknown(wo
 def test_merge_queue_reads_the_platform_first(ruleset_queue, required, committed, expected) -> None:
     from lib.hosting.review_reality import merge_queue
     assert merge_queue(ruleset_queue, required, committed) == expected
+
+
+def test_review_reality_approval_integrity_end_to_end(world) -> None:
+    """#1664: the counts through the real gh path, with ``[identities]`` naming a bot.
+    ``approved_share`` still counts the bot's approval; no login reaches the block."""
+    from lib.fleet_config import parse_fleet_config
+
+    _require_by_ruleset(world)
+    world.serve("user-lintbot%5Bbot%5D", {"login": "lintbot[bot]", "type": "Bot"})
+
+    def approved(who: str, commit: str, at: str) -> dict:
+        return {"author": {"login": who}, "state": "APPROVED",
+                "commit": {"oid": commit}, "submittedAt": at}
+
+    prs = [_pr(n) for n in range(5)]
+    for pr in prs:
+        pr["headRefOid"] = "c0ffee"
+    prs[0]["reviews"] = [approved("bob", "c0ffee", "2026-08-31T00:00:00Z")]
+    prs[1]["reviews"] = [approved("bob", "facade", "2026-08-31T00:00:00Z")]  # stale
+    prs[2]["reviews"] = [approved("bob", "c0ffee", "2026-09-02T00:00:00Z")]  # after merge
+    prs[3]["reviews"] = [approved("lintbot", "c0ffee", "2026-08-31T00:00:00Z")]  # probed bot
+    prs[4]["reviews"] = [approved("reviewer-app", "c0ffee", "2026-08-31T00:00:00Z")]
+    world.serve("prs.json", prs)
+    config = parse_fleet_config('[identities]\nbots = ["reviewer-app[bot]"]\n')
+    block = scan_review_reality(world.root, fleet_config=config)
+    assert block["approved_share"] == 1.0  # unchanged meaning: bots included
+    assert {k: block[k] for k in block if k.endswith("_count") and k != "merged_count"} == {
+        "independent_approval_count": 3, "no_independent_approval_count": 2,
+        "bot_only_approval_count": 2, "stale_approval_count": 1,
+        "approved_after_merge_count": 1, "self_merged_unapproved_count": 2,
+        "bot_authored_count": 0,
+    }
+    text = json.dumps(block)
+    assert "bob" not in text and "lintbot" not in text and "reviewer-app" not in text

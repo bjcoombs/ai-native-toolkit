@@ -5463,12 +5463,13 @@
     {
       "name": "review_reality",
       "title": "Review on merged changes",
-      "summary": "Review and approval shares over the sampled merged changes, read through gh or glab.",
+      "summary": "Review and approval shares, and approval-integrity counts, over the sampled merged changes, read through gh or glab.",
       "collector": "core.review_reality",
       "reads": [
         "merged_sample",
         "gitlab_note_facts",
-        "review_rules"
+        "review_rules",
+        "fleet_config"
       ],
       "headless_reads": null,
       "network": true,
@@ -7512,7 +7513,8 @@
       "reads": [
         "merged_sample",
         "gitlab_note_facts",
-        "review_rules"
+        "review_rules",
+        "fleet_config"
       ],
       "network": true,
       "private": false

@@ -466,6 +466,13 @@ DELIVERY: JsonDict = {
 
 _TOKENS: JsonDict = {"type": "array", "items": {"type": "string"}}
 
+
+def _approvals(what: str) -> JsonDict:
+    """An approval-integrity count of sampled changes (#1664)."""
+    return _field({"type": ["integer", "null"]},
+                  f"Sampled changes {what}; null when an account whose bot status is unknown, "
+                  "a missing commit or an unreadable time decides it.")
+
 REVIEW_REALITY: JsonDict = {
     "description": (
         "Whether merged changes were reviewed (lib/hosting/review_reality.py), from the shared sample "
@@ -509,6 +516,22 @@ REVIEW_REALITY: JsonDict = {
                                     "behind approved_share and reviewed_share (#943)."),
         "bot_sequence": _field(_TOKENS, "One token per sampled change, in the order of sequence: "
                                         "bot, none or unknown (review-bot output, #943)."),
+        "independent_approval_count": _approvals(
+            "approved by a person other than the author (bots, [identities] bots and agents "
+            "excluded; lib/hosting/approval_integrity.py, #1664)"),
+        "no_independent_approval_count": _approvals(
+            "without an approval by a person other than the author"),
+        "bot_only_approval_count": _approvals(
+            "approved by another account, every one of them a bot"),
+        "stale_approval_count": _approvals(
+            "whose approvals by people all name a commit other than the head (always null on "
+            "GitLab, which gives no reviewed commit)"),
+        "approved_after_merge_count": _approvals(
+            "whose earliest approval by a person came after the merge (null on GitLab where no "
+            "approval time is given)"),
+        "self_merged_unapproved_count": _approvals(
+            "merged by their author without an approval by a person"),
+        "bot_authored_count": _approvals("authored by a bot"),
     },
 }
 

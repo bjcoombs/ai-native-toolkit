@@ -314,6 +314,12 @@ def test_gitlab_review_reality_is_available(world: World) -> None:
         "approved_share": 0.3, "bot_review_share": 0.0, "self_merged_share": 0.7,
         "review_required": True, "hollow_required_review": False,
         "required_approval_bypassed": False,
+        # Approval integrity (#1664): GitLab gives no reviewed commit (stale null), and
+        # these approvals carry no approved_at, so after-merge is null too.
+        "independent_approval_count": 3, "no_independent_approval_count": 7,
+        "bot_only_approval_count": 0, "stale_approval_count": None,
+        "approved_after_merge_count": None, "self_merged_unapproved_count": 7,
+        "bot_authored_count": 0,
     }
     assert "SECRET" not in json.dumps(block) and "bob" not in json.dumps(block)
     assert world.calls("ghlog") == []
