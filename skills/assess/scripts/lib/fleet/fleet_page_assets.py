@@ -17,7 +17,8 @@ words what it finds. Its parts:
   (set on the page, not yet read by a run) is shown as set, with its progress to come; a
   ``target_note`` in the bundle says why a page offers no entry.
 - **Sections.** ``SECTIONS`` lists the section renderers in page order: Fleet at a glance (the
-  front screen, #1255, from the bundle's ``front``: Step counts, moves, one change away, gates
+  front screen, #1255, from the bundle's ``front``: Step counts, each with those whose next Step
+  reads not measured (#1640), moves, one change away, gates
   ranked by the repositories each would move, team units by name, each a button that opens it in
   the ownership view), then Practice packs (a ``--pack`` run's per-pack counts, #1276), then
   Since last run, Where this unit stands, Your target, Drill-down, Practice shape (#1368: one
@@ -32,7 +33,9 @@ words what it finds. Its parts:
   then a repository's detail with its truth tags (met and unmet counts, from the bundle), then a
   tag's conditions (from the bundle's ``tags[].conditions``) each with its state as the grid shows
   it (the practice's reading: held when it reads at or above the condition's level, not measured
-  with its reason) and the next Step's needs, then one condition's hover lines (``cellTitle``).
+  with its reason) and the next Step's needs, then one condition's hover lines (``cellTitle``), whose
+  reading names the cell's next condition: "Next condition" when that is not the one selected.
+  The next Step's needs read the same in the hover and the tag tier: both come from ``needs``.
   The tag counts are the level result's counted conditions and the states are the grid's
   readings, so a listed but uncounted condition can read held with 0 met; the page says so.
   ``state`` carries ``repo``, ``tag`` and ``cond`` (``{row, level}``); a click on a tier above
@@ -46,7 +49,8 @@ words what it finds. Its parts:
 - **Order.** Units and repositories are listed by label, never by rank.
 
 ``renderPage(bundle, state, targets, canSet, extra)`` returns the HTML of the whole app and
-``cellTitle(bundle, repo, cell)`` a heatmap cell's hover text, both pure, so a Node test
+``cellTitle(bundle, repo, cell, level)`` a heatmap cell's hover text (``level`` the selected
+condition's, in the drill-down only), both pure, so a Node test
 (``tests/test_fleet_page.py``) runs them on the fixture without a browser.
 """
 from __future__ import annotations
@@ -221,7 +225,19 @@ SCRIPT = r"""
     }
     return out;
   }
-  function cellTitle(bundle, repo, cell) {
+  function needs(bundle, r, gate, text, end) {
+    // the next Step's needs, one wording for the hover (plain text) and the tag tier (HTML)
+    if (r.next) {
+      return text(stepName(bundle, r.next.step) + " needs: ") + r.next.blockers.map(function (b) {
+        return gate(b.gate) + text(b.state === "not_measured" ? " (not measured: " + (b.reason || "no_value") + ")"
+          : b.excluded ? " (set aside by the owner)" : "");
+      }).join(", ");
+    }
+    return text(r.step === null || r.step === undefined ? "No measured Step for this repository" : "At the top Step") + end;
+  }
+  function plain(s) { return s; }
+  function cellTitle(bundle, repo, cell, level) {
+    // ``level``: the condition selected in the drill-down; the reading names the cell's next one
     var row = bundle.rows[cell.row];
     var lines = [row.title];
     if (cell.status !== "level") {
@@ -230,20 +246,13 @@ SCRIPT = r"""
       lines.push("State: level " + cell.level + " of " + row.top_level);
     }
     if (cell.signal) {
-      lines.push("Condition: " + row.title + ", level " + (cell.next_level === null || cell.next_level === undefined ? "next" : cell.next_level)
+      var next = cell.next_level === null || cell.next_level === undefined ? null : cell.next_level;
+      lines.push((level !== undefined && level !== next ? "Next condition: " : "Condition: ") + row.title + ", level "
+        + (next === null ? "next" : next)
         + ", reads " + cell.signal + (cell.value !== null && cell.value !== undefined ? " (measured " + cell.value + ")" : ""));
     }
     if (cell.why) { lines.push("Why: " + cell.why); }
-    if (repo.next) {
-      lines.push(stepName(bundle, repo.next.step) + " needs: " + repo.next.blockers.map(function (b) {
-        return b.gate + (b.state === "not_measured" ? " (not measured: " + (b.reason || "no_value") + ")"
-          : b.excluded ? " (set aside by the owner)" : "");
-      }).join(", "));
-    } else if (repo.step === null || repo.step === undefined) {
-      lines.push("No measured Step for this repository");
-    } else {
-      lines.push("At the top Step");
-    }
+    lines.push(needs(bundle, repo, plain, plain, ""));
     return lines.join("\n");
   }
   function cellClass(bundle, cell) {
@@ -262,13 +271,7 @@ SCRIPT = r"""
     return (cell.level >= level ? "held, " : "not held yet, ") + reads;
   }
   function needsLine(bundle, r) {
-    if (r.next) {
-      return esc(stepName(bundle, r.next.step)) + " needs: " + r.next.blockers.map(function (b) {
-        return "<code>" + esc(b.gate) + "</code>" + esc(b.state === "not_measured" ? " (not measured: "
-          + (b.reason || "no_value") + ")" : b.excluded ? " (set aside by the owner)" : "");
-      }).join(", ");
-    }
-    return r.step === null || r.step === undefined ? "No measured Step for this repository." : "At the top Step.";
+    return needs(bundle, r, function (g) { return "<code>" + esc(g) + "</code>"; }, esc, ".");
   }
   function tagList(bundle, r) {
     if (!r.tags) { return "<p>Truth tags: not measured for this repository, never read as zero.</p>"; }
@@ -298,7 +301,7 @@ SCRIPT = r"""
     var cell = cellOf(r, cond.row);
     if (!cell || !bundle.rows[cond.row]) { return ""; }
     return "<div class=\"panel\"><p><strong>" + esc(condName(bundle, cond)) + "</strong>: "
-      + esc(condState(bundle, cell, cond.level)) + "</p><ul>" + cellTitle(bundle, r, cell).split("\n").map(function (l) {
+      + esc(condState(bundle, cell, cond.level)) + "</p><ul>" + cellTitle(bundle, r, cell, cond.level).split("\n").map(function (l) {
         return "<li>" + esc(l) + "</li>";
       }).join("") + "</ul></div>";
   }
@@ -484,7 +487,8 @@ SCRIPT = r"""
       out += "<p>Not drawn: skipped: " + esc(f.skipped) + "</p>";
     } else {
       out += "<ul>" + f.steps.map(function (s) {
-        return "<li>" + esc(stepName(bundle, s.step)) + ": " + esc(repos(s.count)) + "</li>";
+        var unread = s.next_not_measured ? " (" + s.next_not_measured + " with Step " + (s.step + 1) + " not measured)" : "";
+        return "<li>" + esc(stepName(bundle, s.step)) + ": " + esc(repos(s.count) + unread) + "</li>";
       }).join("") + "</ul>";
       if (f.not_measured) { out += "<p class=\"muted\">" + esc(repos(f.not_measured)) + " with no measured Step.</p>"; }
     }

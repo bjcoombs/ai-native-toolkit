@@ -30,7 +30,11 @@ artifact. ``plan`` with ``--org-dir`` then writes ``OUT/publish/plan.json`` (the
 order), ``index.html`` and ``shards/<folder>/`` per shard. ``record-shard`` keeps the index's or
 one shard's URL in ``ORG_DIR/shards.json``; ``--shard`` takes the folder ``shards`` prints and is
 refused unless ``OUT/publish/plan.json`` names it. Without ``--org-dir`` a run that needs shards is
-refused, as before.
+refused, as before. A run that fits one artifact on its own but not with the strays and targets
+the artifact already stores (earlier runs, units and repositories, strays, targets) stays one artifact and is
+refused, naming the strays to remove or saying there are none, whether or not ``--org-dir`` was
+passed. A shard folder under ``--exports`` is read as it is, so a recorded shard whose folder
+lacks ``runs.json``, ``units.json`` or ``repos.json`` is refused, naming them.
 
 ``record`` keeps the artifact URL in ``ORG_DIR/publish.json`` (the fleet's history directory for
 the org), so the next run publishes to the same artifact. ``url`` prints that URL on stdout, or
@@ -67,6 +71,8 @@ from lib.fleet.fleet_publish_session import (
     LIMITS_PINNED,
     PUBLISH_DIR,
     STORED_COLLECTIONS,
+    PinnedWrite,
+    PlanSummary,
     StoredDoc,
     plan_publish,
     read_export,
@@ -127,8 +133,11 @@ def _data(out: Path) -> dict[str, Any]:
     return data
 
 
-def _exports(folder: Path) -> dict[str, list[StoredDoc]]:
-    exports: dict[str, list[StoredDoc]] = {c: [] for c in STORED_COLLECTIONS}  # a first publish has nothing stored
+def _exports(folder: Path, *, fill: bool = True) -> dict[str, list[StoredDoc]]:
+    """The ``<collection>.json`` files in ``folder``; with ``fill``, a missing stored collection is an
+    empty one (a first publish has nothing stored). A shard's folder is read without ``fill``, so a
+    recorded shard missing a stored collection is refused (``plan_sharded``)."""
+    exports: dict[str, list[StoredDoc]] = {c: [] for c in STORED_COLLECTIONS} if fill else {}
     for path in sorted(folder.glob("*.json")):
         exports[path.stem] = read_export(_json(path), path.stem)
     return exports
@@ -159,7 +168,7 @@ def _plan_sharded(args: argparse.Namespace, out: Path, data: dict[str, Any], pag
     """Plan and write a sharded publish; None when the run fits one artifact (see the module doc)."""
     registry = read_shards(Path(args.org_dir))
     root = Path(args.exports)
-    exports = {p.name: _exports(p) for p in sorted(root.iterdir()) if p.is_dir()} if root.is_dir() else {}
+    exports = {p.name: _exports(p, fill=False) for p in sorted(root.iterdir()) if p.is_dir()} if root.is_dir() else {}
     sharded = plan_sharded(data, exports, run_id=run_id, registry=registry, allow_names=args.allow_names)
     if sharded is None:
         return None
@@ -183,6 +192,24 @@ def _plan_sharded(args: argparse.Namespace, out: Path, data: dict[str, Any], pag
     return 0
 
 
+def _over_cap(summary: PlanSummary, batches: list[list[PinnedWrite]]) -> str:
+    """Why a one-artifact plan is over the document cap. Only a run whose own documents are over it
+    is told to shard: one that fits on its own is over because of what the artifact already stores
+    (earlier runs, units and repositories, strays, targets), and the shard plan keeps such a run one artifact."""
+    size, strays = summary["size"], summary["strays"]
+    own = len({f"{w['collection']}/{w['doc_id']}" for batch in batches for w in batch})
+    if own > size["document_limit"]:
+        return (f"the run needs {size['documents']} documents, over one artifact's {size['document_limit']}; "
+                "plan it with --org-dir to shard it")
+    head = (f"the run's {own} documents fit one artifact, but with the {size['documents'] - own} the artifact "
+            f"already stores it needs {size['documents']}, over one artifact's {size['document_limit']}")
+    if strays["count"]:
+        return (f"{head}; {strays['count']} of them are strays (in {', '.join(strays['collections'])}): remove them "
+                "from the artifact, export again and plan again")
+    return (f"{head}; none of them is a stray ({strays['targets']} are targets, the rest earlier runs, units and repositories), "
+            "so there is nothing safe to remove")
+
+
 def _plan(args: argparse.Namespace) -> int:
     out = Path(args.out)
     data = _data(out)
@@ -201,8 +228,7 @@ def _plan(args: argparse.Namespace) -> int:
     if not size["fits"]:  # nothing oversized is left to send: no batch, and an earlier plan's removed
         for stale in (out / PUBLISH_DIR).glob("batch-*.json"):
             stale.unlink()
-        print(f"fleet_publish_plan: the run needs {size['documents']} documents, over one artifact's "
-              f"{size['document_limit']}; plan it with --org-dir to shard it, so nothing was planned", file=sys.stderr)
+        print(f"fleet_publish_plan: {_over_cap(summary, batches)}, so nothing was planned", file=sys.stderr)
         return 2
     folder = write_plan(out, summary, batches, live_page(page, data, summary["mode"], run_id))
     print(f"fleet_publish_plan: run {run_id}, {summary['mode']}, {len(batches)} batch(es), {size['documents']} of "

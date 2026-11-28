@@ -223,11 +223,11 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 - **Generated test reports**: `html-report/`, `playwright-report/`, `lighthouse-report.html`, `lighthouse-results.json`, `zap-report.*`, and `*.jsonl` under a `fixtures/` directory below the top level. When the 5 largest files are all JSON, YAML or JSONL scored by scc with complexity 0, stderr hints at `.assess/config.toml` excludes.
 - **Generated code**: protobuf bindings (`*.pb.go`, `*_grpc.pb.go`, `*.pb.gw.go`, `*.connect.go`, `*_pb.ts`, `*_pb.d.ts`, `*_pb2.py`, `*.pb.cc`, `*.pb.h`), Go generators (`*.gen.go`, `wire_gen.go`, `zz_generated_*.go`, `bindata.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart/Flutter codegen (`*.freezed.dart`, `*.g.dart`, `*.gr.dart`), `*.generated.*`, `*.gen.ts`, `database.types.ts`, and any file with a comment in its first 5 lines carrying a generator marker (`DO NOT EDIT`, `@generated`, etc.; reason `generated-header`) or whose average line exceeds 1,000 characters (reason `long-lines`). Content-matched files are listed in `excluded_generated` (stats file and `run-context.json`), which the report and gate disclose.
 
-**Dominance warning.** If a single file still holds >30% of total scoreable LOC after filtering (the threshold compiled bundles typically cross), the script prints a warning to stderr identifying the file. When you see this, the right next step depends on *why* the file is large:
+**Dominance warning.** If a single file still holds >30% of total scoreable LOC after filtering, the script prints a warning to stderr naming the file. Size alone is not evidence of build output: in a small repository (a browser extension, say) one hand-written script can pass 30%. The warning says which case it found, and the next step depends on that; in every case, do NOT skip the rest of the assessment, because the layered scan still produces useful signal:
 
-- **Compiled bundle or committed build output** (`main.dart.js`, a bundled JS file, etc.): surface in the report's "Hotspot snapshot" section as "`<file>` holds X% of LOC and is likely a build artifact - recommend adding to `.gitignore` and re-running." Add a Top 3 Action of the same shape.
+- **Content evidence of build output** (the warning reads "likely a build artifact (`<reason>`)", where the reason is `sourcemap` for a `sourceMappingURL` comment or a sibling `.map` file, `bundler-banner` for webpack or Parcel bootstrap code, `generated-header` or `long-lines`): surface in the report's "Hotspot snapshot" section as "`<file>` holds X% of LOC and is likely a build artifact (`<reason>`) - recommend adding to `.gitignore` and re-running." Add a Top 3 Action of the same shape.
+- **No content evidence, and the file is source code** (the warning reads "dominant, with no content evidence of build output"; a hand-written script, say): report "`<file>` holds X% of LOC" as a concentration finding in the "Hotspot snapshot" section. Never call it a build artifact or recommend `.gitignore` for it.
 - **Intentionally-tracked reference data** (regulatory raw exports, vetted-context corpora, seed datasets, large CSV/JSON reference tables): the file is *meant* to be in git but isn't source code. The fix is `--exclude`, not `.gitignore`. Recommend the user persist the rule in `.assess/config.toml` so subsequent runs apply it automatically (see "Custom excludes" below). Do not push toward `.gitignore` in this case.
-- Either way, do NOT skip the rest of the assessment - the layered scan still produces useful signal.
 
 **Custom excludes for vetted-context / reference data.** When the repo intentionally tracks large non-source files, two mechanisms extend the built-in defaults (the built-ins always apply; both layers are additive). **The same excludes apply across every scan** - the heatmap, the doc-navigability graph, the doc-staleness pass, and the liveness scan all honour the same list, so "this is reference data, not source" is a single statement, not a per-layer toggle:
 
@@ -350,7 +350,7 @@ jq '.test_focus' "$REPO_ROOT/.assess/run-context.json"
 # regex mirrors sibling_tests.IS_TEST_RE; suffixes mirror test_focus.MUTABLE_SUFFIXES).
 # Tool by dominant focus-file language
 # (Python -> mutmut, TS/JS -> stryker); mutmut when mixed.
-FOCUS_FILES=$(jq -r '(.test_focus.entries // [])[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path | select(split("/") as $p | (($p[-1] | sub("\\.[^.]*$"; "") | test("(^test_|_test$|\\.test$|\\.spec$|_spec$|Tests?$)")) or ($p[-1] | endswith(".bats")) or any($p[:-1][]; . == "__tests__")) | not) | select(test("\\.(py|tsx?|jsx?|go|rs)$"))' "$REPO_ROOT/.assess/run-context.json" | head -5)
+FOCUS_FILES=$(jq -r '(.test_focus.entries // [])[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path | select(split("/") as $p | (($p[-1] | sub("\\.[^.]*$"; "") | test("(^test_|_test$|\\.test$|\\.spec$|_spec$|Tests?$)")) or ($p[-1] | endswith(".bats")) or any($p[:-1][]; . == "__tests__")) | not) | select(test("\\.(py|tsx?|jsx?|go|rs)$"))' "$REPO_ROOT/.assess/run-context.json" | tr -d '\r' | head -5)
 case "$FOCUS_FILES" in
   *.ts|*.tsx|*.js|*.jsx) MUT_TOOL=stryker ;;
   *) MUT_TOOL=mutmut ;;
@@ -360,7 +360,7 @@ command -v "$MUT_TOOL" >/dev/null 2>&1 && MUT_PRESENT=1 || MUT_PRESENT=0
 
 # Re-offer once when the existing decline was made under an older plugin major
 # (the mutation pass may have changed materially since). The core computes this.
-REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null)
+REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null | tr -d '\r')
 ```
 
 **Offer with AskUserQuestion** as a **standalone question** (skip it entirely when `run-context.json .interactive` is `false`, or when `MUT_DECLINED=1` **unless** `REOFFER_MUT=true`, in which case ask once more - the prior decline predates a major bump). Frame the code modification explicitly - not "run a deeper test analysis?" but "**this will modify your source files** (mutating up to 5 focus files) and run your test suite over the changes, time-boxed, then revert". When re-offering, say so: _"You previously declined mutation testing under an older version; the pass has since changed - run it now?"_. Three options, same shape as Steps 2a/2b:

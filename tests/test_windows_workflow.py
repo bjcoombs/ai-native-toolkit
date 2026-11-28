@@ -307,3 +307,63 @@ def test_long_path_step_builds_the_fixture_and_runs_the_scanners() -> None:
     # vulture is not in the locked environment; without it liveness is not measured.
     assert '--with "vulture==' in run[signals:check]
     assert (REPO / "tests" / "fixtures" / "windows_smoke" / "longpath.py").is_file()
+
+
+
+# The Python 3.15 probe (#1490): its own workflow that tries to reproduce the
+# pytest-xdist startup crash on 3.15. It runs weekly and on demand only, so it
+# never costs a pull request a Windows runner and never gates a merge.
+PROBE_WORKFLOW = REPO / ".github" / "workflows" / "windows-py315.yml"
+PROBE_ID = "python315"
+PROBE_SUITES = ("assess", "contract")
+
+
+def _probe_doc() -> dict[str, Any]:
+    doc: dict[str, Any] = yaml.safe_load(PROBE_WORKFLOW.read_text(encoding="utf-8"))
+    return doc
+
+
+def _probe() -> dict[str, Any]:
+    jobs = _probe_doc()["jobs"]
+    assert set(jobs) == {PROBE_ID}, f"windows-py315.yml jobs: {sorted(jobs)}"
+    job: dict[str, Any] = jobs[PROBE_ID]
+    return job
+
+
+def test_python315_probe_runs_weekly_and_on_demand_only() -> None:
+    # PyYAML reads the bare `on:` key as True.
+    triggers = _probe_doc()[True]
+    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    assert len(triggers["schedule"]) == 1 and "cron" in triggers["schedule"][0]
+    assert PROBE_ID not in _jobs(), "the probe must not run with the per-PR windows.yml"
+
+
+def test_python315_probe_is_not_a_required_check() -> None:
+    probe = _probe()
+    assert probe["name"] != REQUIRED_NAME
+    assert "weekly" in probe["name"]
+    assert "strategy" not in probe
+    assert probe["runs-on"] == "windows-latest"
+
+
+def test_python315_probe_runs_parallel_suites_that_cannot_fail_the_job() -> None:
+    steps = {s.get("id"): s for s in _probe()["steps"] if "id" in s}
+    for sid in PROBE_SUITES:
+        step = steps[sid]
+        run = " ".join(step["run"].split())
+        assert step["continue-on-error"] is True, sid
+        assert step["shell"] == "bash", sid  # the reporter ran under Git Bash
+        assert "--python 3.15" in run, sid
+        assert "-n auto --dist loadfile" in run, sid
+        assert "set -o pipefail" in run, sid  # tee must not hide pytest's exit code
+
+
+def test_python315_probe_records_each_outcome() -> None:
+    steps = _probe()["steps"]
+    record = next(s for s in steps if s.get("name") == "Record the 3.15 outcome")
+    assert record["if"] == "${{ !cancelled() }}"
+    assert "continue-on-error" not in record
+    for sid in PROBE_SUITES:
+        assert f"${{{{ steps.{sid}.outcome }}}}" in record["env"].values(), sid
+    assert "Errno 22" in record["run"]
+    assert "GITHUB_STEP_SUMMARY" in record["run"]

@@ -16,6 +16,9 @@ precedes every gate line.
      reads ``1 advisory, and it blocks no Step.``; none reads ``Holding Step 4 of 4.``;
    - below it: ``Step 3 of 4: unattended agent PRs.``, the Step's name in the model, its first
      letter lowered unless the name opens with an acronym (``CI-gated merges`` stays);
+   - below it, when every gate of the next Step that does not hold was not measured
+     (``lib/scoring/step_reading.py``, #1640): ``Step 2, Step 3 not measured · Step 2 of 4:
+     supervised agent PRs.``, never the next Step;
    - below the first Step of a model whose Step 1 has a gate (#889): ``Not yet at Step 1 of 3.``;
    - a model without Steps: ``This maturity model defines no Steps.``;
 
@@ -34,7 +37,10 @@ precedes every gate line.
    ``Blocks Step 4: no coverage gate is enforced.`` (``GATE_GAP``, plus ``headline.gate_note``
    when the gate was not measured or the owner excluded it). A gate held by a met hazard reads
    ``the hazard <id> undermines the <gate> gate``, and one whose condition the repository
-   declined reads ``the repository declined <id>, so the <gate> gate cannot hold`` (#828); the
+   declined reads ``the repository declined <id>, so the <gate> gate cannot hold`` (#828), and
+   one not measured reads ``the CI runs tests gate, not measured here (needs a full run)``, never
+   as a gate not held (#1640); when every blocking gate reads so, the line opens ``Step 3 not
+   measured:`` in place of ``Blocks Step 3:``. The
    Start here line then names the hazard's fix, or says nothing is to do while the decline
    stands and how to lift it. When that one gate is all that
    stands below a higher Step whose other gates already hold (``headline.one_change_ceiling``,
@@ -51,7 +57,8 @@ precedes every gate line.
 5. ``Start here: ...`` and 6. ``Done when: ...``, exactly one each: the first open entry of
    ``.assess/actions.json`` by rank (``first_action``; its ``first_step``, in backticks unless
    it already holds some, else its ``action``, and its ``done_when``). With no open action:
-   below the top Step, the first blocking gate as a task (``GATE_TASK``), linked to its
+   below the top Step, the first blocking gate that was measured, else the first
+   (``step_reading.first_measured``, the gate the badge's ``next:`` names, #1640), as a task (``GATE_TASK``), linked to its
    catalog entry; at the top Step, the next run of ``/assess`` (``Done when: the next `/assess`
    run still holds every gate.``). The core reads ``actions.json``
    as it stands when the run starts, the file the previous run's finalize step wrote (or the
@@ -82,7 +89,9 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from lib.card_facts import CardFact, advisories, blocking_gates, fully_in_place, step_gate_ids, step_name, top_step
-from lib.scoring.headline import GATE_CHANGE, GATE_NOUN, GLOSSARY_URL, gate_note, one_change_ceiling, verified_count
+from lib.scoring.headline import (GATE_CHANGE, GATE_NOUN, GLOSSARY_URL, gate_note, one_change_ceiling, reason_word,
+                                  verified_count)
+from lib.scoring.step_reading import first_measured, next_unread, step_reading, unread_gap
 from lib.scoring.levels import MaturityModel
 from lib.model_change import model_changed_line
 from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
@@ -189,6 +198,8 @@ def _gap(blocker: Mapping[str, Any]) -> str:
         return f"the hazard {blocker.get('condition', '')} undermines the {noun} gate"
     if blocker.get("state") == "declined":  # #828: a declined condition never holds a gate
         return f"the repository declined {blocker.get('condition', '')}, so the {noun} gate cannot hold"
+    if blocker.get("state") == "not_measured":  # #1640: never read as a gate not held
+        return unread_gap(noun, reason_word(str(blocker.get("reason", ""))) if blocker.get("reason") else "")
     return GATE_GAP.get(gate, f"the {gate} gate does not hold yet") + gate_note(blocker)  # type: ignore[arg-type]
 
 
@@ -223,6 +234,10 @@ def _lead(level: Mapping[str, Any], model: MaturityModel) -> str:
                 else f" · {k} advisories, none blocks the Step")
         return f"Holding Step {step} of {top}{tail}."
     name = step_name(model, step)
+    reading = step_reading(level)
+    if reading is not None:  # #1640: the next Step's open gates were not measured
+        held = f"Step {step} of {top}: {_lower_first(name)}" if name else f"Step {step} of {top}"
+        return f"{reading} · {held}."  # the held Step's name stays beside its number
     return f"Step {step} of {top}: {_lower_first(name)}." if name else f"Step {step} of {top}."
 
 
@@ -288,7 +303,8 @@ def _blocks(level: Mapping[str, Any], model: MaturityModel, rollup: Any) -> str 
     nxt = level.get("next_step")
     if not gates or not isinstance(nxt, Mapping):
         return None
-    line = f"Blocks Step {nxt.get('step')}: {'; '.join(_gap(b) for b in gates)}."
+    lead = f"Step {nxt.get('step')} not measured" if next_unread(level) is not None else f"Blocks Step {nxt.get('step')}"
+    line = f"{lead}: {'; '.join(_gap(b) for b in gates)}."
     ceiling = one_change_ceiling(level, model.get("steps", []))
     if ceiling is not None:
         line = f"{line[:-1]}; that one change reaches Step {ceiling}."
@@ -338,13 +354,14 @@ def start_lines(level: Mapping[str, Any], action: CardAction | None) -> tuple[st
     gate as a task, else the next run of ``/assess``."""
     if action is not None:
         return f"Start here: {action['start']}", f"Done when: {_sentence(action['done_when'])}"
-    gates = blocking_gates(level)
-    if gates and (special := _special_start(level, gates[0])) is not None:
+    # the first measured blocking gate, the one the badge's next: names (#1640)
+    first = first_measured(blocking_gates(level))
+    if first is not None and (special := _special_start(level, first)) is not None:
         return special
-    if gates:
-        gate = str(gates[0].get("gate", ""))
+    if first is not None:
+        gate = str(first.get("gate", ""))
         task = GATE_TASK.get(gate, f"make the {gate} gate hold")
-        return (f"Start here: [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL}){gate_note(gates[0])}",
+        return (f"Start here: [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL}){gate_note(first)}",  # type: ignore[arg-type]
                 f"Done when: the next `/assess` run reads that {GATE_CHANGE.get(gate, f'the {gate} gate holds')}.")
     return ("Start here: run `/assess` again after your next change",
             "Done when: the next `/assess` run still holds every gate.")

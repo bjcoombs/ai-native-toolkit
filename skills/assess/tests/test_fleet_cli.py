@@ -431,6 +431,7 @@ def test_missing_layer_package_prints_the_pip_hint_once(froot, tmp_path, monkeyp
     assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams"]) == 0
     err = capsys.readouterr().err
     assert err.count("python -m pip install --user grimp") == 1
+    assert err.count(tool_lookup.NO_UV_POINTER) == 1
 
 
 def test_agent_clusters_are_unnamed_unless_asked(froot, tmp_path, monkeypatch, capsys):

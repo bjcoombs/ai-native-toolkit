@@ -24,7 +24,7 @@ write_decline_marker() {
   local who when ver
   who="$(git -C "$REPO_ROOT" config user.name 2>/dev/null || echo "${USER:-unknown}")"
   when="$(date +%Y-%m-%d)"
-  ver="$(assess_plugin_version)"
+  ver="$(assess_plugin_version | tr -d '\r')"
   jq -n --arg by "$who" --arg at "$when" --arg ver "$ver" --arg reason "$reason" \
     '{declined_by: $by, declined_at: $at, plugin_version: $ver}
        + (if $reason == "" then {} else {reason: $reason} end)' \

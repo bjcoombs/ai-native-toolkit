@@ -86,7 +86,7 @@
     },
     {
       "id": "core.ci_checks",
-      "revision": 9
+      "revision": 10
     },
     {
       "id": "core.ci_hazards",
