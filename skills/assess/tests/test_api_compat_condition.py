@@ -616,6 +616,7 @@ def test_a_pipe_check_in_a_workflow_step_counts(tmp_path: Path) -> None:
     "apidiff -incompatible old new | grep -q . || exit 1",                   # red only when nothing changed
     "apidiff -incompatible old new | grep -q . && echo changed",             # no re-raise
     "apidiff -incompatible old new | cat && exit 1",                         # decides nothing
+    f"{STEP_PIPE} &",                                                        # a background job; the step exits 0
 ])
 def test_a_masked_or_inverted_step_pipe_does_not_count(tmp_path: Path, line: str) -> None:
     block = _block(_repo(tmp_path, {WF: _workflow(line)}))

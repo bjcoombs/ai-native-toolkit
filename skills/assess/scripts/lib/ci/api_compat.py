@@ -95,6 +95,7 @@ _GITLAB_BODY = frozenset({"script", "before_script"})
 _GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
 _INCLUDE = re.compile(r"^include\s*:", re.M)
 _OUTPUT_FILE = re.compile(r"(?:\d?>>?|\btee(?:\s+-a)?)\s*([\w./-]+)")
+_BACKGROUND = re.compile(r"(?<![&>|])&(?![&>])")   # ``... && exit 1 &``: the exit runs in a background job
 _STATUS_VAR = re.compile(r"(?<![\w$])(\w+)=\$\?")
 _CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?(\w+)=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
 # The japicmp settings that make a breaking change stop the build: the Maven plugin's
@@ -475,7 +476,7 @@ class _Reader:
                 self.report_only.add("apidiff")
             text = ci_line_text(raw[index])   # a piped apidiff masking dropped (pipefail off), read as written
             piped = [c["words"] for c in _commands(_shell(text)) if as_written and tool_of(c["words"]) == "apidiff"]
-            if piped and not any(c["masked"] for c in commands) and not _rescued(text) and any(
+            if piped and not any(c["masked"] for c in commands) and not _rescued(text) and not _BACKGROUND.search(text) and any(
                     _checks_output(words, raw[index:]) for words in piped):
                 found.add("apidiff")
             elif piped:
