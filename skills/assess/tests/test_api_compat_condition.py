@@ -228,6 +228,8 @@ def test_a_pinning_test_with_the_test_run_unsettled_reads_not_measured(tmp_path:
     "def test_x() -> None:\n    assert 'EXPECTED_ALL' == 'x'  # __all__ ==\n",  # text only
     "def test_x() -> None:\n    assert set(mod.__all__) == {n for n in dir(mod) if not n.startswith('_')}\n",
     "def test_x() -> None:\n    assert sorted(mod.__all__) == sorted(n for n, _ in inspect.getmembers(mod))\n",
+    "def test_x() -> None:\n    assert set(m.__all__) == set(dir(m)) - {'helper'}\n",  # a literal inside, not the side
+    "def test_x() -> None:\n    assert set(m.__all__) == {n for n, _ in inspect.getmembers(m) if n not in ('a', 'b')}\n",
 ])
 def test_a_test_that_names_all_without_pinning_it_does_not_count(tmp_path: Path, body: str) -> None:
     root = _repo(tmp_path, {"tests/test_imports.py": body})
@@ -373,3 +375,27 @@ def test_gitlab_is_read_through_the_merged_view(tmp_path: Path) -> None:
     assert _block(_repo(tmp_path / "a", files))["runs"] == [{"path": ".gitlab-ci.yml", "tool": "buf-breaking"}]
     replaced = {**files, ".gitlab-ci.yml": files[".gitlab-ci.yml"] + "  script:\n    - make test\n"}
     assert _block(_repo(tmp_path / "b", replaced))["runs"] == []
+
+
+REVAPI_POM = ("<project><modelVersion>4.0.0</modelVersion><artifactId>widget</artifactId><build><plugins>"
+              "<plugin><groupId>org.revapi</groupId><artifactId>revapi-maven-plugin</artifactId>{config}"
+              "<executions><execution><goals><goal>{goal}</goal></goals></execution></executions></plugin>"
+              "</plugins></build></project>")
+
+
+def test_a_maven_revapi_check_goal_meets(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"pom.xml": REVAPI_POM.format(config="", goal="check"), WF: _workflow("mvn -B verify")})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "revapi"}]
+
+
+@pytest.mark.parametrize(("config", "goal", "line"), [
+    ("", "report", "mvn -B verify"),                                     # report only: never stops the build
+    ("<configuration><failBuildOnProblemsFound>false</failBuildOnProblemsFound></configuration>", "check",
+     "mvn -B verify"),
+    ("", "check", "mvn -B verify -Drevapi.failBuildOnProblemsFound=false"),
+])
+def test_a_revapi_run_that_cannot_stop_the_build_is_declared(tmp_path: Path, config: str, goal: str, line: str) -> None:
+    root = _repo(tmp_path, {"pom.xml": REVAPI_POM.format(config=config, goal=goal), WF: _workflow(line)})
+    block = _block(root)
+    assert block["runs"] == [] and block["present"] is False
+    assert "revapi" in {row["tool"] for row in block["declared"]}   # listed, never counted

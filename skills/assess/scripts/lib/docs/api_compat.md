@@ -32,7 +32,7 @@ A command invokes a tool when, past a launcher (`uv run`, `npx --yes`, `pnpm exe
 | `cargo-semver-checks` | `cargo semver-checks`, `cargo-semver-checks`, a step that `uses: obi1kenobi/cargo-semver-checks-action` |
 | `buf-breaking` | `buf breaking`, a step that `uses: bufbuild/buf-breaking-action` |
 | `japicmp` | `japicmp` or `java -jar <...japicmp...>.jar` with an `--error-on-*` flag; a Maven `japicmp-maven-plugin` goal or a Gradle `japicmp` plugin the asked task reaches, with a stop setting (below) |
-| `revapi` | `revapi`, a Maven `revapi-maven-plugin` goal or a Gradle `revapi` plugin the asked task reaches |
+| `revapi` | `revapi`, the Maven `revapi-maven-plugin:check` goal or a Gradle `revapi` plugin the asked task reaches, unless `failBuildOnProblemsFound` is set false (in a build file read or as `-Drevapi.failBuildOnProblemsFound=false`); a `report`-only goal never stops the build |
 
 **A run counts only when it can turn the job red.** Two tools report without stopping by default:
 
@@ -47,7 +47,7 @@ Not an invocation: an install (`go install`, `npm i -D`, `cargo install`, `pip i
 
 ## Pinning-test arm
 
-- Python: a file named `test_*.py` or `*_test.py`, parsed with `ast` (never imported), holding an `==` comparison with `__all__` (a name or an attribute) on exactly one side and, on the other, a list, tuple or set literal of names or a name assigned one in the file. `assert set(__all__) == set(EXPECTED_ALL)` pins. `len(__all__) > 0`, `a.__all__ == b.__all__` and a comparison with `dir(mod)` or `inspect.getmembers(mod)` do not: those check `__all__` against the module, so a removed name passes when `__all__` drops it too.
+- Python: a file named `test_*.py` or `*_test.py`, parsed with `ast` (never imported), holding an `==` comparison with `__all__` (a name or an attribute) on exactly one side and, on the other, a list, tuple or set literal of names or a name assigned one in the file, optionally wrapped in `set`, `sorted`, `list`, `tuple` or `frozenset`, and nothing more (`set(dir(m)) - {"helper"}` holds a literal but is not one). `assert set(__all__) == set(EXPECTED_ALL)` pins. `len(__all__) > 0`, `a.__all__ == b.__all__` and a comparison with `dir(mod)` or `inspect.getmembers(mod)` do not: those check `__all__` against the module, so a removed name passes when `__all__` drops it too.
 - JavaScript and TypeScript: a `*.test.*` or `*.spec.*` file with `expect(Object.keys(<module>))` compared by `toMatchSnapshot`, `toMatchInlineSnapshot`, `toEqual` or `toStrictEqual`; a `//` comment line is skipped.
 - Files under `fixtures/`, `testdata/`, `vendor/`, `node_modules/` or `third_party/` are set aside.
 

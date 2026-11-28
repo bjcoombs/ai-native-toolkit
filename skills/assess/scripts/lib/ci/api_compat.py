@@ -89,6 +89,8 @@ _CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?(\w+)=\$\((.*)\)\s*$")   # ``
 # The japicmp settings that make a breaking change stop the build: the Maven plugin's
 # ``breakBuildOn*`` / ``breakBuildBasedOnSemanticVersioning`` and the Gradle task's ``failOn*``.
 _JAPICMP_SETTING = r"(?:breakBuild(?:On|Based)\w*|failOn(?:Modification|SourceIncompatibility|BinaryIncompatibility))"
+_REVAPI_NO_FAIL = re.compile(r"^-Drevapi\.failBuildOnProblemsFound=false$")
+_REVAPI_QUIET = re.compile(r"failBuildOnProblemsFound\s*(?:>|=|\(|\.set\()\s*false")
 _JAPICMP_FLAG = re.compile(r"^-Djapicmp\." + _JAPICMP_SETTING + r"=true$")
 _JAPICMP_BREAK = re.compile(_JAPICMP_SETTING + r"\s*(?:>|=|\(|\.set\()\s*true")
 # Remote GitHub actions that run a compatibility check and stop the job on a breaking change.
@@ -252,13 +254,20 @@ def can_stop(tool: str, words: list[str], unit: list[str]) -> bool:
 def build_tools(followed: Followed, read_local: ReadLocal, words: list[str]) -> tuple[set[str], set[str], bool]:
     """``(run, report_only, unsettled)`` for a Maven or Gradle step: the tools its bound plugins
     and tasks reach, those that cannot stop the build (japicmp with no ``breakBuild*`` or
-    ``failOn*`` setting true in a build file read, nor a ``-Djapicmp.breakBuild*=true``), and
+    ``failOn*`` setting true in a build file read, nor a ``-Djapicmp.breakBuild*=true``; a Maven
+    revapi run that reaches no ``revapi-maven-plugin:check`` goal, or revapi with
+    ``failBuildOnProblemsFound`` set false), and
     whether the reading left a part unsettled (a ``-Djapicmp.skip``, an unread ``apply from:``)."""
     names = [n.lower() for n in (*followed.plugins, *followed.tasks)]
     found = {tool for tool in ("japicmp", "revapi") if any(tool in n for n in names)}
     if any(t in u.lower() for u in followed.unknown for t in found):
         return set(), set(), True   # a property may skip the goal: not credit
     quiet: set[str] = set()
+    if "revapi" in found and (
+            (followed.kind == "maven" and not any(t.lower().startswith("revapi-maven-plugin:check") for t in followed.tasks))
+            or any(_REVAPI_NO_FAIL.match(w) for w in words)
+            or any(_REVAPI_QUIET.search(read_local(p) or "") for p in followed.paths)):
+        quiet.add("revapi")   # only the ``check`` goal stops the build, and only with failing left on
     if "japicmp" in found and not (any(_JAPICMP_FLAG.match(w) for w in words)
                                    or any(_JAPICMP_BREAK.search(read_local(p) or "") for p in followed.paths)):
         quiet.add("japicmp")
@@ -422,6 +431,9 @@ def _declared(tracked: frozenset[str], read_local: ReadLocal, ci_files: frozense
     return out
 
 
+_WRAPS = frozenset({"set", "sorted", "list", "tuple", "frozenset"})
+
+
 def _literal_strs(node: ast.AST) -> bool:
     """A list, tuple or set literal of one or more string constants."""
     return (isinstance(node, (ast.List, ast.Tuple, ast.Set)) and bool(node.elts)
@@ -430,7 +442,8 @@ def _literal_strs(node: ast.AST) -> bool:
 
 def _python_pins(text: str) -> bool:
     """An ``==`` comparison in a Python test with ``__all__`` on one side and, on the other, a
-    literal of names or a name bound to one (``EXPECTED_ALL``). A comparison with ``dir(mod)`` or
+    literal of names or a name bound to one (``EXPECTED_ALL``), optionally wrapped in ``set``,
+    ``sorted``, ``list``, ``tuple`` or ``frozenset``, and nothing else. A comparison with ``dir(mod)`` or
     ``inspect.getmembers`` checks ``__all__`` against the module, not against a fixed list."""
     try:
         tree = ast.parse(text)
@@ -445,7 +458,12 @@ def _python_pins(text: str) -> bool:
                    or (isinstance(n, ast.Attribute) and n.attr == "__all__") for n in ast.walk(node))
 
     def pinned(node: ast.AST) -> bool:
-        return any(_literal_strs(n) or (isinstance(n, ast.Name) and n.id in fixed) for n in ast.walk(node))
+        """The side is the fixed list itself: a literal, a name bound to one, or one wrapped in
+        ``set``, ``sorted``, ``list``, ``tuple`` or ``frozenset``; ``set(dir(m)) - {"x"}`` is not."""
+        if _literal_strs(node) or (isinstance(node, ast.Name) and node.id in fixed):
+            return True
+        return (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _WRAPS
+                and len(node.args) == 1 and not node.keywords and pinned(node.args[0]))
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Compare) and len(node.ops) == 1 and isinstance(node.ops[0], ast.Eq):
