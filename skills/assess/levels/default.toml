@@ -372,6 +372,14 @@
 #   .mvn/maven.config, a reactor pom, or a script, recipe, action or pom a CI step leads to,
 #   through the shared CI-step follower). With no CI file and no root pom it is unknown
 #   (no_ci_files). Both graded measured (head_structure), read from the committed files.
+# - Instruction files skipped by pull request checks (lib/ci/ci_path_filters.py, #857): a
+#   hazard, ci-instructions-unchecked (polarity hazard, never counted), that names
+#   blocks = "instructions", so while it is met the instructions gate does not hold and Step 2
+#   stays out of reach; the tally does not move. It reads ci_hazards.instructions_unchecked:
+#   the tracked instruction files (instruction_files.INSTRUCTION_FILE_PATHS) that every GitHub
+#   Actions pull request workflow filters out (paths-ignore matches it, or no paths pattern lets
+#   it through). A filter it cannot read, or an empty one, lets every file through. With no pull
+#   request workflow that runs a check it is unknown (no_pr_checks). Graded measured (head_structure).
 # - AI governance (lib/ai_governance.py, #851). ai-policy-enforced reads ai_governance.enforced:
 #   a GitHub Actions workflow on pull_request or pull_request_target reads the pull request
 #   body or the commit trailers, names an AI disclosure or attribution marker, and fails the
@@ -785,6 +793,19 @@ aggregation = "min"
   polarity = "hazard"
   blocks = "ci_runs_tests"
   criteria = [{ signal = "ci_hazards.test_failures_ignored", op = "gt", value = 0 }]
+
+[[rows]]
+id = "ci-instructions-unchecked"
+title = "Pull request checks skip the instruction files"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["agent_context", "governance"]
+  polarity = "hazard"
+  blocks = "instructions"
+  criteria = [{ signal = "ci_hazards.instructions_unchecked", op = "gt", value = 0 }]
 
 [[rows]]
 id = "contributor-files"

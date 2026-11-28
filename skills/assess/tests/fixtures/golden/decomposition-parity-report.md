@@ -18,9 +18,9 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 ## Catalogue Coverage
 
-Catalogue coverage: 22 not measured (needs a full run: 1, no agent jobs: 3, no CI file or root pom: 1, no manifests read: 1, no model jobs: 1, no ownership map: 1, no CI check on pull requests: 1, no workflow on pull requests: 1, no remote: 2, no skill files: 2, no skill scripts: 1, no source files: 2, no value read: 2, not a git repository: 1, waits on layer-4-architecture.1: 1, unavailable: 1) · 4 not applicable here (fewer than two agent systems: 2, no configured gate: 2) · model <<normalized>>
+Catalogue coverage: 23 not measured (needs a full run: 1, no agent jobs: 3, no CI file or root pom: 1, no manifests read: 1, no model jobs: 1, no ownership map: 1, no CI check on pull requests: 2, no workflow on pull requests: 1, no remote: 2, no skill files: 2, no skill scripts: 1, no source files: 2, no value read: 2, not a git repository: 1, waits on layer-4-architecture.1: 1, unavailable: 1) · 4 not applicable here (fewer than two agent systems: 2, no configured gate: 2) · model <<normalized>>
 
-By tag: behaviour 0 of 3 (NOT MEASURED: 4) · contracts 0 of 1 · docs 0 of 2 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 3) · agent_runtime 0 of 1 (NOT MEASURED: 4) · governance 0 of 1 (NOT MEASURED: 7) · supply_chain 0 of 0 (NOT MEASURED: 1)
+By tag: behaviour 0 of 3 (NOT MEASURED: 4) · contracts 0 of 1 · docs 0 of 2 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 4) · agent_runtime 0 of 1 (NOT MEASURED: 4) · governance 0 of 1 (NOT MEASURED: 8) · supply_chain 0 of 0 (NOT MEASURED: 1)
 
 ## Where you are on the Steps
 

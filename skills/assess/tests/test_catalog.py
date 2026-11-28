@@ -238,7 +238,7 @@ def _section(text: str, heading: str) -> str:
 
 
 HAZARDS = {"agent-job-write-access.1", "ci-skip-label.1", "ci-test-failures-ignored.1",
-           "agent-rewrites-instructions.1"}  # the default model's hazards (#849, #828, #858)
+           "agent-rewrites-instructions.1", "ci-instructions-unchecked.1"}  # the default model's hazards (#849, #828, #857, #858)
 
 
 def test_every_condition_carries_its_frame_fields() -> None:

@@ -5,18 +5,18 @@
 id = "core.ci_hazards"
 kind = "collector"
 title = "CI that can be told not to fail"
-summary = "Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to."
-issues = [828]
+summary = "Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to. Instruction files that every pull request check workflow filters out with paths or paths-ignore."
+issues = [828, 857]
 callable = "lib.ci.ci_hazards:scan_ci_hazards"
 publishes = ["ci_hazards"]
 reads = ["repo_root"]
 stage = "post_offers"
 headless = { ci_hazards = "registered" }
-whys.ci_hazards = "A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it."
+whys.ci_hazards = "A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it. An instruction file that no pull request check runs on can change with nothing checking it."
 shapes = [
   { path = "ci_hazards", type = "lib.ci.ci_hazards:CiHazardsBlock" },
 ]
-revision = 1
+revision = 2
 unknown_reasons = [
   { code = "no_pr_checks", block = "ci_hazards", means = "No GitHub Actions workflow runs a test or lint command on pull requests. So this reader sees no check a label could skip.", next_step = "Nothing to change: this reads as not measured until a workflow runs a check on pull requests." },
   { code = "no_ci_files", block = "ci_hazards", means = "The tree tracks no GitHub Actions workflow, .gitlab-ci.yml, Jenkinsfile or root pom.xml, so there is no build setting to read.", next_step = "Nothing to change: this reads as not measured until a CI file or a root pom is committed." },
@@ -24,6 +24,8 @@ unknown_reasons = [
   [entries.privacy]
   "ci_hazards.skip_labels_reason" = "token"
   "ci_hazards.test_failures_ignored_reason" = "token"
+  "ci_hazards.instructions_unchecked_reason" = "token"
+  "ci_hazards.unchecked_instruction_files" = "path"
   "ci_hazards.ci_hazard_files" = "path"
 
 [[entries]]
@@ -61,3 +63,21 @@ title = "CI ignores test failures"
 key = "ci-test-failures-ignored.1:ci_hazards.test_failures_ignored"
 why = "With broken tests ignored, the build passes whatever the tests report, so a green run says nothing about the change. A test an agent broke reaches the main branch unseen."
 fix = "Remove -Dmaven.test.failure.ignore=true and testFailureIgnore from the CI command, the Jenkinsfile and the poms listed. Quarantine a flaky test by name instead of ignoring every failure."
+
+[[entries]]
+id = "core:ci_hazards.instructions_unchecked"
+kind = "signal"
+title = "Instruction files that no pull request check runs on"
+collector = "core.ci_hazards"
+path = "ci_hazards.instructions_unchecked"
+type = "number"
+evidence = "head_structure"
+null_means = "no_pr_checks: no GitHub Actions workflow runs a check on pull requests"
+
+[[entries]]
+id = "core.cond.ci-instructions-unchecked.1.instructions_unchecked"
+kind = "condition"
+title = "Pull request checks skip the instruction files"
+key = "ci-instructions-unchecked.1:ci_hazards.instructions_unchecked"
+why = "When every pull request check filters the instruction file out, a change to it merges with no check run. Agents follow that file, so an edit that breaks it reaches every agent unseen."
+fix = "Remove the instruction files listed from paths-ignore, or add them to the paths filter, in at least one workflow that runs checks on pull requests."

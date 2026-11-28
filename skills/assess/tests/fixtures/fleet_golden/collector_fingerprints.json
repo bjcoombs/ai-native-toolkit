@@ -106,11 +106,11 @@
     },
     "core.ci_hazards": {
       "repos": {
-        "grpa/sub/deep/svc2": "a7135ce3b2d35f695143761ba7a8e4981302e3278b35746a48ca23a024e8a8cc",
-        "grpa/svc1": "aab0e6fecbfb00f30b1fc832eab22699cd6c53f9b3ce92f9284b44e0e3407723",
-        "grpb/lib1": "a7135ce3b2d35f695143761ba7a8e4981302e3278b35746a48ca23a024e8a8cc"
+        "grpa/sub/deep/svc2": "8919708c6a12d0300b78bf23a4a88117c8af64e59331428001350e45bcb4ccd3",
+        "grpa/svc1": "00d3a87ed6dc834efcf3bdebcc9333bb52a939948977105de17e0003334fb239",
+        "grpb/lib1": "8919708c6a12d0300b78bf23a4a88117c8af64e59331428001350e45bcb4ccd3"
       },
-      "revision": 1
+      "revision": 2
     },
     "core.ci_model_jobs": {
       "repos": {
