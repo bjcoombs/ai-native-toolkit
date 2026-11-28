@@ -66,21 +66,29 @@ _REMOTE_IMPORT = re.compile(r"[\w-][\w.-]*/[\w.-]+/[^@\s]+@[^@\s]+")
 
 
 def frontmatter(text: str) -> str | None:
-    """A gh-aw source's YAML frontmatter, or None when ``text`` has none.
-
-    An opening ``---`` with no closing one raises ``YamlError``: the frontmatter does not parse.
-    """
+    """A gh-aw source's YAML frontmatter, or None when ``text`` has none (or never closes it)."""
     lines = text.lstrip("\ufeff").splitlines()
     if not lines or lines[0].strip() != "---":
         return None
     end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
-    if end is None:
+    return "\n".join(lines[1:end]) if end is not None else None
+
+
+def import_frontmatter(text: str) -> str | None:
+    """``frontmatter`` for the import chain: an opening ``---`` with no closing one raises
+    ``YamlError``, so ``local_reach`` fails closed where the other readers skip the file."""
+    front = frontmatter(text)
+    if front is None and [line.strip() for line in text.lstrip("\ufeff").splitlines()[:1]] == ["---"]:
         raise YamlError(UNPARSABLE)
-    return "\n".join(lines[1:end])
+    return front
 
 
 def remote_import(value: str) -> bool:
-    """A gh-aw import from another repository: ``owner/repo/path@ref``, three or more path parts."""
+    """A gh-aw import from another repository: ``owner/repo/path@ref``, three or more path parts.
+
+    The rule is #1602's: a local name with ``@`` and three or more path parts
+    (``shared/prompts/a@v2.md``) also matches it and reads as remote.
+    """
     return bool(_REMOTE_IMPORT.fullmatch(value))
 
 
@@ -128,7 +136,7 @@ def local_reach(rel: str, read: Read) -> set[str]:
     while todo:
         current = todo.pop()
         text = read(current) or ""
-        front = frontmatter(text) if current.endswith(".md") else None
+        front = import_frontmatter(text) if current.endswith(".md") else None
         for imported in gh_aw_imports(current, front) if front is not None else []:
             if imported not in found and imported != rel and read(imported) is not None:
                 found.add(imported)

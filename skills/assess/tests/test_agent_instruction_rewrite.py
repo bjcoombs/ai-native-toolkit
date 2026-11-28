@@ -283,3 +283,10 @@ def test_an_imported_file_whose_frontmatter_does_not_parse_raises_it(git_repo) -
     assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 1
     files[".github/workflows/shared/a.md"] = "---\nimports: [b.md]\n---\nText.\n"
     assert scan_agent_ops(_repo(git_repo, files))["summary"]["agent_instruction_rewrite"] == 0
+
+
+def test_a_workflow_folder_note_with_an_unclosed_rule_does_not_break_the_scan(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/notes.md": "---\nSome notes.\n"})
+    summary = scan_agent_ops(repo)["summary"]
+    assert summary["agent_instruction_rewrite"] is None
+    assert summary["agent_instruction_rewrite_reason"] == "no_agent_jobs"
