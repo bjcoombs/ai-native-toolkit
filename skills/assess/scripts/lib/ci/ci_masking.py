@@ -563,8 +563,9 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
                     run_shell: tuple[bool, bool, bool] | None,
                     captured: frozenset[tuple[int, int]] = frozenset(),
                     ) -> tuple[list[tuple[int, int]], Segments, Segments]:
-    """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``,
-    and the segments a later ``exit 0`` masks in a body with errexit on.
+    """The statements of one script body masked by ``set +e``, by a later top-level ``exit 0`` or
+    by coming after a top-level ``exit`` (``first_exit``, #1622), and the segments a later
+    ``exit 0`` masks in a body with errexit on.
 
     ``refs`` are ``(first line, statement index)`` in order. A re-raise (``exit 1``,
     ``exit $?``) after a statement un-masks it; for ``exit 0`` its own re-raise does too.
