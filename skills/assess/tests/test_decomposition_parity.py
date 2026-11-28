@@ -27,6 +27,8 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from assess_core import build_and_publish_run
 from assess_report import render_report
 from golden import normalize_report
@@ -114,10 +116,51 @@ def test_orchestrator_delegates_to_each_unit():
     assert "assess-pr" in body, "orchestrator must delegate end-of-run offers"
 
 
+THIN_BODY_LIMIT = 500
+
+
+def _body_line_count(text: str) -> int:
+    """Lines after the closing ``---`` of the frontmatter; the whole file if it has none.
+
+    The limit guards the orchestrator's instructions, which live in the body, so
+    frontmatter keys (name, description, any added later) do not count.
+    """
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], start=1):
+            if line.strip() == "---":
+                return len(lines) - i - 1
+    return len(lines)
+
+
+def _assert_thin(text: str) -> None:
+    count = _body_line_count(text)
+    assert count < THIN_BODY_LIMIT, f"orchestrator grew to {count} body lines - re-check the seams"
+
+
 def test_orchestrator_is_thin():
-    """The monolith was ~1290 lines; the thin orchestrator must stay well under."""
-    lines = ASSESS_SKILL.read_text(encoding="utf-8").splitlines()
-    assert len(lines) < 500, f"orchestrator grew to {len(lines)} lines - re-check the seams"
+    """The monolith was ~1290 lines; the thin orchestrator's body must stay well under."""
+    _assert_thin(ASSESS_SKILL.read_text(encoding="utf-8"))
+
+
+def _skill_md(frontmatter: list[str], body_lines: int) -> str:
+    """An invented SKILL.md: the given frontmatter keys, then a body of numbered lines."""
+    body = [f"line {i}" for i in range(body_lines)]
+    return "\n".join(["---", *frontmatter, "---", *body]) + "\n"
+
+
+def test_thin_limit_ignores_frontmatter_keys():
+    """Extra frontmatter keys leave the counted body, and so the verdict, unchanged."""
+    short = _skill_md(["name: demo", "description: x"], 120)
+    long = _skill_md(["name: demo", "description: x", "license: MIT", "allowed-tools: Read", "model: haiku"], 120)
+    assert _body_line_count(short) == _body_line_count(long) == 120
+    _assert_thin(long)
+
+
+def test_thin_limit_fails_a_500_line_body():
+    with pytest.raises(AssertionError, match="500 body lines"):
+        _assert_thin(_skill_md(["name: demo"], 500))
+    _assert_thin(_skill_md(["name: demo"], 499))
 
 
 def test_attention_low_signal_is_read_before_the_rule_that_uses_it():
