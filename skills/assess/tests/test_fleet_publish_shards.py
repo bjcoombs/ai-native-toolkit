@@ -103,7 +103,7 @@ def test_a_run_that_fits_on_its_own_but_not_with_what_is_stored_never_names_org_
     if stored == "strays":
         assert "25000 of them are strays (in junk): remove them" in err
     else:
-        assert "none of them is a stray (0 are targets, the rest earlier runs and units)" in err
+        assert "none of them is a stray (0 are targets, the rest earlier runs, units and repositories)" in err
     assert not (out / "publish" / "plan.json").exists()
 
 

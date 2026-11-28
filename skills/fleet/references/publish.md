@@ -223,9 +223,9 @@ no network call.
   repositories. `opportunities.biggest_lift.repos` and `opportunities.shared_templates[].repos`
   keep only the shard's repositories, while their counts stay the fleet's.
 - **Stored documents do not shard.** A run that fits one artifact on its own stays one artifact.
-  If what that artifact already stores (earlier runs and units, strays, targets) takes it over
-  the cap, the planner refuses it, with or without `--org-dir`, and names the strays' collections
-  to remove, or says none of the stored documents is a stray.
+  If what that artifact already stores (earlier runs, units and repositories, strays, targets)
+  takes it over the cap, the planner refuses it, with or without `--org-dir`, and names the strays'
+  collections to remove, or says none of the stored documents is a stray.
 - **Size guard per shard.** Each shard is projected on its own against its own stored
   documents, so the 80% warning and the refusal above the limit apply per shard and name the
   shard and the document. A shard with more documents than one artifact holds is refused,

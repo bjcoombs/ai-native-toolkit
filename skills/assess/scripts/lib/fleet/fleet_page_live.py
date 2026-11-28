@@ -37,9 +37,9 @@ contract 0.2.96 (``claude.use``; ``null`` means absent):
 
 **A shard's page** (#950, ``shard``, a ``fleet_shard.ShardView``): the bundle is cut to the units
 and repositories the shard shows, by page label (``shard_bundle``), with the achievements, targets
-and Recount lines about them (an achievement by its view and label, since a label is unique only
-within a view: a repository's credit when the shard shows the repository, a unit's when the shard
-shows that unit in that view, so another shard's credit never shows here); the fleet-wide front screen and pictures are left out, since they
+and Recount lines about them (an achievement or a target by its view and label, since a label is
+unique only within a view: a repository's when the shard shows the repository, a unit's when the
+shard shows that unit in that view, so another shard's never shows here); the fleet-wide front screen and pictures are left out, since they
 describe every shard. It gains ``shard``: the shard's label and top-level unit, the index URL
 (the breadcrumb's first link) and, per system unit it shows, the system's repositories in other
 shards with each shard's URL. A URL that is not ``https://claude.ai/`` is written as null.
@@ -54,6 +54,7 @@ import re
 from collections.abc import Mapping
 from typing import Any, Final, cast
 
+from lib.fleet.fleet_achievements import REPO_VIEW
 from lib.fleet.fleet_page import embed
 from lib.fleet.fleet_page_data import COUNTS_ONLY, PageBundle, labels
 from lib.fleet.fleet_publish import PublishError, doc_id
@@ -194,8 +195,9 @@ def shard_bundle(bundle: dict[str, Any], shard: ShardView) -> dict[str, Any]:
         view["units"] = [u for u in view["units"] if u["key"] in units.get(view["view"], set())]
     out["repos"] = [r for r in out["repos"] if r["key"] in repos]
     out["achievements"] = [a for a in out["achievements"]
-                           if a["unit"] in (repos if a["view"] == "repo" else units.get(a["view"], set()))]
-    out["targets"] = [t for t in out["targets"] if t["unit"] in units.get(t["view"], set())]
+                           if a["unit"] in (repos if a["view"] == REPO_VIEW else units.get(a["view"], set()))]
+    out["targets"] = [t for t in out["targets"]
+                      if t["unit"] in (repos if t["view"] == REPO_VIEW else units.get(t["view"], set()))]
     if out.get("recount"):
         out["recount"]["lines"] = [line for line in out["recount"]["lines"] if line["repo"] in repos]
     out["front"], out["pictures"] = None, []  # fleet-wide: the shard page shows its own unit only

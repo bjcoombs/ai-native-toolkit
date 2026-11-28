@@ -192,11 +192,15 @@ def test_a_shard_page_keeps_only_the_credit_of_its_own_units_by_view() -> None:
     belongs to another shard and is left out."""
     bundle: dict[str, Any] = {
         "views": [{"view": "ownership", "units": [{"key": "team 2"}]}, {"view": "system", "units": []}],
-        "repos": [{"key": "repository 1"}], "targets": [], "recount": None, "front": None, "pictures": [],
+        "repos": [{"key": "repository 1"}], "recount": None, "front": None, "pictures": [],
+        "targets": [{"view": v, "unit": u, "step": 2} for v, u in (
+            ("ownership", "team 2"), ("system", "team 2"), ("repo", "repository 1"), ("repo", "team 2"))],
         "achievements": [{"view": v, "unit": u, "text": f"{v} {u}"} for v, u in (
             ("ownership", "team 2"), ("system", "team 2"), ("repo", "repository 1"), ("repo", "team 2"),
             ("ownership", "repository 1"))]}
     view: fs.ShardView = {"unit": "team 2", "label": "team 2", "index_url": None, "repos": ["repository 1"],
                           "units": {"ownership": ["team 2"], "system": []}, "elsewhere": {}}
-    kept = shard_bundle(bundle, view)["achievements"]
-    assert [a["text"] for a in kept] == ["ownership team 2", "repo repository 1"]
+    cut = shard_bundle(bundle, view)
+    assert [a["text"] for a in cut["achievements"]] == ["ownership team 2", "repo repository 1"]
+    # targets follow the same rule: a repository target shows on the shard that shows the repository
+    assert [(t["view"], t["unit"]) for t in cut["targets"]] == [("ownership", "team 2"), ("repo", "repository 1")]

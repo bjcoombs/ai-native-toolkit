@@ -31,7 +31,7 @@ order), ``index.html`` and ``shards/<folder>/`` per shard. ``record-shard`` keep
 one shard's URL in ``ORG_DIR/shards.json``; ``--shard`` takes the folder ``shards`` prints and is
 refused unless ``OUT/publish/plan.json`` names it. Without ``--org-dir`` a run that needs shards is
 refused, as before. A run that fits one artifact on its own but not with the strays and targets
-the artifact already stores (earlier runs and units, strays, targets) stays one artifact and is
+the artifact already stores (earlier runs, units and repositories, strays, targets) stays one artifact and is
 refused, naming the strays to remove or saying there are none, whether or not ``--org-dir`` was
 passed. A shard folder under ``--exports`` is read as it is, so a recorded shard whose folder
 lacks ``runs.json``, ``units.json`` or ``repos.json`` is refused, naming them.
@@ -195,7 +195,7 @@ def _plan_sharded(args: argparse.Namespace, out: Path, data: dict[str, Any], pag
 def _over_cap(summary: PlanSummary, batches: list[list[PinnedWrite]]) -> str:
     """Why a one-artifact plan is over the document cap. Only a run whose own documents are over it
     is told to shard: one that fits on its own is over because of what the artifact already stores
-    (earlier runs and units, strays, targets), and the shard plan keeps such a run one artifact."""
+    (earlier runs, units and repositories, strays, targets), and the shard plan keeps such a run one artifact."""
     size, strays = summary["size"], summary["strays"]
     own = len({f"{w['collection']}/{w['doc_id']}" for batch in batches for w in batch})
     if own > size["document_limit"]:
@@ -206,7 +206,7 @@ def _over_cap(summary: PlanSummary, batches: list[list[PinnedWrite]]) -> str:
     if strays["count"]:
         return (f"{head}; {strays['count']} of them are strays (in {', '.join(strays['collections'])}): remove them "
                 "from the artifact, export again and plan again")
-    return (f"{head}; none of them is a stray ({strays['targets']} are targets, the rest earlier runs and units), "
+    return (f"{head}; none of them is a stray ({strays['targets']} are targets, the rest earlier runs, units and repositories), "
             "so there is nothing safe to remove")
 
 
