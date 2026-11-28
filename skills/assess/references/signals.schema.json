@@ -103,6 +103,7 @@
           "backlog_ready",
           "behaviour",
           "behaviour_pins",
+          "change_census",
           "ci_checks",
           "ci_hazards",
           "ci_model_jobs",
@@ -580,6 +581,142 @@
             },
             "reason": {
               "type": "string"
+            }
+          }
+        },
+        "change_census": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: not_requested (no --period was given, so no census was read); network (a headless run without --platform makes no GitHub or GitLab read); no_remote (the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "description": "Every change merged in an absolute --period (lib/hosting/merged_census.py, #1668), read through gh or glab: the population for the auditor to sample. Fails closed: a capped listing, the call ceiling or a refused read sets population_complete false and every count null. Absent from a run without --period.",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the census could not start."
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab"
+              ],
+              "description": "The platform read."
+            },
+            "population": {
+              "type": "string",
+              "enum": [
+                "census"
+              ],
+              "description": "census: every change in the period, not the 30-change sample."
+            },
+            "period_start": {
+              "type": "string",
+              "description": "The period's first day, YYYY-MM-DD (UTC)."
+            },
+            "period_end": {
+              "type": "string",
+              "description": "The period's last day, YYYY-MM-DD, inclusive."
+            },
+            "population_complete": {
+              "type": "boolean",
+              "description": "True only when every page was read with no cap or error."
+            },
+            "incomplete_reason": {
+              "type": "string",
+              "description": "Why the census is incomplete: truncated, no_access, not_found, inconsistent or the CLI's reason code."
+            },
+            "census_calls": {
+              "type": "integer",
+              "description": "CLI calls the census made."
+            },
+            "census_call_ceiling": {
+              "type": "integer",
+              "description": "The most CLI calls a census makes."
+            },
+            "merged_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Changes merged in the period; null when incomplete."
+            },
+            "unlinked_change_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Changes with no closing issue reference (a mention in the body does not count); null when incomplete or a change's references were unread."
+            },
+            "independent_approval_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Census changes approved by a person other than the author (lib/hosting/approval_integrity.py, #1664); null when incomplete or an unknown account decides."
+            },
+            "no_independent_approval_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Census changes without such an approval (lib/hosting/approval_integrity.py, #1664); null when incomplete or an unknown account decides."
+            },
+            "bot_only_approval_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Census changes approved by other accounts, every one a bot (lib/hosting/approval_integrity.py, #1664); null when incomplete or an unknown account decides."
+            },
+            "stale_approval_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Census changes whose people approved an older commit (null on GitLab) (lib/hosting/approval_integrity.py, #1664); null when incomplete or an unknown account decides."
+            },
+            "approved_after_merge_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Census changes first approved by a person after the merge (lib/hosting/approval_integrity.py, #1664); null when incomplete or an unknown account decides."
+            },
+            "self_merged_unapproved_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Census changes merged by their author with no such approval (lib/hosting/approval_integrity.py, #1664); null when incomplete or an unknown account decides."
+            },
+            "bot_authored_count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Census changes a bot authored (lib/hosting/approval_integrity.py, #1664); null when incomplete or an unknown account decides."
             }
           }
         },

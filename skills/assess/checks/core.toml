@@ -71,6 +71,8 @@ fragments = [
   "review_rules",
   "review_reality",
   "delivery",
+  "merged_census",
+  "change_census",
   "backlog_outcomes",
   "gate_cost_estimate",
   "coverage_gate",

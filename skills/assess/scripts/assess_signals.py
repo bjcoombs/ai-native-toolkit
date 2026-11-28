@@ -19,12 +19,18 @@ Exit codes:
     2  usage error: unknown scan name, bad --window, --out inside the target,
        a target or --ghsync-root that is not a directory, a --scope that is missing,
        outside the target or a pattern that matches nothing, --scope with --units or a --scans unit scan, an unreadable or invalid
-       --fleet-config (the message names the key), or a --pack that does not load
+       --fleet-config (the message names the key), a --pack that does not load, or a
+       malformed --period or one without --platform
 
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
         [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE] [--platform]
         [--ghsync-root DIR] [--scope PATH ... | --units] [--pack FILE ...] [--jobs N]
+        [--period YYYY-MM-DD..YYYY-MM-DD]
+
+``--period A..B`` (#1668, with ``--platform``) reads every change merged in that absolute
+period into the ``change_census`` block (``lib/hosting/merged_census.py``); without it the
+block is absent and no census call is made.
 
 ``--jobs N`` (#1381) runs at most N scans at a time (``lib/run/scan_pool.py``; default the CPU
 count capped at 8); the document is the same for every N, and 1 runs them one by one.
@@ -88,6 +94,7 @@ from lib.counts_only.content_free import (
     validate_cli_args,
 )
 from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config
+from lib.hosting.merged_census import Period, parse_period
 from lib.packs import PackError, load_packs
 from lib.run_context_types import SignalsDocument
 from lib.run.run_scope import Scope, resolve_scope
@@ -98,6 +105,7 @@ from lib.run.signals import (
     build_document,
     known_scans,
     parse_window,
+    period_error,
     platform_only_error,
     scope_units_error,
     select_scans,
@@ -133,6 +141,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--platform", action="store_true",
         help="Make the platform reads (gh or glab) of the scans in lib/run/signals.py PLATFORM_SCANS "
              "instead of reporting them unavailable. Off by default: no network call.",
+    )
+    parser.add_argument(
+        "--period", metavar="YYYY-MM-DD..YYYY-MM-DD",
+        help="Read every change merged in this absolute period, both days inclusive, into the "
+             "change_census block (lib/hosting/merged_census.py). Needs --platform. A capped or "
+             "refused read marks the census incomplete, never partial counts.",
     )
     parser.add_argument(
         "--managed-settings", action="store_true",
@@ -217,6 +231,10 @@ def main(argv: list[str] | None = None) -> int:
         problem = platform_only_error(requested, args.platform) or scope_units_error(requested, scope)
         if problem is not None:
             raise ValueError(problem)
+        period = _period(args.period)
+        problem = period_error(period, args.platform)
+        if problem is not None:
+            raise ValueError(problem)
     except UnknownScanError as e:
         print(f"error: {e}. Known scans: {', '.join(known_scans())}", file=sys.stderr)
         return 2
@@ -227,11 +245,22 @@ def main(argv: list[str] | None = None) -> int:
     document = build_document(repo_root, requested, args.window, fleet_config=fleet_config,
                               platform=args.platform, ghsync_root=ghsync_root,
                               scope=scope, units=args.units,
-                              managed_settings=args.managed_settings, packs=packs, jobs=args.jobs)
+                              managed_settings=args.managed_settings, packs=packs, jobs=args.jobs,
+                              period=period)
     if args.counts_only:
         _counts_only(document, args)
     _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")
     return 0
+
+
+def _period(raw: str | None) -> Period | None:
+    """``--period`` as a ``Period``, None without it; a ``ValueError`` names the flag."""
+    if raw is None:
+        return None
+    try:
+        return parse_period(raw)
+    except ValueError as e:
+        raise ValueError(f"--period {raw}: {e}") from None
 
 
 def _scope(repo_root: Path, raw: list[str] | None) -> Scope | None:

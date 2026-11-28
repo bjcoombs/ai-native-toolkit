@@ -15,6 +15,7 @@ import os
 import stat
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from assess_test_support import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+from lib.hosting.merged_census import Period
 from lib.run import signals
 
 RECORDED = Path(__file__).resolve().parent / "fixtures" / "platform" / "github_merged_prs.json"
@@ -51,6 +53,7 @@ printf '%s\037' glab "$@" >> "$FAKE_DIR/log"; echo >> "$FAKE_DIR/log"
 case "$*" in
   "auth status"*) exit 0 ;;
   *"merge_requests?state=merged"*) cat "$FAKE_DIR/mrs.json"; exit 0 ;;
+  *"/closes_issues?"*) echo '[]'; exit 0 ;;
   *"/approvals") echo '{"approved_by":[{"user":{"username":"bob"}}]}'; exit 0 ;;
   *"/notes?"*) echo '[{"system":false,"author":{"username":"bob"},"body":"ok","created_at":"2026-11-01T01:00:00Z"}]'; exit 0 ;;
   *"approval_rules"*) echo '[{"rule_type":"regular","approvals_required":1,"applies_to_all_protected_branches":true}]'; exit 0 ;;
@@ -126,7 +129,9 @@ def _run(tmp_path: Path, remote: str, gitlab_ci: str | None = None) -> dict[str,
         _git(repo, "add", ".gitlab-ci.yml")
         _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "c")
     # Run from elsewhere: a call leaning on the cwd remote would find none here.
-    return signals.collect(repo, list(signals.PLATFORM_SCANS), platform=True)
+    # A period wide enough for every fixture merge, so the census reads run too (#1668).
+    return signals.collect(repo, list(signals.PLATFORM_SCANS), platform=True,
+                           period=Period(date(2000, 1, 1), date(2099, 12, 31)))
 
 
 def test_every_github_platform_read_names_its_target(stubs: Path, tmp_path: Path,
@@ -138,7 +143,8 @@ def test_every_github_platform_read_names_its_target(stubs: Path, tmp_path: Path
     assert [c for c in calls if not _names_target(c, "acme/widget")] == []
     joined = [" ".join(c) for c in calls]
     for needle in ("--json mergedAt", "--json author,", "api users/", "rules/branches",
-                   "/protection", "api repos/acme/.github/contents", "api graphql"):
+                   "/protection", "api repos/acme/.github/contents", "api graphql",
+                   "closingIssuesReferences", "merged:2000-01-01..2099-12-31"):
         assert any(needle in c for c in joined), needle
     assert all(c[0] == "gh" for c in calls)
 
@@ -157,6 +163,7 @@ def test_every_gitlab_platform_read_names_its_target(stubs: Path, tmp_path: Path
     assert [c for c in calls if not _names_target(c, "grp/app")] == []
     joined = [" ".join(c) for c in calls]
     for needle in ("merge_requests?state=merged", "/approvals", "/notes?", "approval_rules",
-                   "protected_branches", "projects/grp%2Fapp/ci/lint?content_ref=", "/issues?updated_after="):
+                   "protected_branches", "projects/grp%2Fapp/ci/lint?content_ref=", "/issues?updated_after=",
+                   "/closes_issues?"):
         assert any(needle in c for c in joined), needle
     assert all(c[0] == "glab" for c in calls)

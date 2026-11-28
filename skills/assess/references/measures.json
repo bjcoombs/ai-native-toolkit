@@ -3685,6 +3685,59 @@
       "why_source": ""
     },
     {
+      "name": "change_census",
+      "title": "Merged changes in a period",
+      "summary": "Every change merged in an absolute --period, whether the read was complete, how many closed no issue, and the approval-integrity counts over that population, read through gh or glab.",
+      "collector": "core.change_census",
+      "reads": [
+        "merged_census",
+        "fleet_config"
+      ],
+      "headless_reads": null,
+      "network": true,
+      "platform": true,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "change_census.incomplete_reason": "token",
+          "change_census.period_end": "token",
+          "change_census.period_start": "token",
+          "change_census.population": "token",
+          "change_census.provider": "token",
+          "change_census.reason": "reason"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_requested",
+          "means": "No --period was given, so no census was read.",
+          "next_step": "Pass --period YYYY-MM-DD..YYYY-MM-DD to /assess, or to assess_signals.py with --platform."
+        },
+        {
+          "code": "network",
+          "means": "A headless run without --platform makes no GitHub or GitLab read.",
+          "next_step": "Run assess_signals.py with --platform and --period, or /assess --period, with gh or glab signed in."
+        },
+        {
+          "code": "no_remote",
+          "means": "The repository has no GitHub or GitLab remote, so there are no merged changes to read.",
+          "next_step": "Nothing to change if the repository is local only."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "An auditor samples from the whole population of changes in a period; a census with a gap reads as complete, so any cap or refused read marks it incomplete and leaves every count unmeasured.",
+      "why_source": ""
+    },
+    {
       "name": "ci_checks",
       "title": "CI runs a test or lint command",
       "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command. Whether such a line can fail its job on ordinary changes: not masked, and not outside the ordinary triggers. Whether such a line runs a linter. The value is null when no check is found but a CI file pulls its jobs from elsewhere. It is also null when no check is found and the tree tracks a CI file the scan does not parse. It is null under --platform when most sampled merged pull requests carry an external CI check. It is null when a root Prow OWNERS_ALIASES is the only CI evidence.",
@@ -6649,6 +6702,19 @@
       "private": false
     },
     {
+      "name": "change_census",
+      "title": "Merged changes in a period",
+      "publishes": [
+        "change_census"
+      ],
+      "reads": [
+        "merged_census",
+        "fleet_config"
+      ],
+      "network": true,
+      "private": false
+    },
+    {
       "name": "churn_degenerate",
       "title": "Degenerate churn history",
       "publishes": [
@@ -7319,6 +7385,17 @@
         "repo_root"
       ],
       "network": false,
+      "private": true
+    },
+    {
+      "name": "merged_census",
+      "title": "Merged-change census",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "census_period"
+      ],
+      "network": true,
       "private": true
     },
     {

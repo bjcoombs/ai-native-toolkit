@@ -88,8 +88,9 @@ def test_full_run_leaves_the_target_untouched_and_validates(fixture_repo, tmp_pa
     assert stamp["plugin_version"] != "unknown"
     # Every known scan but the platform-only ones, absent without --platform (#779), and the
     # unit scans, absent without --units (#866).
+    # The period-only census is absent without --period (#1668).
     assert set(doc["scans"]) == (set(signals.known_scans()) - set(signals.PLATFORM_ONLY_SCANS)
-                                 - set(signals.UNIT_SCANS))
+                                 - set(signals.UNIT_SCANS) - set(signals.PERIOD_ONLY_SCANS))
     assert stamp["scope"] is None
     assert "delivery" not in doc["scans"] and "review_reality" in doc["scans"]
 

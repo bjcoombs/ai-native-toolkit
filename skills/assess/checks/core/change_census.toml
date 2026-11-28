@@ -1,0 +1,34 @@
+# Check manifest fragment: the change_census collector, built from the private merged_census.
+# Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.change_census"
+kind = "collector"
+title = "Merged changes in a period"
+summary = "Every change merged in an absolute --period, whether the read was complete, how many closed no issue, and the approval-integrity counts over that population, read through gh or glab."
+issues = [1668]
+callable = "lib.hosting.merged_census:change_census"
+offline_callable = "lib.hosting.merged_census:change_census"
+publishes = ["change_census"]
+reads = ["merged_census", "fleet_config"]
+stage = "read_side"
+network = true
+platform_pass = true
+headless = { change_census = "registered" }
+whys.change_census = "An auditor samples from the whole population of changes in a period; a census with a gap reads as complete, so any cap or refused read marks it incomplete and leaves every count unmeasured."
+shapes = [
+  { path = "change_census", type = "lib.hosting.merged_census:ChangeCensusBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "not_requested", means = "No --period was given, so no census was read.", next_step = "Pass --period YYYY-MM-DD..YYYY-MM-DD to /assess, or to assess_signals.py with --platform." },
+  { code = "network", means = "A headless run without --platform makes no GitHub or GitLab read.", next_step = "Run assess_signals.py with --platform and --period, or /assess --period, with gh or glab signed in." },
+  { code = "no_remote", means = "The repository has no GitHub or GitLab remote, so there are no merged changes to read.", next_step = "Nothing to change if the repository is local only." },
+]
+  [entries.privacy]
+  "change_census.reason" = "reason"
+  "change_census.provider" = "token"
+  "change_census.population" = "token"
+  "change_census.period_start" = "token"
+  "change_census.period_end" = "token"
+  "change_census.incomplete_reason" = "token"

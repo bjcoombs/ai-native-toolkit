@@ -1,0 +1,16 @@
+# Check manifest fragment: the merged_census collector (private), read by change_census.
+# Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.merged_census"
+kind = "collector"
+title = "Merged-change census"
+issues = [1668]
+callable = "lib.hosting.merged_census:merged_census"
+offline_callable = "lib.hosting.merged_census:offline_merged_census"
+publishes = []
+reads = ["repo_root", "census_period"]
+stage = "read_side"
+private = true
+network = true
+revision = 1

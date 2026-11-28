@@ -24,9 +24,11 @@ from lib.run.scan_binding import binding_error
 # ``build_run_context``. A spec may read these, or the key of any spec declared
 # before it (``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
 # ``fleet_config`` are setup specs). ``plan`` is the run's ``lib.run.scan_plan.ScanPlan``, or
-# None for a full run (#1268).
+# None for a full run (#1268). ``census_period`` is ``--period`` as a
+# ``lib.hosting.merged_census.Period``, or None without it (#1668).
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive",
-                             "maturity_model", "managed_settings", "plan", "packs"})
+                             "maturity_model", "managed_settings", "plan", "packs",
+                             "census_period"})
 
 STAGE_SETUP = "setup"
 STAGE_READ_SIDE = "read_side"

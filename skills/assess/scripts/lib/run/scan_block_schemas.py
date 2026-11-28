@@ -6,7 +6,8 @@ published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
 here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
 ``delivery`` (#715), ``review_reality`` (#943), ``guardrails`` (#767), ``agent_consistency`` (#768),
-``agent_outcome`` (#1085), ``concurrency`` (#985) and ``layer_grades`` (#620, #821).
+``agent_outcome`` (#1085), ``concurrency`` (#985), ``change_census`` (#1668) and
+``layer_grades`` (#620, #821).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -20,7 +21,7 @@ a field of the block's TypedDict, and that real documents validate.
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
 `delivery` (#779), `review_reality` (#943), `guardrails` (#767), `agent_consistency` (#768) and
-`agent_outcome` (#1085) and `concurrency` (#985), read
+`agent_outcome` (#1085), `concurrency` (#985) and `change_census` (#1668), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -670,10 +671,51 @@ LAYER_GRADES: JsonDict = {
     },
 }
 
+_CENSUS_COUNT: JsonDict = {"type": ["integer", "null"]}
+
+CHANGE_CENSUS: JsonDict = {
+    "description": (
+        "Every change merged in an absolute --period (lib/hosting/merged_census.py, #1668), read "
+        "through gh or glab: the population for the auditor to sample. Fails closed: a capped "
+        "listing, the call ceiling or a refused read sets population_complete false and every "
+        "count null. Absent from a run without --period."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "reason": _field({"type": "string"}, "Why the census could not start."),
+        "provider": _field({"type": "string", "enum": ["github", "gitlab"]}, "The platform read."),
+        "population": _field({"type": "string", "enum": ["census"]},
+                             "census: every change in the period, not the 30-change sample."),
+        "period_start": _field({"type": "string"}, "The period's first day, YYYY-MM-DD (UTC)."),
+        "period_end": _field({"type": "string"}, "The period's last day, YYYY-MM-DD, inclusive."),
+        "population_complete": _field(
+            {"type": "boolean"}, "True only when every page was read with no cap or error."),
+        "incomplete_reason": _field(
+            {"type": "string"}, "Why the census is incomplete: truncated, no_access, not_found, "
+                                "inconsistent or the CLI's reason code."),
+        "census_calls": _field(_INT, "CLI calls the census made."),
+        "census_call_ceiling": _field(_INT, "The most CLI calls a census makes."),
+        "merged_count": _field(_CENSUS_COUNT, "Changes merged in the period; null when incomplete."),
+        "unlinked_change_count": _field(
+            _CENSUS_COUNT, "Changes with no closing issue reference (a mention in the body does "
+                           "not count); null when incomplete or a change's references were unread."),
+        **{name: _field(_CENSUS_COUNT, f"Census changes {what} (lib/hosting/approval_integrity.py, "
+                                       "#1664); null when incomplete or an unknown account decides.")
+           for name, what in (
+               ("independent_approval_count", "approved by a person other than the author"),
+               ("no_independent_approval_count", "without such an approval"),
+               ("bot_only_approval_count", "approved by other accounts, every one a bot"),
+               ("stale_approval_count", "whose people approved an older commit (null on GitLab)"),
+               ("approved_after_merge_count", "first approved by a person after the merge"),
+               ("self_merged_unapproved_count", "merged by their author with no such approval"),
+               ("bot_authored_count", "a bot authored"))},
+    },
+}
+
 BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "agent_consistency": AGENT_CONSISTENCY,
     "agent_outcome": AGENT_OUTCOME,
     "ai_usage": AI_USAGE,
+    "change_census": CHANGE_CENSUS,
     "ci_checks": CI_CHECKS,
     "concurrency": CONCURRENCY,
     "coverage_gate": COVERAGE_GATE,

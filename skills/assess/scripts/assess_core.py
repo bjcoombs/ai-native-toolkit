@@ -60,6 +60,7 @@ from lib.profiles import profile_names, single_repo_choice
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run.run_publish import publish_run
+from lib.hosting.merged_census import Period, parse_period
 from lib.assess_config import load_managed_settings_opt_in
 from lib.report.run_wiki import refresh_log_readiness
 from lib.run.run_scope import RequestedScope, assess_dir_for, load_current_stats, resolve_scope
@@ -76,7 +77,7 @@ def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: RequestedScope = None, model: ModelChoice | None = None, managed_settings: bool = False,
     plan: ScanPlan | None = None,
-    packs: tuple[Pack, ...] = (), jobs: int = 1,
+    packs: tuple[Pack, ...] = (), jobs: int = 1, period: Period | None = None,
 ) -> dict[str, Any]:
     """Run the deterministic pipeline and return the structured context dict.
 
@@ -118,18 +119,23 @@ def build_run_context(
     The ``timings`` block, last, holds each stage's and each scan's wall time
     (``lib.run.scan_timings``, #1380): a diagnostic that differs on every run.
 
+    ``period`` (``--period A..B``, #1668) makes the ``change_census`` block read every change
+    merged in that absolute period (``lib.hosting.merged_census``); None reads ``not_requested``
+    and makes no census call.
+
     ``jobs`` (``--jobs``, #1381) is how many scans run at a time (``lib.run.scan_pool``); the
     context is the same for every value, ``timings`` apart. The CLI defaults to
     ``scan_pool.default_jobs``; 1 runs the table one scan after another.
     """
-    return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs, jobs)[0]
+    return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs, jobs,
+                 period)[0]
 
 
 def build_and_publish_run(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: RequestedScope = None, model: ModelChoice | None = None, managed_settings: bool = False,
     plan: ScanPlan | None = None,
-    packs: tuple[Pack, ...] = (), jobs: int = 1,
+    packs: tuple[Pack, ...] = (), jobs: int = 1, period: Period | None = None,
 ) -> dict[str, Any]:
     """``build_run_context``, then the publish step that writes the artifacts.
 
@@ -138,7 +144,7 @@ def build_and_publish_run(
     (``pruned_hotspots``, ``log_integrity``, ``prior_findings_snapshot``, ...).
     """
     ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs,
-                             jobs)
+                             jobs, period)
     publish_run(ctx, scan_inputs)
     return ctx
 
@@ -146,7 +152,7 @@ def build_and_publish_run(
 def _scan(
     repo_root: Path, run_date: str, non_interactive: bool, scope: RequestedScope,
     model: ModelChoice | None = None, managed_settings: bool = False, plan: ScanPlan | None = None,
-    packs: tuple[Pack, ...] = (), jobs: int = 1,
+    packs: tuple[Pack, ...] = (), jobs: int = 1, period: Period | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the scan table; return the context and the inputs it filled."""
     scan_inputs: dict[str, Any] = {
@@ -156,6 +162,7 @@ def _scan(
         "managed_settings": managed_settings,
         "plan": plan,
         "packs": packs,
+        "census_period": period,
     }
     ctx: dict[str, Any] = {}
     run_scans(ctx, scan_inputs, jobs=jobs)
@@ -379,6 +386,13 @@ def main(argv: list[str] | None = None) -> int:
             "context records each pack's name, version and sha256."
         ),
     )
+    parser.add_argument(
+        "--period", metavar="YYYY-MM-DD..YYYY-MM-DD",
+        help=(
+            "Read every change merged in this absolute period, both days inclusive, into the "
+            "change_census block. A capped or refused read marks the census incomplete."
+        ),
+    )
     add_jobs_argument(parser)
     add_counts_only_arguments(parser)
     parsed = parser.parse_args(argv)
@@ -396,6 +410,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     # the default model with no pack row layered onto it is the run's default (None)
     model = None if choice.kind == "default" and not pack_sources(choice.model) else choice
+    try:
+        period = None if parsed.period is None else parse_period(parsed.period)
+    except ValueError as e:
+        print(f"error: --period {parsed.period}: {e}", file=sys.stderr)
+        return 2
     if parsed.opt_in_mutation:
         return run_opt_in_mutation(repo_root, scope=parsed.scope, model=model, packs=packs)
     run_date = datetime.now().strftime("%Y-%m-%d")
@@ -405,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
             non_interactive=parsed.non_interactive,
             scope=parsed.scope, model=model, plan=run_plan(model, parsed.all_scans),
             managed_settings=parsed.managed_settings or load_managed_settings_opt_in(repo_root),
-            packs=packs, jobs=parsed.jobs,
+            packs=packs, jobs=parsed.jobs, period=period,
         )
     except ValueError as e:
         # Invalid --scope (missing path, outside the repo, or a pattern matching nothing). Report cleanly

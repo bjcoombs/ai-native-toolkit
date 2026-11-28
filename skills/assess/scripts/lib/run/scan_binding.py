@@ -45,6 +45,7 @@ READ_ALIASES: Mapping[str, str] = {
     "liveness_blocks": "liveness",
     "maturity_model": "choice",
     "measured_commit": "measured",
+    "merged_census": "census",
     "merged_sample": "sample",
     "nested_instructions": "nested",
     "run_header": "header",

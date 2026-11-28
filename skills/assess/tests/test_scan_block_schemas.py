@@ -21,6 +21,7 @@ from lib.ci.ci_checks import CiChecksBlock
 from lib.counts_only.content_free import counts_only_scans
 from lib.testing.coverage_gate import CoverageGateBlock
 from lib.hosting.delivery import DeliveryBlock
+from lib.hosting.merged_census import ChangeCensusBlock
 from lib.instructions.guardrails import GuardrailsBlock
 from lib.scoring.layer_grades import LayerGradesBlock
 from lib.fleet.fleet_schema import build_schema as build_row_schema
@@ -32,7 +33,7 @@ TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": 
          "delivery": DeliveryBlock, "guardrails": GuardrailsBlock,
          "agent_consistency": AgentConsistencyBlock, "layer_grades": LayerGradesBlock,
          "agent_outcome": AgentOutcomeBlock, "concurrency": ConcurrencyBlock,
-         "review_reality": ReviewRealityBlock}
+         "review_reality": ReviewRealityBlock, "change_census": ChangeCensusBlock}
 
 
 @pytest.mark.parametrize("name", sorted(BLOCK_SCHEMAS))
@@ -141,6 +142,20 @@ def test_delivery_blocks_validate_and_unavailable_needs_a_reason() -> None:
         jsonschema.validate({"available": False}, described_block("delivery"))
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({**full, "merged_count": "five"}, described_block("delivery"))
+
+
+def test_change_census_blocks_validate_complete_and_incomplete() -> None:
+    complete = {"available": True, "provider": "github", "population": "census",
+                "period_start": "2026-07-01", "period_end": "2026-09-30",
+                "population_complete": True, "census_calls": 3, "census_call_ceiling": 1000,
+                "merged_count": 4, "unlinked_change_count": 1, "independent_approval_count": 3}
+    incomplete = {**complete, "population_complete": False, "incomplete_reason": "truncated",
+                  "merged_count": None, "unlinked_change_count": None,
+                  "independent_approval_count": None}
+    _validate({"change_census": complete})
+    _validate(counts_only_scans({"change_census": incomplete}))
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**complete, "population": "sample"}, described_block("change_census"))
 
 
 def test_coverage_gate_blocks_validate_full_and_counts_only(repo: Path) -> None:

@@ -297,6 +297,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `broken_instruction_refs` | path (hashed when hashing is on) |
 
+## change_census
+
+| Field | Kept as |
+|---|---|
+| `change_census.reason` | reason code |
+| `change_census.provider` | token |
+| `change_census.population` | token |
+| `change_census.period_start` | token |
+| `change_census.period_end` | token |
+| `change_census.incomplete_reason` | token |
+
 ## ci_checks
 
 | Field | Kept as |

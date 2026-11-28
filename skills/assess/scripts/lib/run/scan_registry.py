@@ -120,6 +120,7 @@ from lib.pack_checks import collect as collect_packs
 from lib.hosting.org_security_policy import scan_org_security_policy
 from lib.hosting.github_secret_scanning import scan_github_secret_scanning
 from lib.scoring.layer_grades import scan_layer_grades
+from lib.hosting.merged_census import change_census, merged_census, offline_merged_census
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
 from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.hosting.gitlab_include_renames import no_include_renames, read_include_renames
@@ -430,6 +431,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # Delivery figures (#715): time to merge, first human comment, AI review;
     # review_reality's approved and self-merged shares are copied, not recomputed.
     _spec("delivery", scan_delivery),
+    # Every change merged in an absolute --period (#1668): private, never cached, fails closed;
+    # no --period makes no call. change_census publishes its counts.
+    _spec("merged_census", merged_census, offline_fn=offline_merged_census),
+    _spec("change_census", change_census, offline_fn=change_census),
     # The issue tracker read for backlog-ready level 2 (#1323, lib/hosting/issue_outcomes.py): issue
     # times and labels from GitHub or GitLab, in memory only. Private; offline it reads the remote only.
     _spec("backlog_outcomes", backlog_outcomes, offline_fn=offline_backlog_outcomes),

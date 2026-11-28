@@ -81,6 +81,10 @@
       "revision": 1
     },
     {
+      "id": "core.change_census",
+      "revision": 1
+    },
+    {
       "id": "core.churn_degenerate",
       "revision": 1
     },
@@ -274,6 +278,10 @@
     },
     {
       "id": "core.measured_commit",
+      "revision": 1
+    },
+    {
+      "id": "core.merged_census",
       "revision": 1
     },
     {

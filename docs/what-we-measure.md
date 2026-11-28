@@ -534,6 +534,23 @@ Test practices that pin behaviour beyond line coverage, each read from a depende
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `change_census`: Merged changes in a period
+
+An auditor samples from the whole population of changes in a period; a census with a gap reads as complete, so any cap or refused read marks it incomplete and leaves every count unmeasured.
+
+Every change merged in an absolute --period, whether the read was complete, how many closed no issue, and the approval-integrity counts over that population, read through gh or glab.
+
+- Collector: `core.change_census`, reading `merged_census`, `fleet_config`.
+- Network: yes, GitHub or GitLab (with --platform).
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `change_census.incomplete_reason` token, `change_census.period_end` token, `change_census.period_start` token, `change_census.population` token, `change_census.provider` token, `change_census.reason` reason.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_requested`: No --period was given, so no census was read. Pass --period YYYY-MM-DD..YYYY-MM-DD to /assess, or to assess_signals.py with --platform.
+  - `network`: A headless run without --platform makes no GitHub or GitLab read. Run assess_signals.py with --platform and --period, or /assess --period, with gh or glab signed in.
+  - `no_remote`: The repository has no GitHub or GitLab remote, so there are no merged changes to read. Nothing to change if the repository is local only.
+
 ### `ci_checks`: CI runs a test or lint command
 
 It reads whether CI runs tests or linters on ordinary changes in a way that can stop the job, so "it passed" means a check ran and could have said no.
@@ -1374,6 +1391,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `backlog_ready` | Backlog kept agent-ready (intake configuration) | `repo_root`, `backlog_outcomes` | `backlog_ready` | no |
 | `behaviour_pins` | Tests that pin behaviour beyond coverage | `repo_root` | `behaviour_pins` | no |
 | `broken_instruction_refs` | Broken instruction references | `doc_graph`, `instruction_grading` | `broken_instruction_refs` | no |
+| `change_census` | Merged changes in a period | `merged_census`, `fleet_config` | `change_census` | yes |
 | `churn_degenerate` | Degenerate churn history | `doc_staleness` | `churn_degenerate` | no |
 | `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`, `gitlab_include_renames` | `ci_checks` | no |
 | `ci_hazards` | CI that can be told not to fail | `repo_root` | `ci_hazards` | no |
@@ -1423,6 +1441,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
 | `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
 | `measured_commit` | Measured commit | `repo_root` | private input | no |
+| `merged_census` | Merged-change census | `repo_root`, `census_period` | private input | yes |
 | `merged_sample` | Merged-change sample | `repo_root`, `history_window`, `run_date` | private input | yes |
 | `mutation_not_run_cap` | Mutation-not-run cap | `test_pressure` | `mutation_not_run_cap` | no |
 | `nested_instructions` | Nested instruction files | `repo_root`, `excludes` | `nested_instructions` | no |

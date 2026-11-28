@@ -60,7 +60,10 @@ one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_rea
 `review_reality`, #696), or a network spec one of them reads, runs its `fn`. Extension point:
 append a new platform block's name to `PLATFORM_SCANS`; blocks that describe merged
 changes read the private `network=True` spec `merged_sample` (`merged_sample.py`, #715),
-which runs once under `--platform` as their dependency. Only published, single-key scans
+which runs once under `--platform` as their dependency. A `PERIOD_ONLY_SCANS` block
+(`change_census`, #1668) is left out without `--period` (`collect(period=...)`, provided to the
+`merged_census` spec as `census_period`), and `period_error` makes `assess_signals.py` exit 2 on
+`--period` without `--platform`. Only published, single-key scans
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
 the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
@@ -101,6 +104,7 @@ from lib.history.git_churn import git_commit_info
 from lib.history.history_window import split_window
 from lib.run.headless_layers import HEADLESS_SCANS as LAYER_SCANS
 from lib.run.headless_static import HEADLESS_SCANS as STATIC_SCANS
+from lib.hosting.merged_census import Period
 from lib.instructions.instruction_files import grade_instruction_files
 from lib.pack_checks import PACK_BLOCK
 from lib.packs import Pack
@@ -231,7 +235,13 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # ``backlog_outcomes`` (lib/hosting/issue_outcomes.py) for its level 2 metrics.
 PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence",
                                    "review_automation", "ci_checks", "org_security_policy",
-                                   "github_secret_scanning", "secrets_guard", "backlog_ready")
+                                   "github_secret_scanning", "secrets_guard", "backlog_ready",
+                                   "change_census")
+
+# The PLATFORM_SCANS blocks that exist only for an absolute ``--period`` (#1668): the census
+# (lib/hosting/merged_census.py). Without ``--period`` the document leaves them out and no census
+# call is made, so a run without the flag is unchanged; ``--period`` needs ``--platform``.
+PERIOD_ONLY_SCANS: tuple[str, ...] = ("change_census",)
 
 # The PLATFORM_SCANS blocks that exist only on the platform (#779): without
 # ``--platform`` the document leaves them out (absent, never a ``network``
@@ -249,6 +259,13 @@ def platform_only_error(requested: Iterable[str] | None, platform: bool) -> str 
     if platform or not named:
         return None
     return f"--scans {', '.join(named)} needs --platform: the block exists only on the platform"
+
+
+def period_error(period: Period | None, platform: bool) -> str | None:
+    """The error for ``--period`` without ``--platform`` (the census reads the platform)."""
+    if period is None or platform:
+        return None
+    return "--period needs --platform: the census reads merged changes from GitHub or GitLab"
 
 
 def scope_units_error(requested: Iterable[str] | None, scope: Scope | None) -> str | None:
@@ -345,7 +362,8 @@ def parse_window(window: str) -> str:
 def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
                  fleet_config: FleetConfig | None = None,
                  ghsync_root: Path | None = None, scope: Scope | None = None,
-                 managed_settings: bool = False, packs: Sequence[Pack] = ()) -> dict[str, Any]:
+                 managed_settings: bool = False, packs: Sequence[Pack] = (),
+                 period: Period | None = None) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
     ``scope`` is ``--scope`` resolved to a ``Scope`` of folders under ``repo_root``
@@ -360,6 +378,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
     ``managed_settings`` is ``--managed-settings`` (#1153): ``agent_ops`` reads this machine's
     Claude Code managed settings. Never read from the target's ``.assess/config.toml``.
     ``packs`` are ``--pack``'s practice packs (#1276), in pass order; empty without it.
+    ``census_period`` is ``--period`` (#1668), read by the ``merged_census`` spec; None without it.
     Besides the ``build_run_context`` arguments, it supplies the setup values
     ``instruction_files``, ``scope``, ``excludes``, ``history_window``,
     ``fleet_config`` and ``ghsync_root`` itself; the table never recomputes a name the runner provides.
@@ -374,6 +393,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "managed_settings": managed_settings,
         "plan": None,  # the headless runner selects scans by name (--scans), never by plan
         "packs": tuple(packs),  # --pack: the pack_checks entry evaluates them (#1276)
+        "census_period": period,  # --period: the merged_census spec reads it (#1668)
         "instruction_files": instruction_files,
         "scope": scope,
         "excludes": load_excludes(repo_root),
@@ -411,17 +431,19 @@ def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
     ghsync_root: Path | None = None, scope: Scope | None = None, managed_settings: bool = False,
-    packs: Sequence[Pack] = (), jobs: int = 1,
+    packs: Sequence[Pack] = (), jobs: int = 1, period: Period | None = None,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read); one block per name.
 
     Offline unless ``platform``: then a network scan in ``PLATFORM_SCANS``, or one
     a listed scan reads, runs its network ``fn``. Offline, a ``PLATFORM_ONLY_SCANS``
     name gets no block at all. With ``packs`` the ``pack_checks`` entry runs whatever the
-    selection and its ``pack`` block is added (``PACK_BLOCKS``, #1276). ``jobs`` scans run at
+    selection and its ``pack`` block is added (``PACK_BLOCKS``, #1276). Without ``period`` a
+    ``PERIOD_ONLY_SCANS`` name gets no block (#1668). ``jobs`` scans run at
     a time (``lib/run/scan_pool.py``, #1381); the blocks are the same for every value.
     """
-    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope, managed_settings, packs)
+    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope, managed_settings, packs,
+                          period)
     needed = _with_dependencies(selected, specs, inputs) | ({PACK_ENTRY} if packs else set())
     online = _with_dependencies(PLATFORM_SCANS, specs, inputs) if platform else set()
     ctx: dict[str, Any] = {}
@@ -439,7 +461,8 @@ def collect(
         for stage in STAGES:
             run_scans(ctx, inputs, stage, runnable, jobs=jobs)
     blocks = {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected
-              if platform or name not in PLATFORM_ONLY_SCANS}
+              if (platform or name not in PLATFORM_ONLY_SCANS)
+              and (period is not None or name not in PERIOD_ONLY_SCANS)}
     if packs:
         blocks.update({name: ctx[name] for name in PACK_BLOCKS if name in ctx})
     return blocks
@@ -526,6 +549,7 @@ def build_document(
     fleet_config: FleetConfig | None = None, platform: bool = False,
     ghsync_root: Path | None = None, scope: Scope | None = None, units: bool = False,
     managed_settings: bool = False, packs: Sequence[Pack] = (), jobs: int = 1,
+    period: Period | None = None,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -541,5 +565,5 @@ def build_document(
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
             "stamp": build_stamp(repo_root, window, toolkit_root, scope, managed_settings),
             "scans": collect(repo_root, selected, specs, window, fleet_config, platform,
-                             ghsync_root, scope, managed_settings, packs, jobs),
+                             ghsync_root, scope, managed_settings, packs, jobs, period),
         }
