@@ -3,7 +3,7 @@
 Three readings of the committed files, each kept apart because only one of them is evidence that
 a rule holds. Nothing is executed; files are read as text, and a CI step is followed into the
 repository only through the shared CI-step follower (``lib.ci.ci_step_follower``) or, for a
-``python``, ``node`` or shell script a ``run:`` line names, through the same repo-local reader
+``python``, ``node``, ``ruby`` or shell script a ``run:`` line names, through the same repo-local reader
 (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout is read.
 
 - **Enforced (counted).** ``enforced`` is true when a GitHub Actions workflow whose ``on:`` names
@@ -24,7 +24,10 @@ repository only through the shared CI-step follower (``lib.ci.ci_step_follower``
   cannot turn the run red. A script a ``run:`` line names is read from the ``cd`` directory
   before it. ``enforcing_workflows`` lists them. Null with ``enforced_reason``
   ``no_pr_workflows`` when no tracked workflow runs on pull requests: a bot or an app could still
-  enforce, and this reader cannot see one.
+  enforce, and this reader cannot see one. Null with ``ruby_unread`` when none enforces but a
+  step runs Ruby (a ``ruby`` script a ``run:`` line names, or ``shell: ruby``) whose code names an
+  AI marker (issue #1609): no reader reads Ruby, so that step may enforce and the condition reads
+  not measured rather than unmet. Ruby that names no marker enforces nothing and changes nothing.
 - **Declared (listed, never counted).** ``policy_declared`` is true when an ``AI_POLICY.md`` sits
   at the root, in ``.github/`` or in ``docs/`` (``policy_files``), or when a pull request template
   has a checkbox whose own line names AI and disclosure wording (``disclosure_checkboxes``,
@@ -63,12 +66,13 @@ from lib.ci.ci_matrix import jobs
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_triggers import workflow_events
-from lib.ci.disclosure_reader import JS, PYTHON, SHELL, Unit, env_names, step_acts, step_units
-from lib.ci.disclosure_terms import LABEL
+from lib.ci.disclosure_reader import JS, PYTHON, RUBY, SHELL, Unit, env_names, step_acts, step_units
+from lib.ci.disclosure_terms import LABEL, has_marker
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, read_config, repo_files
 from lib.scoring.level_result_types import DeclineRecord
 
 NO_PR_WORKFLOWS = "no_pr_workflows"
+RUBY_UNREAD = "ruby_unread"
 COPILOT_OPT_OUT = "copilot_opt_out"
 PR_EVENTS = frozenset({"pull_request", "pull_request_target"})
 POLICY_PATHS = ("AI_POLICY.md", ".github/AI_POLICY.md", "docs/AI_POLICY.md")
@@ -83,9 +87,9 @@ INSTRUCTIONS_DIR = ".github/instructions/"
 OPT_OUT_CONDITIONS: tuple[str, ...] = ()
 
 _I = re.IGNORECASE
-# A script a run: line names, by the reader its language goes to (Ruby has none, so it reads as no check).
-_SCRIPT_ARG = re.compile(r"\b(?:python3?|node|bash|sh)\s+(?:-\S+\s+)*(?:\./)?([\w./-]+\.(?:py|js|mjs|cjs|sh))\b")
-_LANGUAGES = {".py": PYTHON, ".js": JS, ".mjs": JS, ".cjs": JS, ".sh": SHELL}
+# A script a run: line names, by the reader its language goes to (Ruby has none: a Ruby unit is unread).
+_SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*(?:\./)?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
+_LANGUAGES = {".py": PYTHON, ".js": JS, ".mjs": JS, ".cjs": JS, ".rb": RUBY, ".sh": SHELL}
 _CD = re.compile(r"\bcd\s+([\w./-]+)\s*(?:&&|;)")
 _CHECKBOX = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s+(.*)$", re.MULTILINE)
 _AI_WORD = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|chatgpt|claude|gemini|generative|language model)\b)")
@@ -108,7 +112,7 @@ _REFUSAL = re.compile(
 class AiGovernanceBlock(TypedDict):
     available: bool
     enforced: bool | None  # a PR-triggered workflow reads AI disclosure and fails or labels on it
-    enforced_reason: str | None  # NO_PR_WORKFLOWS when null
+    enforced_reason: str | None  # NO_PR_WORKFLOWS or RUBY_UNREAD when null
     enforcing_workflows: list[str]  # the workflows that do, sorted
     policy_declared: bool  # an AI_POLICY.md at a fixed path or a disclosure checkbox: listed, never counted
     policy_files: list[str]  # the AI_POLICY.md files found, sorted
@@ -218,23 +222,30 @@ def step_texts(text: str) -> list[Step]:
     return out
 
 
-def enforcing_steps(follower: StepFollower, reader: ReadLocal, text: str) -> int:
+class StepCounts(NamedTuple):
+    enforcing: int  # steps that enforce AI disclosure on their own
+    unread: int  # other steps running Ruby that names an AI marker: they may enforce, unread (#1609)
+
+
+def enforcing_steps(follower: StepFollower, reader: ReadLocal, text: str) -> StepCounts:
     """The steps of a workflow that enforce AI disclosure on their own: the read, the marker test and
     the act all in one step's code and the files its lines lead to (the read may come from the
     ``env:`` of the workflow or the step's job). A step under ``continue-on-error: true`` counts only
-    when it labels."""
-    count = 0
+    when it labels. A step that does not enforce but runs Ruby naming an AI marker is ``unread``."""
+    enforcing = unread = 0
     for step in step_texts(text):
-        acts = step_acts(step_units(step.text) + _followed_units(follower, reader, step.text),
-                         env_names(step.text) | env_names(step.env))
+        units = step_units(step.text) + _followed_units(follower, reader, step.text)
+        acts = step_acts(units, env_names(step.text) | env_names(step.env))
         if acts and (not step.masked or LABEL in acts):
-            count += 1
-    return count
+            enforcing += 1
+        elif any(u.language == RUBY and has_marker(u.code) for u in units):
+            unread += 1
+    return StepCounts(enforcing, unread)
 
 
 def _followed_units(follower: StepFollower, reader: ReadLocal, text: str) -> list[Unit]:
     """The code every line of a step leads to: the shared follower's commands as shell, and a
-    script a ``python``, ``node`` or shell line names, read from the ``cd`` directory before it."""
+    script a ``python``, ``node``, ``ruby`` or shell line names, read from the ``cd`` directory before it."""
     units: list[Unit] = []
     for line in text.splitlines():
         for found in follower.step(line):
@@ -261,8 +272,9 @@ def scan_ai_governance(repo_root: Path) -> AiGovernanceBlock:
         text = follow_workflow(read_config(root, rel), reader).text
         if PR_EVENTS & set(workflow_events(text) or []):
             pr_workflows[rel] = text
-    enforcing = sorted(rel for rel, text in pr_workflows.items()
-                       if enforcing_steps(follower, reader, text) > 0)
+    counts = {rel: enforcing_steps(follower, reader, text) for rel, text in pr_workflows.items()}
+    enforcing = sorted(rel for rel, n in counts.items() if n.enforcing > 0)
+    unread = not enforcing and any(n.unread for n in counts.values())
     policies = sorted(p for p in POLICY_PATHS if p in tracked)
     templates = [f for f in tracked if f in TEMPLATE_PATHS
                  or (f.startswith(TEMPLATE_DIR) and f.lower().endswith(".md"))]
@@ -270,8 +282,8 @@ def scan_ai_governance(repo_root: Path) -> AiGovernanceBlock:
     checked = sum(boxes.values())
     return {
         "available": True,
-        "enforced": bool(enforcing) if pr_workflows else None,
-        "enforced_reason": None if pr_workflows else NO_PR_WORKFLOWS,
+        "enforced": None if unread or not pr_workflows else bool(enforcing),
+        "enforced_reason": NO_PR_WORKFLOWS if not pr_workflows else RUBY_UNREAD if unread else None,
         "enforcing_workflows": enforcing,
         "policy_declared": bool(policies) or checked > 0,
         "policy_files": policies,

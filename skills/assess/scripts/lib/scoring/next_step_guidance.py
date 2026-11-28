@@ -655,7 +655,9 @@ _MEASURE_HINTS = {
     "skill_library": "Not measured (`not_a_git_repository`) outside a git repository, where the "
                      "committed files cannot be listed.",
     "ai_governance": "Not measured (`no_pr_workflows`) when no GitHub Actions workflow runs on pull "
-                     "requests, so no check that could read an AI disclosure is in view.",
+                     "requests, so no check that could read an AI disclosure is in view, and "
+                     "(`ruby_unread`) when no step reads as enforcing but one runs Ruby naming an AI "
+                     "marker, which this reader does not read.",
     "ci_hazards": "Not measured (`no_pr_checks`) when no GitHub Actions workflow runs a check on pull "
                   "requests, and (`no_ci_files`) when no CI file, Jenkinsfile or root `pom.xml` is tracked.",
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "
