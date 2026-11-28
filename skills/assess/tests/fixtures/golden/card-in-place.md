@@ -2,7 +2,7 @@
 
 In place: 5 practices at their top level: Runtime legibility; Code design (module structure); Linters run in CI, suppression cap; and 2 more.
 
-Holding: 8 of 9 Step 4 gates held at `600cca4` · 2 of 3 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
+Holding: 8 of 9 Step 4 gates held at `600cca4` · 9 of 10 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
 
 Blocks Step 4: no coverage gate is enforced. `skills/assess` already does this; copy it.
 

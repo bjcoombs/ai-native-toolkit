@@ -98,7 +98,7 @@ The pair above is this toolkit assessing a private monorepo. Below is `/assess` 
     <th colspan="2">Step ladder (illustrative sample, not a llama.cpp reading)</th>
   </tr>
   <tr>
-    <td colspan="2"><a href="docs/example-step-ladder.svg"><img alt="Illustrative Step ladder: four rungs of agent autonomy, bottom to top - 1 Assisted, an agent can read and help with your code; 2 Supervised agent changes, an agent makes changes and a person reviews each one; 3 Unattended agent changes, agents make changes nobody has to watch; 4 Autonomous loops, agents run longer loops on their own. You are here on Step 3; the instruction, CI, review, linter and secrets guard gates below are in place, and the next gate, a coverage gate is enforced, is highlighted" title="Example: Step 3 of 4, Unattended agent changes; next gate: a coverage gate is enforced" src="docs/example-step-ladder.svg"></a></td>
+    <td colspan="2"><a href="docs/example-step-ladder.svg"><img alt="Illustrative Step ladder: four rungs of agent autonomy, bottom to top - 1 Assisted, an agent can read and help with your code; 2 Supervised agent changes, an agent makes changes and a person reviews each one; 3 Unattended agent changes, agents make changes nobody has to watch; 4 Autonomous loops, agents run longer loops on their own. You are here on Step 3; the instruction, CI, review, linter and secrets guard gates below are in place, and the next gates, a coverage gate, wide review, agent permissions and a boundary map, are highlighted" title="Example: Step 3 of 4, Unattended agent changes; next gate: a coverage gate is enforced" src="docs/example-step-ladder.svg"></a></td>
   </tr>
   <tr>
     <th width="50%">Evidence waffle</th>

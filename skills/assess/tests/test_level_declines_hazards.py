@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 import lib.scoring.level_tally as lt
+from cumulative_gates_fixture import step3_signals
 from lib.counts_only.content_free import counts_only
 from lib.owner_exclusions import owner_exclusions_block
 from lib.run.decline_markers import AGENT_DECLINE, AGENTS_MARKER, decline_badge, read_agent_decline
@@ -46,7 +47,7 @@ def _cond(result: lt.LevelResult, cid: str) -> lt.ConditionResult:
     return next(c for c in result["conditions"] if c["id"] == cid)
 
 
-HELD = {"layer_grades": {"instruction_file_present": True}, "ci_checks": {"enforced_check_runs": True}}
+HELD = step3_signals()  # every Step 3 gate met (#1641)
 
 
 # --- the agent-level marker ---------------------------------------------------------------
@@ -298,7 +299,7 @@ def test_the_top_card_words_a_hazard_and_a_decline_as_what_they_are() -> None:
     assert start_lines(with_fix, None)[0] == "Start here: Clear the hazard skip.1: remove the label rule."
     declined = lt.level_result(lt.default_model(), HELD, declines=[_record()])
     gate = declined["next_step"]["blockers"][0]  # type: ignore[index]
-    assert _gap(gate) == f"the repository declined {INSTRUCTIONS}, so the instruction file gate cannot hold"
+    assert _gap(gate) == f"the repository declined {INSTRUCTIONS}, so the instruction file with a check command gate cannot hold"
     start, done = start_lines(declined, None)
     assert "agents-declined.json" in start and "Commit an instruction file" not in start
     assert done.startswith("Done when: the decline is lifted")

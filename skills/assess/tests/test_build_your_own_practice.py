@@ -44,6 +44,14 @@ HANDOVER_MET: dict[str, Any] = {
     "ci_checks": {"lint_runs": True, "enforced_check_runs": True},
     "review_evidence": {"present": True},
     "doc_staleness": {"summary": {"stale_pct": 10}},
+    # the rows the handover profile gained with the cumulative gates (#1641)
+    "agent_environment": {"available": True, "check": {"named_total": 1}},
+    "instruction_claims": {"total": 1, "verified": 1, "failed": 0},
+    "nested_instructions": {"available": True, "budget": {"claude_code": {"files": ["CLAUDE.md"], "lines": 40}}},
+    "review_reality": {"reviewed_share": 0.9, "approved_share": 0.7},
+    "agent_ops": {"summary": {"permissions_encoded": True}},
+    "structure_drift": {"tier_0": {"boundary_patterns": 2}},
+    "secrets_guard": {"configured": True},
 }
 
 

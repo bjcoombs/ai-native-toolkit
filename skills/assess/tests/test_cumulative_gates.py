@@ -32,6 +32,7 @@ from lib.scoring.level_tally import default_model, level_result
 from lib.scoring.levels import MaturityModel, load_levels
 from lib.scoring.step_reading import step_reading
 from lib.top_card import GATE_GAP, GATE_TASK
+from cumulative_gates_fixture import step3_signals
 from fleet_data_fixture import STAMP
 
 MODEL = default_model()
@@ -43,17 +44,7 @@ STEP4 = [*STEP3, "layer-6-coverage.1", "layer-7-review.2", "layer-8-agent-ops.1"
 
 
 def _step3_signals() -> dict[str, Any]:
-    """Every Step 3 gate met; no coverage gate, so Step 4 waits on it."""
-    return {
-        "layer_grades": {"instruction_file_present": True},
-        "agent_environment": {"available": True, "check": {"named_total": 1}},
-        "instruction_claims": {"total": 3, "verified": 3, "failed": 0},
-        "nested_instructions": {"available": True, "budget": {"claude_code": {"files": ["CLAUDE.md"], "lines": 40}}},
-        "ci_checks": {"enforced_check_runs": True, "enforced_basis": "required_checks", "lint_runs": True},
-        "review_evidence": {"present": True},
-        "secrets_guard": {"configured": True, "configured_reason": None},
-        "coverage_gate": {"enforced_meets_minimum": False, "enforced_basis": "no_gate"},
-    }
+    return step3_signals()
 
 
 def _step4_signals() -> dict[str, Any]:

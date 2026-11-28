@@ -17,7 +17,14 @@ from lib import unit_rollup as ur
 from lib.counts_only.content_free import counts_only
 from lib.scoring.level_tally import default_model
 from lib.run.scan_registry import SCANS
+from cumulative_gates_fixture import STEP3_FILES
 from test_unit_readings import MONOREPO, _write
+
+# The #800 monorepo with every Step 3 gate in place at the root (#1641): a check command that
+# resolves, one claim the repository keeps, and the review, lint and secrets-scan files.
+STEP3_MONOREPO = {**MONOREPO, **STEP3_FILES, "Makefile": "check:\n\tpytest\n",
+                  "CLAUDE.md": "# Repo\n\nRun `make check`.\nThe repository has 2 services in "
+                               "`services/*/pyproject.toml`.\n"}
 
 INSTR = "layer-0-instructions.1"
 CI = "layer-5-ci.1"
@@ -26,7 +33,7 @@ CI = "layer-5-ci.1"
 @pytest.fixture(scope="module")
 def run(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     from assess_core import build_run_context
-    repo = _write(tmp_path_factory.mktemp("mono") / "repo", MONOREPO)
+    repo = _write(tmp_path_factory.mktemp("mono") / "repo", STEP3_MONOREPO)
     ctx: dict[str, Any] = build_run_context(repo_root=repo, run_date="2026-11-23",
                                             non_interactive=True)
     return ctx
@@ -103,7 +110,8 @@ def test_no_instruction_file_anywhere_ranks_the_root_file_first(tmp_path: Path) 
                                    "held": 3, "lifted": 3, "lift_per_change": 3}
     assert block["lines"] == [
         "Units: Step 1 (lowest unit) · 0 of 3 measured units at Step 2",
-        "Next unlock across units: an instruction file an agent reads is committed, once at the root, "
+        "Next unlock across units: a committed instruction file names the check an agent runs, and its claims "
+        "hold, once at the root, "
         "moves 3 units to their next Step"]
 
 
@@ -115,7 +123,8 @@ def test_a_repo_wide_change_counts_once_and_lifts_every_unit() -> None:
                                  "held": 3, "lifted": 3, "lift_per_change": 3}]
     assert block["lines"] == [
         "Units: Step 1 (lowest unit) · 0 of 3 measured units at Step 2",
-        "Next unlock across units: an instruction file an agent reads is committed, once at the root, "
+        "Next unlock across units: a committed instruction file names the check an agent runs, and its claims "
+        "hold, once at the root, "
         "moves 3 units to their next Step"]
 
 

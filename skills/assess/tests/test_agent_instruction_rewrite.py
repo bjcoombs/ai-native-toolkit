@@ -13,6 +13,7 @@ from lib.agents.agent_instruction_rewrite import gh_aw_imports
 from lib.agents.agent_ops import scan_agent_ops
 from lib.counts_only.content_free import counts_only
 from lib.docs.ownership_parser import codeowned
+from cumulative_gates_fixture import step3_signals
 
 WORKFLOW = ".github/workflows/docs-sync.yml"
 
@@ -57,8 +58,7 @@ def _repo(git_repo, files: dict[str, str]) -> Path:
 
 
 def _level(block: dict[str, object]) -> lt.LevelResult:
-    data = {"layer_grades": {"instruction_file_present": True}, "ci_checks": {"enforced_check_runs": True},
-            "agent_ops": block}
+    data = {**step3_signals(), "agent_ops": block}  # every Step 3 gate met but for the hazard (#1641)
     return lt.level_result(lt.default_model(), data)
 
 

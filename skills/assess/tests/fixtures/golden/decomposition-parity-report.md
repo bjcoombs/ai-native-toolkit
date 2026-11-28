@@ -10,7 +10,7 @@ Blocks Step 2: no committed instruction file names the check an agent runs with 
 
 Since last run: gate changes [not known](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#not-measured); closed actions not known (no baseline is committed yet, and this run's result cannot be recorded as one).
 
-Start here: [Commit an instruction file agents read, such as AGENTS.md or CLAUDE.md, of at most 200 lines, that names the command an agent runs to check its work](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates)
+Start here: [Commit an instruction file, such as AGENTS.md or CLAUDE.md, that names the command an agent runs to check its work](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates)
 
 Done when: the next `/assess` run reads that a committed instruction file names the check an agent runs, and its claims hold.
 

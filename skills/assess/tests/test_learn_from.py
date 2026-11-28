@@ -14,6 +14,7 @@ from typing import Any
 
 import lib.fleet.fleet_data as fd
 from fleet_data_fixture import SALT, build
+from cumulative_gates_fixture import step3_signals
 from lib import unit_rollup as ur
 from lib.counts_only.content_free import counts_only, hash_value
 from lib.fleet.fleet_data_units import unit_rows
@@ -121,11 +122,12 @@ def test_counts_only_rollup_names_no_unit_and_hashed_keeps_the_join_key() -> Non
 
 def _scans() -> dict[str, Any]:
     """A repository holding its instruction file but not CI; package A runs its own CI."""
-    ci = {"available": True, "enforced_check_runs": True}
+    ci = {"available": True, "enforced_check_runs": True, "lint_runs": True}
     units = [{"path": p, "kind": "package", "blocks": {"ci_checks": ci} if p == A else {},
               "conditions": [{"id": CI, "origin": "unit"}]} for p in NAMES]
-    return {"layer_grades": {"available": True, "instruction_file_present": True},
-            "ci_checks": {"available": True, "enforced_check_runs": False},
+    # every Step 3 gate met at the root but CI (#1641), so CI is each unit's next gate
+    return {**step3_signals(), "layer_grades": {"available": True, "instruction_file_present": True},
+            "ci_checks": {"available": True, "enforced_check_runs": False, "lint_runs": True},
             "units": UNITS,
             "unit_readings": {"available": True, "unit_count": 3, "unit_count_reason": None,
                               "unit_blocks": ["ci_checks"], "units": units}}

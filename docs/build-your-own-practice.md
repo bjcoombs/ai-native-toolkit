@@ -11,7 +11,7 @@ Start from a model that is close to what you want. The toolkit ships three:
 | Model | File | What it holds |
 |-------|------|---------------|
 | default | `skills/assess/levels/default.toml` | Every practice `/assess` scores, with the autonomy Steps. |
-| handover | `skills/assess/levels/profiles/handover.toml` | Six practices a team expects before it takes a repository over. |
+| handover | `skills/assess/levels/profiles/handover.toml` | Nine practices a team expects before it takes a repository over. |
 | citizen | `skills/assess/levels/profiles/citizen.toml` | A lighter bar while a citizen developer builds; one example of a profile turning on general practices such as the secrets guard. |
 
 The starter command writes a copy you can edit. Run it from `skills/assess` in a toolkit checkout, and give it a path in your own repository:
@@ -73,7 +73,7 @@ The run stops with this error. It names the line of the typo and the closest rea
 
 <!-- guide-example: typo-error -->
 ```text
-error: unknown signal path(s): team:coverage_gate.threshold (row 'coverage-80') at line 170, did you mean coverage_gate.max_threshold_percent, coverage_gate.threshold_meets_minimum or coverage_gate.configured?
+error: unknown signal path(s): team:coverage_gate.threshold (row 'coverage-80') at line 241, did you mean coverage_gate.max_threshold_percent, coverage_gate.threshold_meets_minimum or coverage_gate.configured?
 ```
 
 ## 4. Run it
