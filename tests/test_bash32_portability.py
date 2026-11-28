@@ -37,7 +37,9 @@ BASH4_FEATURES = {
     "readarray": re.compile(r"\breadarray\b"),
     "associative array": re.compile(r"\b(?:declare|local|typeset)\s+-[a-zA-Z]*A"),
     "nameref": re.compile(r"\b(?:declare|local|typeset)\s+-[a-zA-Z]*n"),
-    "case-changing expansion": re.compile(r"\$\{[^}]*(?:,,|\^\^|,|\^)\}"),
+    "case-changing expansion": re.compile(
+        r"\$\{[A-Za-z_]\w*(?:\[[^]]*\])?(?:,,?|\^\^?)[^}]*\}"
+    ),
     "@ operator expansion": re.compile(r"\$\{[^}]*@[QEPAaKkUuL]\}"),
     "&>> redirection": re.compile(r"&>>"),
     "|& pipe": re.compile(r"\|&"),
@@ -85,6 +87,8 @@ def test_the_lint_reads_every_script() -> None:
         ("local -n ref=$1", "nameref"),
         ('echo "${name,,}"', "case-changing expansion"),
         ('echo "${name^^}"', "case-changing expansion"),
+        ('echo "${name^}" "${name,}"', "case-changing expansion"),
+        ('echo "${arr[@],,}"', "case-changing expansion"),
         ('echo "${name@Q}"', "@ operator expansion"),
         ("cmd &>> log", "&>> redirection"),
         ("cmd |& tee log", "|& pipe"),
@@ -112,6 +116,7 @@ def test_the_lint_flags_each_bash4_feature(snippet: str, feature: str) -> None:
         'echo "${#arr[@]}" "${name#prefix}" "${name%%/*}" "${1#*=}"',
         "local -a opts=(-c core.longpaths=true)",
         "  a) echo a ;;",
+        'echo "${x:-a,}" "${x#^}" "${x/,/ }"',
         "cmd >/dev/null 2>&1 &",
         'echo "${arr[0]}" "${arr[@]:0:$n}" "${#arr[@]}"',
     ],
