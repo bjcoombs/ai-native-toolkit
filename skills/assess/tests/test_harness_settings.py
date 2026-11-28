@@ -226,6 +226,9 @@ def test_an_untracked_vscode_settings_file_raises_nothing(tmp_path: Path) -> Non
     ('{"chat.tools.terminal.autoApprove": {"/^.+$/": {"approve": true}},, }', ["/^.+$/"]),
     ('{"chat.tools.global.autoApprove": true,, "x": }', ["chat.tools.global.autoApprove"]),
     ('{"files.exclude": {"*": true}, "chat.tools.terminal.autoApprove": {"npm test": true}', []),
+    ('{"chat.tools.terminal.autoApprove": false, "files.exclude": {"*": true}', []),  # not an object
+    ('{"chat.tools.terminal.autoApprove": {/* { */ "npm test": true}, "files.exclude": {"*": true}', []),
+    ('{"chat.tools.terminal.autoApprove": {"npm test": true, // "*": true\n}', []),
 ])
 def test_an_unparseable_auto_approve_file_is_listed_and_never_reads_clean(
         tmp_path: Path, text: str, broad: list[str]) -> None:

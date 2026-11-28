@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from lib.counts_only.block_shapes import AgentOpsDir, AgentOpsSettingsFile
-from lib.graph.import_graph_typescript import read_jsonc
+from lib.graph.import_graph_typescript import read_jsonc, strip_comments
 from lib.history.git_churn import is_tracked, tracked_files
 from lib.instructions.command_index import NOOP_COMMANDS
 from lib.scoring.level_result_types import DeclineRecord
@@ -181,14 +181,13 @@ def _decoded(key: str) -> str:
 
 
 def _rules_text(text: str) -> str:
-    """The text of the ``chat.tools.terminal.autoApprove`` value: from the key to the brace that
-    closes its object, or to the end of a file that never closes it."""
-    start = text.find(f'"{TERMINAL_AUTO_APPROVE}"')
-    if start < 0:
+    """The text of the ``chat.tools.terminal.autoApprove`` object: from the brace that opens its
+    value to the brace that closes it, or to the end of a file that never closes it. Empty when
+    the value is not an object."""
+    m = re.search(rf'"{re.escape(TERMINAL_AUTO_APPROVE)}"\s*:\s*\{{', text)
+    if m is None:
         return ""
-    open_at = text.find("{", start)
-    if open_at < 0:
-        return text[start:]
+    start = open_at = m.end() - 1
     depth, quoted, i = 0, False, open_at
     while i < len(text):
         c = text[i]
@@ -217,7 +216,8 @@ def broad_in_text(text: str) -> list[str]:
     """The broad auto-approves in a settings file that does not parse (#846), read from its raw
     text so an unreadable file never reads as clean: an all-tools setting set to true, the
     terminal setting set to true, or a broad rule key approved inside the terminal setting's
-    object. Other settings' keys (``files.exclude``) are never read."""
+    object. Other settings' keys (``files.exclude``) are never read, nor is a comment."""
+    text = strip_comments(text)
     found = [name for name in _ALL_TOOLS
              if re.search(rf'"{re.escape(name)}"\s*:\s*true\b', text)]
     if re.search(rf'"{re.escape(TERMINAL_AUTO_APPROVE)}"\s*:\s*true\b', text):
