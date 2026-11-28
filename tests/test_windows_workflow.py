@@ -309,31 +309,45 @@ def test_long_path_step_builds_the_fixture_and_runs_the_scanners() -> None:
     assert (REPO / "tests" / "fixtures" / "windows_smoke" / "longpath.py").is_file()
 
 
-# The Python 3.15 probe (#1490): a job outside the matrix that tries to
-# reproduce the pytest-xdist startup crash on 3.15. It must never gate a merge.
+
+# The Python 3.15 probe (#1490): its own workflow that tries to reproduce the
+# pytest-xdist startup crash on 3.15. It runs weekly and on demand only, so it
+# never costs a pull request a Windows runner and never gates a merge.
+PROBE_WORKFLOW = REPO / ".github" / "workflows" / "windows-py315.yml"
 PROBE_ID = "python315"
 PROBE_SUITES = ("assess", "contract")
 
 
-def _probe(jobs: dict[str, Any]) -> dict[str, Any]:
-    assert PROBE_ID in jobs, f"windows.yml has no {PROBE_ID} job"
-    return jobs[PROBE_ID]
+def _probe_doc() -> dict[str, Any]:
+    doc: dict[str, Any] = yaml.safe_load(PROBE_WORKFLOW.read_text(encoding="utf-8"))
+    return doc
+
+
+def _probe() -> dict[str, Any]:
+    jobs = _probe_doc()["jobs"]
+    assert set(jobs) == {PROBE_ID}, f"windows-py315.yml jobs: {sorted(jobs)}"
+    job: dict[str, Any] = jobs[PROBE_ID]
+    return job
+
+
+def test_python315_probe_runs_weekly_and_on_demand_only() -> None:
+    # PyYAML reads the bare `on:` key as True.
+    triggers = _probe_doc()[True]
+    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    assert len(triggers["schedule"]) == 1 and "cron" in triggers["schedule"][0]
+    assert PROBE_ID not in _jobs(), "the probe must not run with the per-PR windows.yml"
 
 
 def test_python315_probe_is_not_a_required_check() -> None:
-    jobs = _jobs()
-    probe = _probe(jobs)
-    _, agg = _aggregator(jobs)
-    needs = agg["needs"]
-    assert PROBE_ID not in (needs if isinstance(needs, list) else [needs])
+    probe = _probe()
     assert probe["name"] != REQUIRED_NAME
-    assert "not required" in probe["name"]
-    assert "strategy" not in probe, "the probe must stay out of the matrix the aggregator reads"
+    assert "weekly" in probe["name"]
+    assert "strategy" not in probe
     assert probe["runs-on"] == "windows-latest"
 
 
 def test_python315_probe_runs_parallel_suites_that_cannot_fail_the_job() -> None:
-    steps = {s.get("id"): s for s in _probe(_jobs())["steps"] if "id" in s}
+    steps = {s.get("id"): s for s in _probe()["steps"] if "id" in s}
     for sid in PROBE_SUITES:
         step = steps[sid]
         run = " ".join(step["run"].split())
@@ -345,7 +359,7 @@ def test_python315_probe_runs_parallel_suites_that_cannot_fail_the_job() -> None
 
 
 def test_python315_probe_records_each_outcome() -> None:
-    steps = _probe(_jobs())["steps"]
+    steps = _probe()["steps"]
     record = next(s for s in steps if s.get("name") == "Record the 3.15 outcome")
     assert record["if"] == "${{ !cancelled() }}"
     assert "continue-on-error" not in record
