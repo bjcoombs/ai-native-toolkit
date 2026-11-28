@@ -62,7 +62,9 @@ parser (the core has no YAML dependency). Only literal values count.
   ``set -e``, unless a later statement of that body re-raises a status: it
   exits or returns a non-zero literal, a variable or ``$?`` (``exit 1``,
   ``exit $status``), as ``.github/workflows/floor.yml``'s retry loop does.
-
+- Never reached (#1622). A bare ``exit`` or ``exit`` with any status, alone at the top level of a body (nesting as above, any
+  shell, GitLab too), masks every later statement of it (``lib.ci.ci_statements.first_exit``): ``exit 0`` then ``pytest`` earns
+  nothing; ``if ...; then exit 0; fi`` and ``x &&`` then ``exit 0`` on the next line mask nothing.
 - Errexit-exempt positions (#936, ``lib.ci.ci_exempt``). With errexit on, bash does not stop
   at a failing command on the left of ``&&`` / ``||``, in a pipeline but its last command
   (pipefail off: the default ``bash -e {0}`` and ``sh``; on for ``shell: bash``, a custom
@@ -76,7 +78,6 @@ parser (the core has no YAML dependency). Only literal values count.
 - A folded block scalar (``run: >``) is read as YAML folds it: adjacent non-blank lines at
   the block's indentation are one line, so ``pytest`` and ``|| true`` on two lines are one
   masked statement, and ``pytest`` then ``exit 0`` is the one command ``pytest exit 0``.
-
 - Not measured (#1008, ``lib.ci.ci_unsure``). ``mask_lines(text)`` returns ``(unmasked,
   unsure)``: the forms whose failure the step may hide are left out of the unmasked lines
   and returned on their own, so ``ci_checks`` and ``coverage_ci`` read them null
@@ -112,7 +113,8 @@ GitLab body is read for the ``||`` fallback only; a compound command in an exemp
 (``fi || true``) does not exempt its body; ``allow_failure`` inherited through
 ``default:``, ``extends:`` or a YAML anchor is not resolved; a GitLab ``set +e`` in
 ``before_script:`` does not reach ``script:``; reusable-workflow and composite-action
-internals are not read. A check that is the last statement after ``set +e`` is masked by
+internals are not read; a lone ``exit`` in a ``shell: python`` body (a no-op there) is read as
+ending the step (#1622). A check that is the last statement after ``set +e`` is masked by
 design (issue #775 scope): bash would exit with its status, but any trailing line would
 hide it.
 
@@ -158,16 +160,15 @@ pipeline, the `||` pipelines up to the next `&&` are dropped (`ruff check . --ex
 || pytest` drops `pytest`), and a folded block scalar (`run: >`) is folded into one
 line before any rule reads it. The default `bash -e` stops at the failing check first, so
 `pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
-`exit 0` rule; a literal `if: false`,
-`if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
-`\\` continuations are joined first.
+`exit 0` rule; a literal `if: false`, `if: 'false'` or `if: ${{ false }}` masks its step or job like
+`continue-on-error: true`. `\\` continuations are joined first. Issue #1622 masks every statement after a top-level `exit`.
 Issue #1008 adds `mask_lines(text) -> (unmasked, unsure)`, the forms that read null
 (`lib.ci.ci_unsure`). Issue #1061 masks a pipeline member but the last with pipefail off
 (null with a later `PIPESTATUS` read or re-raise) and an uncalled function's body in a
 GitHub bash or sh body. Known limits (module docstring): an exempt check inside a subshell or function with a later statement there, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
-shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.
+shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`; #1622: `tests/test_ci_exit_unreachable.py`.
 """
 from __future__ import annotations
 
@@ -179,7 +180,7 @@ from dataclasses import dataclass
 from lib.ci.ci_exempt import (
     condition_flags, exempt_segments, pipefail_after, piped_groups, piped_members, shell_pipefail, unquoted)
 from lib.ci.ci_statements import (
-    _capture_targets, _checked_later, _join, _pick, _same_line_keep, split_statements)
+    _capture_targets, _checked_later, _join, _pick, _same_line_keep, exit_status, first_exit, split_statements)
 from lib.ci.ci_unsure import (
     condition_raises, group_call_unsure, opaque_flags, or_arm_unsure, piped_calls, uncalled_functions,
     until_break_flags)
@@ -441,12 +442,6 @@ def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> t
     return out, grouped
 
 
-def _exit_zero(statement: list[tuple[str, str]]) -> bool:
-    """A statement that is ``exit 0`` alone: run unconditionally at the top level, it ends the
-    body with success."""
-    return len(statement) == 1 and " ".join(statement[0][1].split()) == "exit 0"
-
-
 # Shells GitHub Actions runs without errexit: ``pwsh`` / ``powershell`` (a Windows runner's
 # default), ``cmd`` and ``python``. ``bash`` and ``sh`` run with ``-e``.
 _NO_ERREXIT_SHELLS = frozenset({"pwsh", "powershell", "cmd", "python"})
@@ -568,8 +563,9 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
                     run_shell: tuple[bool, bool, bool] | None,
                     captured: frozenset[tuple[int, int]] = frozenset(),
                     ) -> tuple[list[tuple[int, int]], Segments, Segments]:
-    """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``,
-    and the segments a later ``exit 0`` masks in a body with errexit on.
+    """The statements of one script body masked by ``set +e``, by a later top-level ``exit 0`` or
+    by coming after a top-level ``exit`` (``first_exit``, #1622), and the segments a later
+    ``exit 0`` masks in a body with errexit on.
 
     ``refs`` are ``(first line, statement index)`` in order. A re-raise (``exit 1``,
     ``exit $?``) after a statement un-masks it; for ``exit 0`` its own re-raise does too.
@@ -614,7 +610,8 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     uncalled, named = uncalled_functions(body) if readable else (set(), set())   # #1061
     grouped_pipes = {**piped_groups(body), **piped_calls(body, before)} if readable else {}   # #1061
     opaque = opaque_flags(body)
-    out: list[tuple[int, int]] = []
+    end = first_exit(body, [depth == 0 for depth in depths])
+    out: list[tuple[int, int]] = refs[end + 1:] if end is not None else []   # never reached (#1622)
     exempt: Segments = {}
     unsure: Segments = {}
     later_code = False   # a later statement runs after this one (not a lone closer)
@@ -622,7 +619,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success
     exit_reraised = False
-    for idx in range(len(refs) - 1, -1, -1):
+    for idx in range(len(refs) - 1 if end is None else end, -1, -1):
         first, k = refs[idx]
         own = bool(_RERAISE.search(_join(parsed[first][k])))
         later_exit = exited and not (exit_reraised or own)
@@ -663,7 +660,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
             pipestatus = True
         if code[idx] and any(seg for _, seg in raw[first][k]) and _head(raw[first][k]) not in _ENDS:
             later_code = True
-        if code[idx] and depths[idx] == 0 and _exit_zero(parsed[first][k]):
+        if code[idx] and depths[idx] == 0 and exit_status(parsed[first][k]) == "0":
             exited, exit_reraised = True, False
         reraised = reraised or own
         exit_reraised = exit_reraised or own
