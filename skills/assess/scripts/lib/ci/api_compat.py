@@ -54,7 +54,8 @@ null or the ``ci_checks`` block absent) or ``ci_not_read`` (a tool is declared o
 unsettled form, and a tracked CI file of a system this reader does not parse, a GitLab top-level
 ``include:`` or a follower reading it could not settle may run it). Else false.
 
-Full reference: lib/docs/api_compat.md. Inward-only imports; never an orchestrator. Tests:
+Full reference: lib/docs/api_compat.md; the re-raise rules live in ``lib.ci.apidiff_reraise``. Inward-only
+imports; never an orchestrator. Tests:
 ``tests/test_api_compat_condition.py``.
 """
 from __future__ import annotations
@@ -64,7 +65,7 @@ import json
 import posixpath
 import re
 from collections.abc import Mapping
-from itertools import dropwhile, takewhile
+from itertools import takewhile
 from pathlib import Path
 
 from lib.ci.agent_evals import _idle
@@ -78,7 +79,8 @@ from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_job_commands import OPERATOR as _OPERATOR
 from lib.ci.ci_job_commands import commands as _commands
-from lib.ci.ci_job_commands import fallback
+from lib.ci.apidiff_reraise import SUBSHELL as _SUBSHELL, branch_reraises as _branch_reraises
+from lib.ci.apidiff_reraise import line_ends as _line_ends, reraises as _reraises, words as _words
 from lib.instructions.command_resolver import command_words
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.run_context_types_api_compat import ApiCompatBlock, ApiCompatRun
@@ -93,7 +95,6 @@ _GITLAB_BODY = frozenset({"script", "before_script"})
 _GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
 _INCLUDE = re.compile(r"^include\s*:", re.M)
 _OUTPUT_FILE = re.compile(r"(?:\d?>>?|\btee(?:\s+-a)?)\s*([\w./-]+)")
-_SUBSHELL = re.compile(r"\s*(?:(?:then|else|do|\{|!)\s+)*\(")   # a command that opens ``( ... )``, not a quoted ``(``
 _STATUS_VAR = re.compile(r"(?<![\w$])(\w+)=\$\?")
 _CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?(\w+)=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
 # The japicmp settings that make a breaking change stop the build: the Maven plugin's
@@ -214,16 +215,6 @@ def _rest(text: str, words: list[str]) -> list[str]:
     return []
 
 
-def _reraises(words: list[str], held: frozenset[str] = frozenset()) -> bool:
-    """A command that ends its script red: ``exit`` or ``return`` with a non-zero literal or a
-    variable other than ``$?`` or one ``held`` (assigned ``$?``), or ``false``, as the command itself
-    (after a ``then``, ``else``, ``do`` or ``{``), never an argument (``echo false``, ``echo exit 1``)."""
-    head = list(dropwhile(lambda w: w in ("then", "else", "do", "{"), words))
-    code = head[1].strip('"') if len(head) > 1 else ""
-    zero = code in ("", "0", "$?") or code.strip("${}") in held   # ``$?`` after apidiff is its 0
-    return (head[:1] in (["exit"], ["return"]) and not zero) or head[:1] == ["false"]
-
-
 def _output_refs(line: str) -> list[str]:
     """How later lines can name what apidiff wrote: the variable a whole-line capture assigns
     (``out=$(apidiff a b)`` gives ``$out``) and the files it is redirected or tee'd to."""
@@ -291,44 +282,6 @@ def _polarity(words: list[str]) -> str | None:
     if found is None or not negated:
         return found
     return "neg" if found == "pos" else "pos"
-
-
-def _words(part: str) -> list[str]:
-    return command_words(part.strip().strip("(){} "))
-
-
-def _and_chain(rest: list[str]) -> list[str]:
-    """The commands of the ``&&`` chain that opens ``rest`` (``rest[0]`` is ``&&``), braces kept
-    together, up to the next ``||``, ``;`` or ``|`` outside them: in ``[ -s f ] && echo x || exit 1``
-    the ``exit 1`` runs only when the test fails, so it is not in the chain."""
-    out: list[str] = []
-    depth = 0
-    for k, part in enumerate(rest[1:]):
-        if k % 2:
-            if depth <= 0 and part != "&&":
-                break
-            continue
-        depth += part.count("{") + part.count("(") - part.count("}") - part.count(")")
-        out.append(part)
-    return out
-
-
-def _branch_reraises(rest: list[str], held: frozenset[str] = frozenset()) -> bool:
-    """Whether the ``&&`` chain or ``||`` fallback opening ``rest`` re-raises past any later passing ``||`` (lib/docs)."""
-    def ends(m: int) -> bool:   # ``exit N`` the test reaches unconditionally: chained, or in its ``{ }``
-        ops, group = rest[0:m:2], "".join(rest[1:m + 1])
-        return _exits(_words(rest[m])) and not any(map(_SUBSHELL.match, rest[1:m + 1:2])) and (
-            all(o == "&&" for o in ops) and all(_words(p)[:1] in (["echo"], ["printf"]) for p in rest[1:m:2])
-            or ops == ["||"] or (rest[m - 1] == ";" and command_words(rest[1])[:1] == ["{"]
-                                                            and group.count("{") == 1 and "}" not in group))
-    branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
-    tails = [branch] + [_OPERATOR.split(fallback(rest[k + 1:]))[::2] for k in range(2, len(rest), 2) if rest[k] == "||"]
-    raised = [any(_reraises(_words(p), held) for p in parts) for parts in tails]   # the branch, then each later fallback
-    return raised[0] and (all(raised) or any(ends(m) for m in range(1, 2 * len(branch), 2)))
-
-
-def _exits(words: list[str]) -> bool:   # ``exit N``, N non-zero: ends the shell before a later ``|| true``
-    return words[:1] == ["exit"] and len(words) > 1 and words[1].strip('"').isdigit() and int(words[1].strip('"')) > 0
 
 
 def _decides(parts: list[str], refs: list[str], later: list[str], held: frozenset[str], piped: bool = False) -> bool:
@@ -415,7 +368,7 @@ def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
         return out
     span = list(takewhile(lambda t: not re.match(r"\s*(?:else|elif)\b", t), [*parts[1::2], *map(ci_line_text, later[:fi])]))
     nested = any(c[:1] in (["if"], ["case"], ["while"], ["for"], ["until"]) for c in out) or any(map(_SUBSHELL.match, span))
-    return out if not nested and any(_exits(command_words(re.sub(r"^\s*then\s+", "", t))) for t in span) else []
+    return out if not nested and any(map(_line_ends, span)) else []
 
 
 def _fi_line(same: list[list[str]], later: list[str]) -> int | None:
@@ -615,8 +568,8 @@ def _gitlab_jobs(tree: IndentTree) -> tuple[dict[int, frozenset[str]], set[int]]
 def _dropped_if(lines: list[str], unmasked: list[str], tree: IndentTree, i: int) -> bool:
     """Whether a blanked line is kept as written: ``fi``/``elif``/``else``, or a lone ``if`` test whose next line survives (lib/docs)."""
     text, nxt = ci_line_text(lines[i]).lstrip(), i + 1
-    kept = any(ci_line_text(u).strip("|>-+ ") and tree.body(j) == tree.body(i) for j, u in enumerate(unmasked))   # not masked
-    return kept and re.match(r"(?:fi|elif|else)\b", text) is not None or (text.startswith("if ") and nxt < len(unmasked)
+    return re.match(r"(?:fi|elif|else)\b", text) is not None and any(   # kept only in a step the masking keeps
+        ci_line_text(u).strip("|>-+ ") and tree.body(j) == tree.body(i) for j, u in enumerate(unmasked)) or (text.startswith("if ") and nxt < len(unmasked)
                                                    and bool(unmasked[nxt].strip()) and tree.body(nxt) == tree.body(i))
 
 

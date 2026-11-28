@@ -698,6 +698,8 @@ EXIT_PAST_FALLBACK = [
     ('[ -z "$(apidiff -incompatible old new)" ] || { echo broke; exit 1; } || true',),
     ("apidiff -incompatible old new > out.txt", '[ -s out.txt ] && { echo "API break (see above)"; exit 1; } || echo "API ok"'),
     ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", '  echo "(see report)"', "  exit 1", "fi || true"),
+    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", "  echo broke; exit 1", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  echo broke && exit 1", "fi || true"),
 ]
 
 
@@ -720,6 +722,8 @@ def test_an_exit_in_a_group_or_then_branch_ends_the_shell_past_a_later_fallback(
     ("apidiff -incompatible old new > out.txt; grep -q . out.txt && ( echo broke; exit 1 ) || true",),
     ("apidiff -incompatible old new > out.txt; grep -q . out.txt && { ( exit 1 ); } || true",),   # a subshell in a group
     ('if [ -n "$(apidiff -incompatible old new)" ]; then ( exit 1 )', "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  [ -s other.txt ] || exit 1", "  false", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  echo broke; ( exit 1 )", "fi || true"),
     ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  echo x", "elif true", "then", "  exit 1", "fi"),   # elif's exit
     ('if [ -n "$(apidiff -incompatible old new)" ]; then', "  echo x", "elif true", "then", "  exit 1", "fi"),
     ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", "  echo x", "elif true", "then", "  exit 1", "fi"),
