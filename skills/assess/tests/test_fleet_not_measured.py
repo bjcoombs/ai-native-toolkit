@@ -53,7 +53,7 @@ def test_a_practice_with_an_unknown_repository_is_never_in_place_nowhere() -> No
     assert opps is not None
     ci = next(p for p in opps["in_place"] if p["row"] == "ci")
     line = absence_line(ci, "CI")
-    assert line == ("- CI: not found in 1 measured repository; 3 not measured "
+    assert line == ("- CI: not found at its top level in 1 measured repository; 3 not measured "
                     "(`included_jobs` 2, `needs_full_run` 1).")
     assert "anywhere" not in line and "nowhere" not in line
 
@@ -62,7 +62,7 @@ def test_with_every_repository_measured_the_practice_is_not_in_place_in_any() ->
     opps = build_opportunities(model(), [_row("grp/a", False), _row("grp/b", False)], Privacy().key)
     assert opps is not None
     ci = next(p for p in opps["in_place"] if p["row"] == "ci")
-    assert absence_line(ci, "CI") == "- CI: not in place in any of the 2 measured repositories."
+    assert absence_line(ci, "CI") == "- CI: not in place at its top level in any of the 2 measured repositories."
 
 
 def test_whats_working_lists_the_practices_no_measured_repository_holds() -> None:
@@ -70,7 +70,7 @@ def test_whats_working_lists_the_practices_no_measured_repository_holds() -> Non
     assert opps is not None
     lines = whats_working(opps, {"instr": "Instructions", "ci": "CI"})
     assert "Not held by any measured repository yet:" in lines
-    assert "- CI: not found in 1 measured repository; 3 not measured (`included_jobs` 2, `needs_full_run` 1)." in lines
+    assert "- CI: not found at its top level in 1 measured repository; 3 not measured (`included_jobs` 2, `needs_full_run` 1)." in lines
 
 
 def test_the_fleet_data_carries_the_counts_and_counts_only_keeps_them() -> None:

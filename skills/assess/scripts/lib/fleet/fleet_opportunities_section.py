@@ -12,7 +12,7 @@ Deterministic; no date.
 `opportunities_section` renders `report.md`'s "What's working across the fleet" section (#1334: each
 practice at the top level in every measured repository, then up to `MOST_HELD` held most widely, from
 `opportunities.in_place`, so the counts are stated once, there; then each practice no measured repository
-holds, with `fleet_not_measured.absence_line`: "not found in N; M not measured" by reason while any repository
+holds, with `fleet_not_measured.absence_line`: "not found at its top level in N; M not measured" by reason while any repository
 reads it unknown, #1350) and its "Opportunities" section from a built
 `FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
 an `In place:` line first (pointing at "What's working", or, when no practice is at the top level in

@@ -107,3 +107,16 @@ def test_a_low_gate_read_in_the_checkout_stays_below_the_minimum(tmp_path: Path)
     files = {".gitlab-ci.yml": PROJECT_ONLY, "pyproject.toml": "[tool.coverage.report]\nfail_under = 20\n"}
     block = detect_coverage_gate(_repo(tmp_path, files))
     assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (False, "threshold_below_minimum")
+
+
+@pytest.mark.parametrize("manifest", ["go.mod", "Cargo.toml"])
+def test_a_go_or_rust_module_with_no_gate_beside_an_unread_include_names_the_include(tmp_path: Path, manifest: str) -> None:
+    body = "module example.test/app\n" if manifest == "go.mod" else "[package]\nname = \"app\"\n"
+    block = detect_coverage_gate(_repo(tmp_path, {".gitlab-ci.yml": PROJECT_ONLY, manifest: body}))
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, "ci_includes_unresolved")
+
+
+def test_a_gate_whose_threshold_is_unread_keeps_its_reason_beside_an_unread_include(tmp_path: Path) -> None:
+    ci = PROJECT_ONLY + "test:\n  script:\n    - pytest --cov --cov-fail-under=$COV_MIN\n"
+    block = detect_coverage_gate(_repo(tmp_path, {".gitlab-ci.yml": ci}))
+    assert block["gates"] and block["enforced_basis"] == "threshold_not_read"

@@ -38,9 +38,10 @@ rule everywhere (#1470): a repository counts only when its own level result list
 at its top level, every condition counted and met, the same rule its badge and top card use. A
 declared or config-only condition, such as an instruction file read from the tree, never counts.
 It then lists each practice no measured repository holds, from `in_place`'s `not_measured` and
-`not_measured_reasons` (#1350): "not found in N measured repositories; M not measured" with the
-reason codes and their counts while any repository reads the practice not measured, and "not in
-place in any of the N measured repositories" only when none does. A sentence written about the
+`not_measured_reasons` (#1350): "not found at its top level in N measured repositories; M not
+measured" with the reason codes and their counts while any repository reads the practice not
+measured, and "not in place at its top level in any of the N measured repositories" only when
+none does. A sentence written about the
 fleet follows the same rule: never say a practice is in place nowhere, or nowhere in the fleet,
 while `not_measured` is above 0 for it; say where it was not found and how many repositories
 were not measured, split by reason (`included_jobs` and `ci_includes_unresolved` name CI in an

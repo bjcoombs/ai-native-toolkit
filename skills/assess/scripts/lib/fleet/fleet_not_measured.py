@@ -9,9 +9,10 @@ repository's level result (``included_jobs`` or ``ci_includes_unresolved`` for C
 scan did not read, ``needs_platform``, ``no_value`` when no result names one), sorted by count
 then code, so a split such as 21 of 27 reads as such.
 
-``absence_line`` is the report sentence for such a practice: "not found in N measured
-repositories; M not measured (code count, ...)" when any repository reads unknown, and "not in
-place in any of the N measured repositories" only when none does. ``report.md``'s "What's working
+``absence_line`` is the report sentence for such a practice: "not found at its top level in N
+measured repositories; M not measured (code count, ...)" when any repository reads unknown, and
+"not in place at its top level in any of the N measured repositories" only when none does. A
+repository may hold the practice at a lower level, so the line names the top level. ``report.md``'s "What's working
 across the fleet" lists these lines (``lib/fleet/fleet_opportunities_section.py``), and the fleet
 report writer follows the same rule (``skills/fleet/references/report-and-diagrams.md``).
 
@@ -65,7 +66,7 @@ def absence_line(p: InPlace, title: str) -> str:
     """The report line for a practice no measured repository holds at its top level."""
     if not p["not_measured"]:
         where = "the 1 measured repository" if p["measured"] == 1 else f"any of the {_repos(p['measured'])}"
-        return f"- {title}: not in place in {where}."
+        return f"- {title}: not in place at its top level in {where}."
     split = ", ".join(f"`{r['reason']}` {r['count']}" for r in p["not_measured_reasons"])
-    return (f"- {title}: not found in {_repos(p['measured'])}; {p['not_measured']} not measured "
+    return (f"- {title}: not found at its top level in {_repos(p['measured'])}; {p['not_measured']} not measured "
             f"({split}).")

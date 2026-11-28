@@ -785,7 +785,7 @@ def detect_coverage_gate(repo_root: Path | str, scope: Scope | None = None,
     enforced, basis = include_hold(enforced_meets_minimum(  # #1350: no gate beside an unread include
         known, meets, (ci or read_ci_runs(root)) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
-        minimum=MINIMUM_THRESHOLD_PERCENT, activation=read_activation(read)), root)
+        minimum=MINIMUM_THRESHOLD_PERCENT, activation=read_activation(read)), root, bool(known))
     return {
         "available": True,
         "configured": any(gates_something(g) for g in known),

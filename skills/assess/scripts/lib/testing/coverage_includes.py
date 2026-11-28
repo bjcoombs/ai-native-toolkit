@@ -6,7 +6,9 @@
 ``lib.ci.ci_includes.resolve_includes``), the gate may run there: ``include_hold`` turns that false
 reading into null with ``enforced_basis`` ``ci_includes_unresolved``. A GitLab template is read by
 its path and holds no project's gate, so it never holds a reading. A gate read in the checkout keeps
-its reading (a low one stays ``threshold_below_minimum``): the include is not where that number is.
+its reading (a low one stays ``threshold_below_minimum``, an unread one ``threshold_not_read``): the
+include is not where that number is. A Go or Rust module with no gate, which reads null
+(``go_rust_gate_form_not_read``), takes the include's reason as well.
 
 The collector reads no ghsync root, so a project include always reads unresolved here; the coverage
 reader does not read an included file's lines either, so that is the honest reading.
@@ -32,9 +34,12 @@ def unread_includes(root: Path) -> int:
                for r in resolve_includes(root).includes)
 
 
-def include_hold(reading: tuple[bool | None, EnforcedBasis], root: Path) -> tuple[bool | None, EnforcedBasis]:
+def include_hold(reading: tuple[bool | None, EnforcedBasis], root: Path,
+                 found: bool = False) -> tuple[bool | None, EnforcedBasis]:
     """``reading`` (``enforced_meets_minimum``, ``enforced_basis``), null when no gate was found and
-    an unread include could hold one."""
-    if reading[1] == "no_gate" and unread_includes(root):
+    an unread include could hold one. ``found``: a gate was read in the checkout. With none, a
+    ``threshold_not_read`` (a go.mod or Cargo.toml with no gate, ``go_rust_gate_form_not_read``)
+    takes the include's reason too; a gate whose threshold is unread keeps its own."""
+    if (reading[1] == "no_gate" or (reading[1] == "threshold_not_read" and not found)) and unread_includes(root):
         return None, INCLUDES_UNRESOLVED
     return reading

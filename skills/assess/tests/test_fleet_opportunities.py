@@ -121,7 +121,7 @@ def test_a_declared_practice_reads_the_same_in_the_badge_and_the_fleet() -> None
     assert section is not None
     assert "- CI: 1 of 1 measured repository at the top level." in section
     assert "- Instructions: 1 of" not in section
-    assert "- Instructions: not in place in the 1 measured repository." in section  # #1350
+    assert "- Instructions: not in place at its top level in the 1 measured repository." in section  # #1350
 
 
 def test_a_declared_practice_reads_the_same_on_the_radar_and_in_whats_working() -> None:

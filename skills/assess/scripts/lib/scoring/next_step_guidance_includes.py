@@ -20,5 +20,5 @@ SECRETS_GUARD_HINT = (
 
 COVERAGE_INCLUDES_HINT = (
     " With no gate in the checkout, the level reads unknown (`enforced_basis: ci_includes_unresolved`) "
-    "when a GitLab include that could run one was not read: clone the included project beside this "
-    "one (`/ghsync`), or run the threshold in the repository's own CI.")
+    "when a GitLab include that could run one was not read. The coverage scan reads no included file, "
+    "so run the threshold in the repository's own CI to measure it.")
