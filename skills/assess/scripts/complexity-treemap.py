@@ -530,7 +530,8 @@ def _warn_if_dominated_by_one_file(
     detail = (f"likely a build artifact ({evidence}).\n         If so, add it to "
               ".gitignore and re-run." if evidence else
               "dominant, with no content evidence of build output.\n"
-              "         Report it as a concentration of code in one file.")
+              "         If it is source, report the concentration; if it is "
+              "tracked reference data,\n         exclude it in .assess/config.toml.")
     print(f"warning: one file holds {share:.0%} of scoreable LOC "
           f"({biggest[1]:,} of {total_loc:,}).\n"
           f"         {biggest[0].name} is {detail}", file=sys.stderr)
