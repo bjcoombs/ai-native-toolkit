@@ -8,9 +8,11 @@ pinned against its own artifact. Nothing here publishes or calls a network.
 shard's collections under ``<exports>/<shard folder>/`` (``fleet_shard.shard_folder``), in the
 single-artifact export format. A missing folder is an empty artifact, as on a first publish; a
 shard whose documents, with its exported targets and strays, exceed one artifact's cap is refused
-(``ShardTooLarge``), as the single-artifact plan is; a current shard the registry records with no export folder is refused (a retired one is never
-written, so it needs none), since its stored documents would
-otherwise be written over without their ``if_version`` pins.
+(``ShardTooLarge``), as the single-artifact plan is. A current shard the registry records is
+refused when it has no export folder or an empty one (no collection at all: ``exports`` maps its
+folder to an empty mapping), since its stored documents would otherwise be written over without
+their ``if_version`` pins; a retired one is never written, so it needs none. An exported
+collection with no documents is a list, so a shard stored empty still passes.
 
 **Output** (``write_sharded``): under ``<out>/publish/``, ``plan.json`` (``sharded`` true, the
 run id, the index URL, ``links_complete`` and ``steps``, the publish order: the index, then
@@ -159,6 +161,9 @@ def plan_sharded(data: Mapping[str, Any], exports: Mapping[str, Exports], *, run
         if folder not in exports:
             raise PublishError(f"shard {folder} is recorded but its collections were not exported; export them "
                                f"into <exports>/{folder}/ first")
+        if not exports[folder]:
+            raise PublishError(f"shard {folder} is recorded but <exports>/{folder}/ holds no collection; export "
+                               "its collections into it first")
         stored[key] = stored_state(exports[folder], run_id)["stored"]
     plan, bundles = shard_plan(bundle, LIMITS_PINNED, run_id=run_id, registry=registry, stored=stored)
     if not plan["sharded"]:

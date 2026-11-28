@@ -30,7 +30,10 @@ artifact. ``plan`` with ``--org-dir`` then writes ``OUT/publish/plan.json`` (the
 order), ``index.html`` and ``shards/<folder>/`` per shard. ``record-shard`` keeps the index's or
 one shard's URL in ``ORG_DIR/shards.json``; ``--shard`` takes the folder ``shards`` prints and is
 refused unless ``OUT/publish/plan.json`` names it. Without ``--org-dir`` a run that needs shards is
-refused, as before.
+refused, as before. A run that fits one artifact on its own but not with the strays and targets
+the artifact stores stays one artifact and is refused, naming the strays to remove, whether or not
+``--org-dir`` was passed. A shard folder under ``--exports`` holding no ``<collection>.json`` is
+no export, so a recorded shard with an empty folder is refused.
 
 ``record`` keeps the artifact URL in ``ORG_DIR/publish.json`` (the fleet's history directory for
 the org), so the next run publishes to the same artifact. ``url`` prints that URL on stdout, or
@@ -127,8 +130,11 @@ def _data(out: Path) -> dict[str, Any]:
     return data
 
 
-def _exports(folder: Path) -> dict[str, list[StoredDoc]]:
-    exports: dict[str, list[StoredDoc]] = {c: [] for c in STORED_COLLECTIONS}  # a first publish has nothing stored
+def _exports(folder: Path, *, fill: bool = True) -> dict[str, list[StoredDoc]]:
+    """The ``<collection>.json`` files in ``folder``; with ``fill``, a missing stored collection is an
+    empty one (a first publish has nothing stored). A shard's folder is read without ``fill``, so an
+    empty folder reads as no export and a recorded shard is refused (``plan_sharded``)."""
+    exports: dict[str, list[StoredDoc]] = {c: [] for c in STORED_COLLECTIONS} if fill else {}
     for path in sorted(folder.glob("*.json")):
         exports[path.stem] = read_export(_json(path), path.stem)
     return exports
@@ -159,7 +165,7 @@ def _plan_sharded(args: argparse.Namespace, out: Path, data: dict[str, Any], pag
     """Plan and write a sharded publish; None when the run fits one artifact (see the module doc)."""
     registry = read_shards(Path(args.org_dir))
     root = Path(args.exports)
-    exports = {p.name: _exports(p) for p in sorted(root.iterdir()) if p.is_dir()} if root.is_dir() else {}
+    exports = {p.name: _exports(p, fill=False) for p in sorted(root.iterdir()) if p.is_dir()} if root.is_dir() else {}
     sharded = plan_sharded(data, exports, run_id=run_id, registry=registry, allow_names=args.allow_names)
     if sharded is None:
         return None
@@ -201,8 +207,17 @@ def _plan(args: argparse.Namespace) -> int:
     if not size["fits"]:  # nothing oversized is left to send: no batch, and an earlier plan's removed
         for stale in (out / PUBLISH_DIR).glob("batch-*.json"):
             stale.unlink()
-        print(f"fleet_publish_plan: the run needs {size['documents']} documents, over one artifact's "
-              f"{size['document_limit']}; plan it with --org-dir to shard it, so nothing was planned", file=sys.stderr)
+        strays = summary["strays"]
+        if size["documents"] - strays["count"] - strays["targets"] > size["document_limit"]:
+            print(f"fleet_publish_plan: the run needs {size['documents']} documents, over one artifact's "
+                  f"{size['document_limit']}; plan it with --org-dir to shard it, so nothing was planned", file=sys.stderr)
+            return 2
+        # the run fits whole (so the shard plan keeps it one artifact): what the artifact stores pushes it over
+        where = f" (in {', '.join(strays['collections'])})" if strays["collections"] else ""
+        print(f"fleet_publish_plan: the run fits one artifact on its own, but with the {strays['count']} stray and "
+              f"{strays['targets']} target document(s) the artifact stores it needs {size['documents']} documents, "
+              f"over one artifact's {size['document_limit']}; remove the strays{where} from the artifact, export "
+              "again and plan again, so nothing was planned", file=sys.stderr)
         return 2
     folder = write_plan(out, summary, batches, live_page(page, data, summary["mode"], run_id))
     print(f"fleet_publish_plan: run {run_id}, {summary['mode']}, {len(batches)} batch(es), {size['documents']} of "

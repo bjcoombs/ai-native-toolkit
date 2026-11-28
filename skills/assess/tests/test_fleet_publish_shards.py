@@ -46,7 +46,7 @@ def test_a_two_shard_plan_has_publish_steps_for_both_shards_and_the_index_in_pla
     org = tmp_path / "history" / "grp"
     pss.record_shard(org, URL + "sub", SUB)
     pss.record_shard(org, URL + "other", OTHER)
-    exports = {shard_folder(SUB): {}, shard_folder(OTHER): {}}
+    exports: dict[str, Any] = {shard_folder(SUB): {"runs": []}, shard_folder(OTHER): {"runs": []}}
     sharded = pss.plan_sharded(_data(), exports, run_id=fx.DATES[-1], registry=pss.read_shards(org), allow_names=True)
     assert sharded is not None
     steps = sharded["summary"]["steps"]
@@ -70,11 +70,51 @@ def test_a_recorded_shard_without_its_export_is_refused(tmp_path: Path) -> None:
         pss.plan_sharded(_data(), {}, run_id=fx.DATES[-1], registry=pss.read_shards(org), allow_names=True)
 
 
+def test_a_recorded_shard_with_an_empty_export_folder_is_refused(tmp_path: Path) -> None:
+    """#1635 (5): a folder with no collection in it is no export; an exported empty collection is."""
+    org = tmp_path / "grp"
+    pss.record_shard(org, URL + "sub", SUB)
+    with pytest.raises(PublishError, match="holds no collection"):
+        pss.plan_sharded(_data(), {shard_folder(SUB): {}}, run_id=fx.DATES[-1], registry=pss.read_shards(org),
+                         allow_names=True)
+    assert pss.plan_sharded(_data(), {shard_folder(SUB): {"targets": []}}, run_id=fx.DATES[-1],
+                            registry=pss.read_shards(org), allow_names=True) is not None
+
+
+@pytest.mark.parametrize("org_dir", [True, False])
+def test_a_run_over_the_cap_only_with_its_strays_names_them_not_org_dir(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str], org_dir: bool) -> None:
+    """#1635 (3): the run fits whole, so it is one artifact even with --org-dir; what pushes it over
+    is the strays the artifact stores, so the refusal names them, never --org-dir."""
+    cli = _script("fleet_publish_plan")
+    out, exports = _out(tmp_path), tmp_path / "exports"
+    exports.mkdir()
+    rows = [{"doc_id": f"x{i}", "version": 1, "data": {}} for i in range(25_000)]
+    (exports / "junk.json").write_text(json.dumps(rows), encoding="utf-8")
+    extra = ["--org-dir", str(tmp_path / "grp")] if org_dir else []
+    assert cli.main(["plan", str(out), "--exports", str(exports), *extra, "--allow-names"]) == 2
+    err = capsys.readouterr().err
+    assert "fits one artifact on its own, but with the 25000 stray and 0 target document(s)" in err
+    assert "remove the strays (in junk)" in err and "--org-dir" not in err
+    assert not (out / "publish" / "plan.json").exists()
+
+
+def test_shard_folders_differ_by_more_than_case() -> None:
+    """#1635 (4): two keys differing only in case get folders that differ on a case-insensitive file
+    system too; the name stays one-to-one with the key and holds no ``:``."""
+    keys = ["ownership/grp/Team", "ownership/grp/team", "ownership/grp/TEAM", "ownership/A:b", "ownership/a:B"]
+    folders = [shard_folder(k) for k in keys]
+    assert len({f.lower() for f in folders}) == len(keys)
+    assert all(":" not in f and "/" not in f for f in folders)
+    assert shard_folder("ownership/grp/Team") == "ownership~2Fgrp~2F~54eam"
+    assert shard_folder(SUB) == "ownership~2Fgrp~2Fsub"  # a lower-case key reads as before
+
+
 def test_a_retired_shard_needs_no_export_and_stays_in_the_registry(tmp_path: Path) -> None:
     org = tmp_path / "grp"
     pss.record_shard(org, URL + "sub", SUB)
     pss.record_shard(org, URL + "gone", "ownership/grp/gone")  # a unit that has left the fleet
-    sharded = pss.plan_sharded(_data(), {shard_folder(SUB): {}}, run_id=fx.DATES[-1], registry=pss.read_shards(org),
+    sharded = pss.plan_sharded(_data(), {shard_folder(SUB): {"runs": []}}, run_id=fx.DATES[-1], registry=pss.read_shards(org),
                                allow_names=True)
     assert sharded is not None and sharded["summary"]["retired"] == ["ownership/grp/gone"]
     assert "ownership/grp/gone" not in [s["key"] for s in sharded["summary"]["steps"]]
@@ -122,7 +162,10 @@ def test_the_cli_plans_shards_with_org_dir_and_prints_them(tmp_path: Path, capsy
     lines = capsys.readouterr().out.splitlines()
     assert lines == ["index new", f"{shard_folder(OTHER)} new", f"{shard_folder(SUB)} {URL}s", "unassigned new"]
     assert cli.main(["plan", str(out), "--exports", str(exports), "--org-dir", str(org), "--allow-names"]) == 2
-    (exports / shard_folder(SUB)).mkdir()
+    (exports / shard_folder(SUB)).mkdir()  # an empty folder is no export (#1635)
+    assert cli.main(["plan", str(out), "--exports", str(exports), "--org-dir", str(org), "--allow-names"]) == 2
+    assert "holds no collection" in capsys.readouterr().err
+    (exports / shard_folder(SUB) / "runs.json").write_text("[]", encoding="utf-8")  # stored empty: a list
     assert cli.main(["plan", str(out), "--exports", str(exports), "--org-dir", str(org), "--allow-names"]) == 0
     err = capsys.readouterr().err
     assert "sharded into 3 artifact(s) plus an index" in err and "plan again" in err

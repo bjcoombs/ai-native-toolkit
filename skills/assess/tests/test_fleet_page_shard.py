@@ -17,7 +17,7 @@ import pytest
 import fleet_page_fixture as fx
 import lib.fleet.fleet_publish as fp
 import lib.fleet.fleet_shard as fs
-from lib.fleet.fleet_page_live import live_page
+from lib.fleet.fleet_page_live import live_page, shard_bundle
 from lib.fleet.fleet_shard_index import index_page
 
 NODE = shutil.which("node")
@@ -168,3 +168,35 @@ def test_a_shard_page_drills_from_the_index_to_unit_repository_tag_and_condition
     assert trail[0] == ["Fleet index", *units, repo["key"]]
     assert trail[1] == ["Fleet index", *units, repo["key"], "Docs"]
     assert trail[2] == ["Fleet index", *units, repo["key"], "Docs", "Instruction docs, level 1"]
+
+
+def test_an_unassigned_shard_with_no_ownership_unit_still_holds_the_root_and_draws() -> None:
+    """#1635 (1): grp/proj4 loses its ownership unit, so no repository of the unassigned shard has
+    one; the shard still holds the ownership root, which its page opens on."""
+    data: Any = fx.run(fx.DATES[-1], fx.VARIANTS["counts-only"])
+    proj4 = next(r for r in data["repos"] if r["key"] == "grp/proj4")
+    proj4["units"] = [u for u in proj4["units"] if u["view"] != "ownership"]
+    plan, bundles = fs.shard_plan(data, SMALL)
+    shard = next(s for s in plan["shards"] if s["key"] == fs.UNASSIGNED)
+    assert [u["key"] for v in bundles[fs.UNASSIGNED]["views"] if v["view"] == "ownership" for u in v["units"]] == [
+        "ownership/grp"]
+    root = shard["view"]["units"]["ownership"]
+    assert len(root) == 1
+    html = live_page(fx.goldens()["expected-counts-only.html"], data, "counts_only", fx.DATES[-1], shard["view"])
+    assert _drawn(html)[f"ownership\n{root[0]}"]
+
+
+def test_a_shard_page_keeps_only_the_credit_of_its_own_units_by_view() -> None:
+    """#1635 (2): a label is unique only within a view, so a system unit's credit whose label matches
+    an ownership unit the shard shows, or a unit's credit whose label matches a shown repository,
+    belongs to another shard and is left out."""
+    bundle: dict[str, Any] = {
+        "views": [{"view": "ownership", "units": [{"key": "team 2"}]}, {"view": "system", "units": []}],
+        "repos": [{"key": "repository 1"}], "targets": [], "recount": None, "front": None, "pictures": [],
+        "achievements": [{"view": v, "unit": u, "text": f"{v} {u}"} for v, u in (
+            ("ownership", "team 2"), ("system", "team 2"), ("repo", "repository 1"), ("repo", "team 2"),
+            ("ownership", "repository 1"))]}
+    view: fs.ShardView = {"unit": "team 2", "label": "team 2", "index_url": None, "repos": ["repository 1"],
+                          "units": {"ownership": ["team 2"], "system": []}, "elsewhere": {}}
+    kept = shard_bundle(bundle, view)["achievements"]
+    assert [a["text"] for a in kept] == ["ownership team 2", "repo repository 1"]

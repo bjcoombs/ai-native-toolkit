@@ -218,9 +218,13 @@ no network call.
   shard of the top-level unit above its ownership unit. A repository with no ownership unit, or
   placed at a root, goes to one `unassigned` shard.
 - **A shard's data.** Its repositories; the top-level unit, the units below it and the units
-  above its repositories (so the root is in every shard); and the system units above its
+  above its repositories, and every root (so the root is in every shard, the `unassigned` one
+  too, even when none of its repositories has an ownership unit); and the system units above its
   repositories. `opportunities.biggest_lift.repos` and `opportunities.shared_templates[].repos`
   keep only the shard's repositories, while their counts stay the fleet's.
+- **Strays do not shard.** A run that fits one artifact on its own stays one artifact. If the
+  strays and targets that artifact stores take it over the cap, the planner refuses it and names
+  the strays' collections to remove, with or without `--org-dir`.
 - **Size guard per shard.** Each shard is projected on its own against its own stored
   documents, so the 80% warning and the refusal above the limit apply per shard and name the
   shard and the document. A shard with more documents than one artifact holds is refused,
@@ -248,7 +252,10 @@ The session, in order:
 
 1. Run `fleet_publish_plan.py shards out "<history>/<org>"`. It prints `index <url or new>`, then
    `<folder> <url or new>` per shard. For each shard with a URL, export its collections into
-   `exports/<folder>/`, as for one artifact.
+   `exports/<folder>/`, as for one artifact. A folder name escapes `:` and every upper-case
+   letter, so two shards never share a folder on a case-insensitive file system. A recorded
+   shard whose folder is missing or holds no `<collection>.json` is refused; an exported empty
+   collection is the file `[]`.
 2. Run `plan` with `--org-dir "<history>/<org>"`. It writes `out/publish/plan.json`, whose
    `steps` list the pages in publish order (the index, then each shard), `index.html`, and per
    shard `out/publish/shards/<folder>/` with `page.html`, `capabilities.json`, `plan.json` and
