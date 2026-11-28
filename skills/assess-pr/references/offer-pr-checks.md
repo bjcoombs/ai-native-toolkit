@@ -17,21 +17,21 @@ The two checks Step 5 of the assess-pr skill runs before the batched Phase 2 que
 # and the whole call returns empty, silently degrading every write-
 # accessible repo to the "leave local" branch).
 PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanAdminister,nameWithOwner,isFork,owner,hasIssuesEnabled 2>/dev/null || true)
-PERM=$(echo "$PUSH_INFO" | jq -r '.viewerPermission // empty')
+PERM=$(echo "$PUSH_INFO" | jq -r '.viewerPermission // empty' | tr -d '\r')
 case "$PERM" in
   ADMIN|MAINTAIN|WRITE) CAN_PUSH=1 ;;
   *)                    CAN_PUSH=0 ;;
 esac
 # A clone of the user's own fork reports ADMIN, so CAN_PUSH alone cannot tell
 # the upstream's maintainer from an outsider working in their fork.
-IS_FORK=$(echo "$PUSH_INFO" | jq -r '.isFork // false')
+IS_FORK=$(echo "$PUSH_INFO" | jq -r '.isFork // false' | tr -d '\r')
 # Gates the read-only upstream-issues offer: no issues list, no upstream issues.
-HAS_ISSUES=$(echo "$PUSH_INFO" | jq -r '.hasIssuesEnabled // false')
+HAS_ISSUES=$(echo "$PUSH_INFO" | jq -r '.hasIssuesEnabled // false' | tr -d '\r')
 # isFork says the repo has a parent, not whose fork it is: a collaborator with
 # push access to someone else's fork also sees isFork=true and WRITE. The
 # current repo counts as the user's own fork only when the viewer owns it.
-VIEWER_LC=$(gh api user 2>/dev/null | jq -r '.login // empty' | tr '[:upper:]' '[:lower:]')
-OWNER_LC=$(echo "$PUSH_INFO" | jq -r '.owner.login // empty' | tr '[:upper:]' '[:lower:]')
+VIEWER_LC=$(gh api user 2>/dev/null | jq -r '.login // empty' | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+OWNER_LC=$(echo "$PUSH_INFO" | jq -r '.owner.login // empty' | tr -d '\r' | tr '[:upper:]' '[:lower:]')
 if [ "$IS_FORK" = true ] && [ -n "$VIEWER_LC" ] && [ "$VIEWER_LC" = "$OWNER_LC" ]; then
   IS_OWN_FORK=true
 else
@@ -56,7 +56,7 @@ if [ -n "$REMOTE_URL" ]; then
 else
   REMOTE_SLUG=""
 fi
-GH_SLUG=$(echo "$PUSH_INFO" | jq -r '.nameWithOwner // empty')
+GH_SLUG=$(echo "$PUSH_INFO" | jq -r '.nameWithOwner // empty' | tr -d '\r')
 # Compare case-insensitively: GitHub treats owner/repo as case-insensitive, so a
 # pure case difference is not a redirect and must not emit a spurious notice.
 REMOTE_SLUG_LC=$(echo "$REMOTE_SLUG" | tr '[:upper:]' '[:lower:]')

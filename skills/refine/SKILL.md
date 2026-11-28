@@ -31,7 +31,7 @@ Readiness is the definition of ready (`docs/contributing/definition-of-ready.md`
 ISSUE="$ARGUMENTS"                        # empty, or one open issue number
 if [ -n "$ISSUE" ] && ! printf '%s' "$ISSUE" | grep -qE '^[0-9]+$'; then echo "usage: /refine [issue-number]"; exit 2; fi
 S="${CLAUDE_SKILL_DIR}/scripts"
-REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner | tr -d '\r')
 WORK=$(mktemp -d); echo "WORK=$WORK"   # note the path: shell variables do not survive between Bash calls
 python3 "$S/refine.py" --repo "$REPO" ${ISSUE:+--issue "$ISSUE"} --out "$WORK/verdict.json"
 ```
@@ -62,11 +62,11 @@ Run every plan through the apply step in dry-run. The block unsets `REFINE_MODE`
 ```bash
 unset REFINE_MODE                          # a REFINE_MODE=live left in the shell would send every write
 S="${CLAUDE_SKILL_DIR}/scripts"; WORK="<the path Step 1 printed>"
-REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner | tr -d '\r')
 export GH_REPO="$REPO" REFINE_STATE_DIR="$WORK/state"
 export REFINE_ALLOWED_LABELS="${REFINE_ALLOWED_LABELS:-agent-ready,needs-triage,bug,enhancement,documentation,question}"   # the workflows' default
 for plan in "$WORK"/plan-*.json; do
-  n=$(jq -r .issue "$plan")
+  n=$(jq -r .issue "$plan" | tr -d '\r')
   python3 "$S/refine_apply.py" triage --verdict "$WORK/verdict.json" --issue "$n" --plan "$plan"
 done
 python3 "$S/refine_apply.py" sweep --verdict "$WORK/verdict.json"   # ready labels and exact-duplicate closes for settled issues
@@ -85,7 +85,7 @@ Each Bash call starts a new shell, so open every confirmed write with the same s
 
 ```bash
 S="${CLAUDE_SKILL_DIR}/scripts"; WORK="<the path Step 1 printed>"
-export GH_REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner) REFINE_STATE_DIR="$WORK/state"
+export GH_REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner | tr -d '\r') REFINE_STATE_DIR="$WORK/state"
 export REFINE_ALLOWED_LABELS="${REFINE_ALLOWED_LABELS:-agent-ready,needs-triage,bug,enhancement,documentation,question}"
 ```
 
