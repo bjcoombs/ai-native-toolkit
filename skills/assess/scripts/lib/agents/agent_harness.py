@@ -35,7 +35,9 @@ absent-file finding), ``detail`` and a one-line ``fix``:
 - ``hooks_forced_on``: ``disableAllHooks: false`` in project settings, which
   overrides a user who disabled hooks.
 - ``broad_allow``: ``Bash``, ``Bash(*)``, ``Bash(:*)``, ``Bash(**)`` or
-  ``Bash(*:*)`` in ``permissions.allow`` (spaces ignored).
+  ``Bash(*:*)`` in ``permissions.allow`` (spaces ignored), read by
+  ``lib.agents.harness_settings.is_broad_allow``. Such a rule is not counted in ``allow_count``
+  (#1618), so it never meets ``permissions_encoded`` on its own.
 - ``broad_auto_approve`` (#846): ``.vscode/settings.json`` auto-approves every terminal
   command (a ``chat.tools.terminal.autoApprove`` key of ``*`` or a match-all regex) or every
   tool (``chat.tools.autoApprove`` / ``chat.tools.global.autoApprove`` true); the VS Code twin
@@ -106,7 +108,7 @@ from lib.instructions.claude_config import parse_frontmatter
 from lib.history.git_churn import tracked_files
 from lib.ci.shared_tooling import ON_KEY
 from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
-from lib.agents.harness_settings import auto_approve, broad_in_text, load, names_auto_approve
+from lib.agents.harness_settings import auto_approve, broad_in_text, is_broad_allow, load, names_auto_approve
 
 ItemKind = Literal[
     "settings_hook", "frontmatter_hook", "env", "api_key_helper", "mcp_server", "cursor_hook",
@@ -175,7 +177,6 @@ _ENV_NAME = re.compile(r"^\.env(\..+)?$")
 _ENV_EXAMPLE_PARTS = frozenset({"example", "sample", "template", "dist", "tmpl", "tpl"})
 _ENV_IGNORE_LINE = re.compile(r"^/?(\*\*/)?\*?\.env(\*|[.*][\w.*-]*)?/?$")
 _ENV_DENY = re.compile(r"^Read\(.*\.env")
-_BROAD_BASH = re.compile(r"^Bash(\((\*|:\*|\*\*|\*:\*)\))?$")
 
 _HOME_REF = r"(?:\$\{localEnv:\w+\}|\$\{env:\w+\}|\$\{HOME\}|\$HOME|~)+"
 _CRED_DIRS = (r"\.ssh|\.aws|\.config/gcloud|\.azure|\.kube|\.gnupg|\.docker"
@@ -488,7 +489,7 @@ class _Scan:
         perms = settings.get("permissions")
         allow = perms.get("allow") if isinstance(perms, dict) else None
         for rule in allow if isinstance(allow, list) else []:
-            if isinstance(rule, str) and _BROAD_BASH.match(rule.replace(" ", "")):
+            if is_broad_allow(rule):
                 self.finding(
                     "broad_allow", file, _line_of(text, json.dumps(rule)),
                     f"`{rule}` lets agents run any shell command without asking",
