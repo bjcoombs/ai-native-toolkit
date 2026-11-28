@@ -16,7 +16,7 @@ whys.ai_governance = "A policy on AI contributions holds only when something che
 shapes = [
   { path = "ai_governance", type = "lib.ai_governance:AiGovernanceBlock" },
 ]
-revision = 1
+revision = 2
 unknown_reasons = [
   { code = "no_pr_workflows", block = "ai_governance", means = "No GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it.", next_step = "Nothing to change: this reads as not measured until a workflow runs on pull requests." },
 ]
