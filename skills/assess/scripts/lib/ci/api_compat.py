@@ -93,7 +93,7 @@ _GITLAB_BODY = frozenset({"script", "before_script"})
 _GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
 _INCLUDE = re.compile(r"^include\s*:", re.M)
 _OUTPUT_FILE = re.compile(r"(?:\d?>>?|\btee(?:\s+-a)?)\s*([\w./-]+)")
-_SUBSHELL = re.compile(r"(?<!\$)\(")   # ``( exit 1 )`` ends only its subshell; ``$(...)`` is a substitution
+_SUBSHELL = re.compile(r"\s*(?:(?:then|else|do|\{|!)\s+)*\(")   # a command that opens ``( ... )``, not a quoted ``(``
 _STATUS_VAR = re.compile(r"(?<![\w$])(\w+)=\$\?")
 _CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?(\w+)=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
 # The japicmp settings that make a breaking change stop the build: the Maven plugin's
@@ -320,7 +320,7 @@ def _branch_reraises(rest: list[str], held: frozenset[str] = frozenset()) -> boo
     """Whether the ``&&`` chain or ``||`` fallback opening ``rest`` re-raises past any later passing ``||`` (lib/docs)."""
     def ends(m: int) -> bool:   # ``exit N`` the test reaches unconditionally: chained, or in its ``{ }``
         ops, group = rest[0:m:2], "".join(rest[1:m + 1])
-        return _exits(_words(rest[m])) and not _SUBSHELL.search(group) and (
+        return _exits(_words(rest[m])) and not any(map(_SUBSHELL.match, rest[1:m + 1:2])) and (
             all(o == "&&" for o in ops) or ops == ["||"] or (rest[m - 1] == ";" and command_words(rest[1])[:1] == ["{"]
                                                             and group.count("{") == 1 and "}" not in group))
     branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
@@ -416,7 +416,7 @@ def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
     if fi is None or not _rescued(later[fi]):
         return out
     span = list(takewhile(lambda t: not re.match(r"\s*(?:else|elif)\b", t), [*parts[1::2], *map(ci_line_text, later[:fi])]))
-    nested = any(c[:1] in (["if"], ["case"], ["while"], ["for"], ["until"]) for c in out) or any(map(_SUBSHELL.search, span))
+    nested = any(c[:1] in (["if"], ["case"], ["while"], ["for"], ["until"]) for c in out) or any(map(_SUBSHELL.match, span))
     return out if not nested and any(_exits(command_words(re.sub(r"^\s*then\s+", "", t))) for t in span) else []
 
 
