@@ -64,6 +64,7 @@ import json
 import posixpath
 import re
 from collections.abc import Mapping
+from itertools import takewhile
 from pathlib import Path
 
 from lib.ci.agent_evals import _idle
@@ -92,6 +93,7 @@ _GITLAB_BODY = frozenset({"script", "before_script"})
 _GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
 _INCLUDE = re.compile(r"^include\s*:", re.M)
 _OUTPUT_FILE = re.compile(r"(?:\d?>>?|\btee(?:\s+-a)?)\s*([\w./-]+)")
+_SUBSHELL = re.compile(r"(?<!\$)\(")   # ``( exit 1 )`` ends only its subshell; ``$(...)`` is a substitution
 _STATUS_VAR = re.compile(r"(?<![\w$])(\w+)=\$\?")
 _CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?(\w+)=\$\((.*)\)\s*$")   # ``out=$(apidiff a b)``
 # The japicmp settings that make a breaking change stop the build: the Maven plugin's
@@ -315,14 +317,20 @@ def _and_chain(rest: list[str]) -> list[str]:
 
 
 def _branch_reraises(rest: list[str], held: frozenset[str] = frozenset()) -> bool:
-    """Whether the ``&&`` chain or ``||`` fallback opening ``rest`` holds a re-raise and no later
-    ``||`` on the line falls back to a command that passes (``{ echo broke; exit 1; } || true``, which
-    ``_rescued`` misses). No group depth is read, so a quoted brace cannot hide the fallback."""
-    def raises(parts: list[str]) -> bool:
-        return any(_reraises(_words(p), held) for p in parts)
+    """Whether the ``&&`` chain or ``||`` fallback opening ``rest`` re-raises past any later passing ``||`` (lib/docs)."""
+    def ends(m: int) -> bool:   # ``exit N`` the test reaches unconditionally: chained, or in its ``{ }``
+        ops, group = rest[0:m:2], "".join(rest[1:m + 1])
+        return _exits(_words(rest[m])) and not _SUBSHELL.search(group) and (
+            all(o == "&&" for o in ops) or ops == ["||"] or (rest[m - 1] == ";" and command_words(rest[1])[:1] == ["{"]
+                                                            and group.count("{") == 1 and "}" not in group))
     branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
-    return raises(branch) and all(raises(_OPERATOR.split(fallback(rest[k + 1:]))[::2])
-                                  for k in range(2, len(rest), 2) if rest[k] == "||")
+    tails = [branch] + [_OPERATOR.split(fallback(rest[k + 1:]))[::2] for k in range(2, len(rest), 2) if rest[k] == "||"]
+    raised = [any(_reraises(_words(p), held) for p in parts) for parts in tails]   # the branch, then each later fallback
+    return raised[0] and (all(raised) or any(ends(m) for m in range(1, 2 * len(branch), 2)))
+
+
+def _exits(words: list[str]) -> bool:   # ``exit N``, N non-zero: ends the shell before a later ``|| true``
+    return words[:1] == ["exit"] and len(words) > 1 and words[1].strip('"').isdigit() and int(words[1].strip('"')) > 0
 
 
 def _decides(parts: list[str], refs: list[str], later: list[str], held: frozenset[str], piped: bool = False) -> bool:
@@ -394,30 +402,34 @@ def _tested_substitution(words: list[str]) -> tuple[str, list[str]] | None:
 def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
     """The commands of an ``if``'s ``then`` branch, up to ``else``, ``elif`` or ``fi``: from the
     operator-split ``parts`` after the condition, then from the ``later`` lines of the shell.
-    Empty when a passing fallback rescues the ``fi`` on a later line (``fi || true``)."""
+    Empty when a later ``fi || true`` rescues a branch with no bare ``exit N`` line (lib/docs)."""
     cmds = [command_words(p.strip().strip("(){} ")) for p in parts[1::2]]
     cmds += [c["words"] for line in later for c in _commands(_shell(line)) if not c["masked"]]
-    if not cmds or cmds[0][:1] != ["then"] or _fi_rescued(cmds[:len(parts[1::2])], later):
+    if not cmds or cmds[0][:1] != ["then"]:
         return []
     out: list[list[str]] = []
     for cmd in [cmds[0][1:], *cmds[1:]]:
         if cmd[:1] in (["else"], ["elif"], ["fi"]):
             break
         out.append(cmd)
-    return out
+    fi = _fi_line(cmds[:len(parts[1::2])], later)
+    if fi is None or not _rescued(later[fi]):
+        return out
+    span = list(takewhile(lambda t: not re.match(r"\s*(?:else|elif)\b", t), [*parts[1::2], *map(ci_line_text, later[:fi])]))
+    nested = any(c[:1] in (["if"], ["case"], ["while"], ["for"], ["until"]) for c in out) or any(map(_SUBSHELL.search, span))
+    return out if not nested and any(_exits(command_words(re.sub(r"^\s*then\s+", "", t))) for t in span) else []
 
 
-def _fi_rescued(same: list[list[str]], later: list[str]) -> bool:
-    """Whether the ``fi`` closing the tested ``if`` (nested blocks counted) is on a ``later`` line a
-    passing fallback rescues (``fi || true``); one on the test's own line is the caller's ``_rescued``."""
+def _fi_line(same: list[list[str]], later: list[str]) -> int | None:
+    """The index in ``later`` of the ``fi`` closing the tested ``if``, nested blocks counted."""
     depth = 1
     for k, cmds in enumerate([same, *([c["words"] for c in _commands(_shell(line))] for line in later)]):
         for words in cmds:
             head = next((w for w in words if w not in ("then", "else", "do")), "")
             depth += (head == "if") - (head == "fi")
             if depth <= 0:
-                return k > 0 and _rescued(later[k - 1])
-    return False
+                return k - 1 if k > 0 else None
+    return None   # never closed, or on the test's own line (the caller's ``_rescued``)
 
 
 def inline_apidiff(text: str, later: list[str]) -> bool | None:
@@ -436,10 +448,9 @@ def inline_apidiff(text: str, later: list[str]) -> bool | None:
         flag, rest = tested[0], parts[i + 1:]
         op = rest[0] if len(rest) > 1 else ""
         if words[0] == "if":   # ``then`` after ``;`` or on the next line
-            stops = flag == "-n" and op in (";", "") and any(_reraises(c) for c in _then_body(rest, later))
+            found = found or (flag == "-n" and op in (";", "") and any(_reraises(c) for c in _then_body(rest, later)))
         else:   # the chain or fallback ``_decides`` reads
-            stops = (flag, op) in (("-n", "&&"), ("-z", "||")) and _branch_reraises(rest)
-        found = found or stops
+            found = found or ((flag, op) in (("-n", "&&"), ("-z", "||")) and _branch_reraises(rest))
     return found
 
 
@@ -503,8 +514,7 @@ class _Reader:
         lines before masking (a CI file's), which apidiff's output check reads: masking drops an
         ``if`` condition such as ``[ -s out.txt ]`` that names the output."""
         found: set[str] = set()
-        as_written = raw is not None   # a CI file's shell: masking may have dropped a piped apidiff
-        raw = raw if raw is not None else lines
+        as_written, raw = raw is not None, raw if raw is not None else lines   # as written: a CI file's shell
         for index, line in enumerate(lines):
             commands = list(_commands(_shell(line)))
             inline = inline_apidiff(ci_line_text(raw[index]), raw[index + 1:])   # masking drops an ``if`` test
@@ -512,8 +522,13 @@ class _Reader:
                 found.add("apidiff")
             elif inline is not None:
                 self.report_only.add("apidiff")
-            if as_written and not any(c["masked"] for c in commands):
-                found |= self._piped_apidiff(raw[index:])
+            text = ci_line_text(raw[index])   # a piped apidiff masking dropped (pipefail off), read as written
+            piped = [c["words"] for c in _commands(_shell(text)) if as_written and tool_of(c["words"]) == "apidiff"]
+            if piped and not any(c["masked"] for c in commands) and not _rescued(text) and any(
+                    _checks_output(words, raw[index:]) for words in piped):
+                found.add("apidiff")
+            elif piped:
+                self.report_only.add("apidiff")
             for cmd in commands:
                 tool = tool_of(cmd["words"]) if not cmd["masked"] else None
                 if tool is not None and can_stop(tool, cmd["words"], raw[index:]):
@@ -534,16 +549,6 @@ class _Reader:
                 self.unsettled |= unsettled or (followed.kind == "workflow" and bool(followed.unknown))
                 found |= self.lines(list(followed.commands), depth + 1, (*path, *followed.paths))
         return found
-
-    def _piped_apidiff(self, raw: list[str]) -> set[str]:
-        """``{"apidiff"}`` when a CI line as written pipes apidiff into a deciding check, which
-        masking with pipefail off drops (``apidiff a b | grep -q . && exit 1``, lib/docs)."""
-        text = ci_line_text(raw[0])
-        cmds = [c["words"] for c in _commands(_shell(text)) if tool_of(c["words"]) == "apidiff"]
-        if cmds and not _rescued(text) and any(_checks_output(words, raw) for words in cmds):
-            return {"apidiff"}
-        self.report_only |= {"apidiff"} if cmds else set()
-        return set()
 
     def _npm(self, words: list[str], depth: int, path: tuple[str, ...]) -> set[str]:
         """The tools a root ``package.json`` script runs, for ``npm run <t>`` and its kin."""
@@ -610,8 +615,7 @@ def _gitlab_jobs(tree: IndentTree) -> tuple[dict[int, frozenset[str]], set[int]]
 
 
 def _dropped_if(lines: list[str], unmasked: list[str], tree: IndentTree, i: int) -> bool:
-    """Whether a line masking blanked is kept beside its text as written: a ``fi`` (its ``|| true``
-    rescues), or an ``if`` test alone on its line whose next line in the body survives (lib/docs)."""
+    """Whether a blanked line is kept as written: a ``fi``, or a lone ``if`` test whose next line survives (lib/docs)."""
     text, nxt = ci_line_text(lines[i]).lstrip(), i + 1
     return re.match(r"fi\b", text) is not None or (text.startswith("if ") and nxt < len(unmasked)
                                                    and bool(unmasked[nxt].strip()) and tree.body(nxt) == tree.body(i))

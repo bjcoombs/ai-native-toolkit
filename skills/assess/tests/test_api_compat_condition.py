@@ -639,7 +639,6 @@ def test_an_inline_test_with_a_chained_re_raise_counts(tmp_path: Path, line: str
 
 @pytest.mark.parametrize("line", [
     'test -n "$(apidiff -incompatible old new)" && echo broke && exit 1 || true',    # masked
-    '[ -z "$(apidiff -incompatible old new)" ] || { echo broke; exit 1; } || true',  # masked
     '[ -z "$(apidiff -incompatible old new)" ] || { echo broke; exit 0; }',          # no re-raise
     '[ -n "$(apidiff -incompatible old new)" ] && echo changed || exit 1',           # red only when nothing changed
     'test -n "$(apidiff -incompatible old new)" || echo ok && exit 1',               # the exit does not hang on the test
@@ -685,14 +684,37 @@ def test_an_output_file_if_with_then_on_the_next_line_counts_in_a_step(tmp_path:
     assert _block(_repo(tmp_path / "g", {".gitlab-ci.yml": gitlab}))["runs"] == [{"path": ".gitlab-ci.yml", "tool": "apidiff"}]
 
 
-@pytest.mark.parametrize("lines", [
-    ('if [ -n "$(apidiff -incompatible old new)" ]; then', "  exit 1", "fi || true"),
-    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", "  exit 1", "fi || true"),
-    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  if true; then echo x; fi", "  false", "fi || true"),
-    ("apidiff -incompatible old new | grep -q . && { echo broke; exit 1; } || true",),
+# ``exit N`` inside ``{ }`` or a ``then`` branch ends the shell before a later ``|| true`` runs;
+# each form has a twin under the next test with ``false``, which ``|| true`` does rescue.
+EXIT_PAST_FALLBACK = [
     ("apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 1; } || true",),
-    ('[ -z "$(apidiff -incompatible old new)" ] || { echo "{"; exit 1; } || true',),   # a quoted brace
-    ('apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo "}"; exit 1; } || true',),
+    ("apidiff -incompatible old new > out.txt", "if [ -s out.txt ]", "then", "  exit 1", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]; then', "  exit 1", "fi || true"),
+    ("apidiff -incompatible old new | grep -q . && { echo broke; exit 1; } || true",),
+    ('[ -z "$(apidiff -incompatible old new)" ] || { echo broke; exit 1; } || true',),
+]
+
+
+@pytest.mark.parametrize("lines", EXIT_PAST_FALLBACK)
+def test_an_exit_in_a_group_or_then_branch_ends_the_shell_past_a_later_fallback(
+        tmp_path: Path, lines: tuple[str, ...]) -> None:
+    step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+    script = _repo(tmp_path / "s", {"hack/api.sh": "#!/bin/sh\n" + "".join(f"{line}\n" for line in lines),
+                                    WF: _workflow("hack/api.sh")})
+    assert _block(script)["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
+@pytest.mark.parametrize("lines", [
+    *[tuple(line.replace("exit 1", "false") for line in form) for form in EXIT_PAST_FALLBACK],
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  if true; then echo x; fi", "  false", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  [ -s other.txt ] && exit 1", "  false", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  false", "else", "  exit 1", "fi || true"),
+    ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  ( exit 1 )", "fi || true"),           # a subshell
+    ("apidiff -incompatible old new > out.txt; grep -q . out.txt && ( echo broke; exit 1 ) || true",),
+    ('[ -z "$(apidiff -incompatible old new)" ] || { echo "{"; false; } || true',),   # a quoted brace
+    ('apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo "}"; false; } || true',),
+    ("apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 0; } || true",),
 ])
 def test_a_rescued_multi_line_check_does_not_count(tmp_path: Path, lines: tuple[str, ...]) -> None:
     step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
