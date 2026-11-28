@@ -569,9 +569,9 @@ _WORDING: dict[str, Wording] = {
         f"[\"{DENY_RULE_EXAMPLE}\"]}}` in `.claude/settings.json`. Deny rules hold in every "
         "permission mode, auto mode included. If your organisation sets this centrally, run with "
         "`--managed-settings`.",
-        "`.claude/settings.json` is tracked in git and its `permissions` lists at least one entry, "
-        "or, with `--managed-settings`, a managed settings source on the machine running the "
-        "check does."),
+        "A tracked `.claude/settings.json` lists a `permissions` entry, or a tracked "
+        "`.vscode/settings.json` lists a `chat.tools.terminal.autoApprove` rule (`\"rm\": false` "
+        "refuses one), or, with `--managed-settings`, a managed settings source on the machine does."),
     "agent_ops.summary.agent_work_present": _flag(
         "Commit the agent work the repository runs on a schedule or trigger: a workflow with a "
         "`schedule`, `issues`, `issue_comment` or `pull_request` trigger whose steps run an agent "

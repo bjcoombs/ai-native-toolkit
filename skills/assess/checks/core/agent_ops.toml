@@ -79,7 +79,7 @@ kind = "condition"
 title = "Agent permissions are committed"
 key = "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded"
 why = "Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code."
-fix = "Commit a deny rule for an action no agent should take, such as `\"deny\": [\"Bash(git push origin main)\"]` under `permissions` in `.claude/settings.json`. It holds under auto mode too. If your organisation sets this centrally, run with --managed-settings."
+fix = "Commit a deny rule, such as `\"deny\": [\"Bash(git push origin main)\"]` under `permissions` in `.claude/settings.json`, or a `false` rule in VS Code's `chat.tools.terminal.autoApprove`. Deny rules hold under auto mode. For central settings, run with --managed-settings."
 
 [[entries]]
 id = "core.cond.layer-8-agent-ops.2.hooks_present"
