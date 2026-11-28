@@ -4,7 +4,6 @@ name: Refine triage
 # Settings are repository variables:
 #   REFINE_ENABLED          the kill switch: anything but `true` skips the run
 #   REFINE_MODE             `live` writes; unset or anything else is a dry-run.
-#                           Set `live` only once issue #1341 is closed.
 #   REFINE_QUESTIONS_ISSUE  the issue that collects questions for the maintainer
 # The credential is the secret REFINE_ANTHROPIC_API_KEY, then the Workload
 # Identity Federation variables below, then the secret CLAUDE_CODE_OAUTH_TOKEN

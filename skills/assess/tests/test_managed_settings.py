@@ -36,6 +36,22 @@ def test_file_and_drop_in_are_counted(tmp_path, monkeypatch) -> None:
     assert ms.managed_permissions(block) is True
 
 
+@pytest.mark.parametrize(("allow", "count", "encoded"), [
+    (["Bash(*)"], 0, False),
+    (["Bash", "Bash( * )"], 0, False),
+    (["Bash(*)", "Bash(npm test)"], 1, True),
+])
+def test_a_broad_managed_allow_is_not_counted(tmp_path, monkeypatch, allow, count,
+                                              encoded) -> None:
+    """A managed allow that lets agents run any shell command is not an encoded permission (#1621)."""
+    directory = _point(monkeypatch, tmp_path)
+    (directory / "managed-settings.json").write_text(
+        json.dumps({"permissions": {"allow": allow}}), encoding="utf-8")
+    block = ms.read_managed_settings()
+    assert [s["allow_count"] for s in block["sources"]] == [count]
+    assert ms.managed_permissions(block) is encoded
+
+
 @pytest.mark.parametrize("text", ["{not json", "[1, 2]"])
 def test_a_source_that_cannot_be_read_reads_unreadable(tmp_path, monkeypatch, text) -> None:
     directory = _point(monkeypatch, tmp_path)

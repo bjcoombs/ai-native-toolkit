@@ -14,8 +14,8 @@ hook conditions count them and no harness adds a condition of its own:
   (``{event: [{command}]}``, or Copilot's ``{type: command, bash, powershell}``), where a hook
   with no ``type`` is a command hook.
 - ``.vscode/settings.json`` (``vscode``): listed only when it sets
-  ``chat.tools.terminal.autoApprove``; each rule approved counts as an ``allow`` entry and each
-  rule refused (``false``) as a ``deny`` entry. A ``.vscode/settings.json`` with no such key is
+  ``chat.tools.terminal.autoApprove``; each scoped rule approved counts as an ``allow`` entry and
+  each rule refused (``false``) as a ``deny`` entry. A ``.vscode/settings.json`` with no such key is
   editor state and is not listed. One that does not parse but whose text names the setting is
   listed with ``parse_ok: false`` and no counts, so an unreadable configuration never looks like
   none; ``broad_in_text`` reads its broad rules from the raw text for ``agent_harness``.
@@ -38,6 +38,14 @@ every command: the key ``*`` (or any key of only ``*`` and spaces), or a regex k
 ``/.*/``, ``/^.+$/`` or a bare anchor ``/^/``. ``chat.tools.autoApprove: true`` and
 ``chat.tools.global.autoApprove: true`` approve every tool, the terminal included, and are broad too. ``agent_harness`` reports
 each as a ``broad_auto_approve`` finding, the twin of Claude Code's ``broad_allow``.
+``is_broad_allow`` is the Claude Code rule that ``broad_allow`` reports: ``Bash``, ``Bash(*)``,
+``Bash(:*)``, ``Bash(**)`` or ``Bash(*:*)``, spaces ignored.
+
+A broad entry is not an encoded permission (#1618): ``allow_count`` leaves out every Claude
+``permissions.allow`` rule ``is_broad_allow`` matches (``scoped_allow``, which
+``lib.agents.managed_settings`` shares, #1621) and every VS Code auto-approve
+``is_broad_rule`` matches (``chat.tools.terminal.autoApprove: true`` included), so a file whose
+only allow is "allow everything" does not meet ``permissions_encoded``.
 
 Pure stdlib plus ``git_churn.tracked_files``; never raises on a malformed file. Tests:
 ``tests/test_harness_settings.py``.
@@ -85,11 +93,22 @@ _COMMAND_KEYS = ("command", "bash", "powershell")
 TERMINAL_AUTO_APPROVE = "chat.tools.terminal.autoApprove"
 # Settings that approve every tool, the terminal included, when true.
 _ALL_TOOLS = ("chat.tools.autoApprove", "chat.tools.global.autoApprove")
+_BROAD_BASH = re.compile(r"^Bash(\((\*|:\*|\*\*|\*:\*)\))?$")
 _MATCH_ALL = re.compile(r"^/(?:\^?(?:\.|\[\\s\\S\]|\[\^\])[*+]\$?|\^?(?:\.|\[\\s\\S\])\??|(?:\.|\[\\s\\S\])\??\$|\^|\$|)/[a-z]*$")
 
 
 def _count(value: Any) -> int:
     return len(value) if isinstance(value, list) else 0
+
+
+def is_broad_allow(rule: object) -> bool:
+    """A Claude Code ``permissions.allow`` rule that lets agents run any shell command."""
+    return isinstance(rule, str) and bool(_BROAD_BASH.match(rule.replace(" ", "")))
+
+
+def scoped_allow(value: Any) -> int:
+    """The allow rules that are not broad (#1618); the managed count uses it too (#1621)."""
+    return sum(not is_broad_allow(r) for r in value) if isinstance(value, list) else 0
 
 
 def _acts(command: Any) -> bool:
@@ -130,7 +149,7 @@ def hook_events(hooks: Any, flat: bool = False) -> int:
 
 
 class AutoApprove(NamedTuple):
-    allow: int  # rules approved
+    allow: int  # scoped rules approved; a broad rule is not counted (#1618)
     deny: int  # rules refused
     broad: list[str]  # the setting names or rule keys that approve every command
 
@@ -160,13 +179,13 @@ def auto_approve(data: dict[str, Any]) -> AutoApprove | None:
     if isinstance(rules, dict):
         for key, value in rules.items():
             if _approves(value):
-                allow += 1
                 if is_broad_rule(str(key)):
                     broad.append(str(key))
+                else:
+                    allow += 1
             elif value is False or (isinstance(value, dict) and value.get("approve") is False):
                 deny += 1
     elif rules is True:  # not a documented shape, but it can only mean every command
-        allow += 1
         broad.append(TERMINAL_AUTO_APPROVE)
     return AutoApprove(allow, deny, broad)
 
@@ -266,7 +285,7 @@ def _entry(repo_root: Path, rel: str, tool: str, tracked: frozenset[Path] | None
     if tool == "claude_code":
         permissions = data.get("permissions")
         if isinstance(permissions, dict):
-            entry["allow_count"] = _count(permissions.get("allow"))
+            entry["allow_count"] = scoped_allow(permissions.get("allow"))
             entry["deny_count"] = _count(permissions.get("deny"))
             entry["ask_count"] = _count(permissions.get("ask"))
             mode = permissions.get("defaultMode")

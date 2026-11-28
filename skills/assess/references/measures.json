@@ -5461,7 +5461,8 @@
       "collector": "core.review_reality",
       "reads": [
         "merged_sample",
-        "gitlab_note_facts"
+        "gitlab_note_facts",
+        "review_rules"
       ],
       "headless_reads": null,
       "network": true,
@@ -5471,6 +5472,7 @@
         "written": true,
         "strings_kept": {
           "review_reality.bot_sequence": "token",
+          "review_reality.merge_queue_source": "token",
           "review_reality.reason": "drop",
           "review_reality.sequence": "token"
         }
@@ -5513,6 +5515,41 @@
         "verified"
       ],
       "why": "It shows how many recently merged changes had a review and an approval, which is how far a second reader reaches into what agents and people merge.",
+      "why_source": ""
+    },
+    {
+      "name": "review_rules",
+      "title": "Merge and review rules kept as code",
+      "summary": "Merge and review rules a repository commits outside branch protection. It reads a merge queue, a policy-bot policy, Prow OWNERS files and a committed ruleset that requires review. It also reads a review guide folder that a pull request workflow names. Each file is parsed, not matched as text. OWNERS files that name one owner for everything do not count. Evidence only: it adds an evidence line to the review condition while that condition is met.",
+      "collector": "core.review_rules",
+      "reads": [
+        "repo_root"
+      ],
+      "headless_reads": null,
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "review_rules.arms": "token",
+          "review_rules.reason": "drop",
+          "review_rules.rules.arm": "token",
+          "review_rules.rules.path": "path",
+          "review_rules.unsettled": "path"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "A rule kept as code is a rule an agent can read before it opens a change, and a reviewer can check it against the code. An approval policy or an owners file says who must look at a change before it lands, and a merge queue says how it lands.",
       "why_source": ""
     },
     {
@@ -7231,6 +7268,7 @@
         "structure_drift",
         "test_pressure",
         "behaviour_pins",
+        "review_rules",
         "owner_exclusions",
         "maturity_model",
         "pack"
@@ -7466,9 +7504,22 @@
       ],
       "reads": [
         "merged_sample",
-        "gitlab_note_facts"
+        "gitlab_note_facts",
+        "review_rules"
       ],
       "network": true,
+      "private": false
+    },
+    {
+      "name": "review_rules",
+      "title": "Merge and review rules kept as code",
+      "publishes": [
+        "review_rules"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
       "private": false
     },
     {
@@ -7839,6 +7890,7 @@
         "structure_drift",
         "test_pressure",
         "behaviour_pins",
+        "review_rules",
         "owner_exclusions"
       ],
       "network": false,

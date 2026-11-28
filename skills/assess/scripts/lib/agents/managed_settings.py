@@ -29,6 +29,10 @@ every one that exists was read), ``absent`` (no source exists) or ``unreadable``
 exists but could not be opened or parsed: permissions, bad JSON, not an object); ``sources``
 lists one entry per source that exists, by ``kind`` token only, with its ``allow`` / ``deny`` /
 ``ask`` entry counts and hook event count. No machine path or setting text is kept.
+``allow_count`` leaves out every broad allow (``Bash``, ``Bash(*)`` and the other rules
+``lib.agents.harness_settings.is_broad_allow`` matches; the count is that module's
+``scoped_allow``, #1621), as the repository count does, so
+a managed source whose only entry allows every shell command does not encode a permission.
 
 ``ASSESS_MANAGED_SETTINGS_DIR``, when set, replaces every location with that one directory's
 ``managed-settings.json`` and ``managed-settings.d/``, and no plist or registry read runs: the
@@ -45,6 +49,7 @@ import sys
 from pathlib import Path
 from typing import Any, Literal
 
+from lib.agents.harness_settings import scoped_allow
 from lib.counts_only.block_shapes import ManagedSettingsBlock, ManagedSource
 
 ManagedState = Literal["not_read", "found", "absent", "unreadable"]
@@ -81,7 +86,7 @@ def _source(kind: SourceKind, data: Any) -> ManagedSource:
         return entry
     permissions = data.get("permissions")
     if isinstance(permissions, dict):
-        entry["allow_count"] = _count(permissions.get("allow"))
+        entry["allow_count"] = scoped_allow(permissions.get("allow"))
         entry["deny_count"] = _count(permissions.get("deny"))
         entry["ask_count"] = _count(permissions.get("ask"))
     hooks = data.get("hooks")

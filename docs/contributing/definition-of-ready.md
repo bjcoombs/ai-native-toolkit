@@ -102,6 +102,6 @@ Nothing in the body or comments waits on a human call: no unanswered question to
 - **The maintainer**, at any time.
 - **The refiner**, only when the script-checked items pass and research leaves nothing that needs a human call. Every other issue goes into one batched question list on a single tracking issue. The maintainer vetoes a refiner decision by removing the label. This rule comes from the backlog refinement plan in [#1317](https://github.com/bjcoombs/ai-native-toolkit/issues/1317).
 
-The refiner workflows run as a dry-run until the repository variable `REFINE_MODE` is `live`. Set it to `live` only once [#1341](https://github.com/bjcoombs/ai-native-toolkit/issues/1341) is closed: that issue holds the fixes without which live mode can apply `agent-ready` after a refused size or blocked-by write, or on a size changed since the verdict, and can close an issue whose text no longer matches its duplicate.
+The refiner workflows run only while the repository variable `REFINE_ENABLED` is `true`, and run as a dry-run, writing nothing, until the variable `REFINE_MODE` is `live`. Setting `REFINE_MODE` to `live` turns on its writes; unsetting it returns to dry-run, and setting `REFINE_ENABLED` to `false` stops every job. [Backlog refinement](../refine.md) has the setup and the credentials.
 
 The `/issues` triage pass applies `agent-ready` by its own sizing judgement today. Making it apply this same checklist is part of [#1317](https://github.com/bjcoombs/ai-native-toolkit/issues/1317).

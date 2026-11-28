@@ -185,14 +185,14 @@ New code imports the new path.
 - **`ci/`**: CI configuration read offline, the `ci` group (#1392, #1393): the committed CI
   files read line by line (continuations, matrices, expressions, triggers), GitLab `include:`
   items resolved offline and the merged line view, and the blocks built from them: CI checks
-  and their state, lint gates and lint inputs, model-backed jobs, review automation and
-  shared tooling. The step-following modules read what one step runs: the shared CI-step
+  and their state, lint gates and lint inputs, model-backed jobs, review automation, merge and review rules kept as code (#856, with
+  the strict YAML reader `yaml_tree`) and shared tooling. The step-following modules read what one step runs: the shared CI-step
   follower (`ci_step_follower`, with its path and safe-read half `ci_step_paths` and its make,
   Gradle and Maven readers `ci_build_follower`, #845) that the older followers go through, action inputs,
   composite actions, compound and shell statements, masking and its exemptions, scripts a
   step calls, unsure lines, and the check, lint and type-check command classifier with its
   lint vocabulary. `ci_workflow` emits the gate workflow and moved with the `report` group.
-  Files: `__init__.py`, `agent_evals.py`, `api_compat.py`, `apidiff_reraise.py`, `check_command.py`, `ci_action_inputs.py`, `ci_build_follower.py`, `ci_check_state.py`, `ci_checks.py`, `ci_composite.py`, `ci_compound.py`, `ci_continuations.py`, `ci_exempt.py`, `ci_expressions.py`, `ci_hazards.py`, `ci_include_items.py`, `ci_includes.py`, `ci_job_commands.py`, `ci_kept_types.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_masking.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_path_filters.py`, `ci_scripts.py`, `ci_shell_text.py`, `ci_statements.py`, `ci_step_follower.py`, `ci_step_paths.py`, `ci_triggers.py`, `ci_unsure.py`, `disclosure_reader.py`, `disclosure_script.py`, `disclosure_shell.py`, `disclosure_terms.py`, `docs_kept_true.py`, `lint_vocabulary.py`, `merged_ci.py`, `repo_guards.py`, `review_automation.py`, `shared_tooling.py`.
+  Files: `__init__.py`, `agent_evals.py`, `api_compat.py`, `apidiff_reraise.py`, `check_command.py`, `ci_action_inputs.py`, `ci_build_follower.py`, `ci_check_state.py`, `ci_checks.py`, `ci_composite.py`, `ci_compound.py`, `ci_continuations.py`, `ci_exempt.py`, `ci_expressions.py`, `ci_hazards.py`, `ci_include_items.py`, `ci_includes.py`, `ci_job_commands.py`, `ci_kept_types.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_masking.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_path_filters.py`, `ci_scripts.py`, `ci_shell_text.py`, `ci_statements.py`, `ci_step_follower.py`, `ci_step_paths.py`, `ci_triggers.py`, `ci_unsure.py`, `disclosure_reader.py`, `disclosure_script.py`, `disclosure_shell.py`, `disclosure_terms.py`, `docs_kept_true.py`, `lint_vocabulary.py`, `merged_ci.py`, `repo_guards.py`, `review_automation.py`, `review_rules.py`, `shared_tooling.py`, `yaml_tree.py`.
 - **`complexity/`**: the complexity treemap renderer, `scc` coverage, the Dart scanner and
   the stats sidecar (its rows, cross-run diff and diff reliability), plus the generated- and
   raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`, `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`, `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
@@ -229,7 +229,7 @@ New code imports the new path.
   Named `hosting`, not `platform`, because a `lib/platform/` package would shadow the standard
   library's `platform` module for any script run by path from `lib/` (decision 9 on #917).
   `external_ci`, `external_ci_rules`, `gitlab_rules` and `unread_ci` (#884, #928) postdate the
-  #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`, `gh_cli.py`, `github_secret_scanning.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_include_renames.py`, `gitlab_notes.py`, `issue_outcomes.py`, `issue_outcomes_gitlab.py`, `merged_sample.py`, `org_security_policy.py`, `platform_cli.py`, `review_reality.py`.
+  #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `config_snapshots.py`, `delivery.py`, `gh_cli.py`, `github_secret_scanning.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_include_renames.py`, `gitlab_notes.py`, `issue_outcomes.py`, `issue_outcomes_gitlab.py`, `merged_sample.py`, `org_security_policy.py`, `platform_cli.py`, `review_reality.py`.
 - **`instructions/`**: agent instruction files read offline, the `instructions` group (#1394):
   discovery of root, nested and path-scoped files and their scope globs, section placement,
   content and claim checks, the always-loaded budget, the grader and the per-file records it

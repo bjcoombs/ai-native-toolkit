@@ -240,6 +240,18 @@ def test_managed_without_rules_leaves_the_repo_reading(git_repo, tmp_path, monke
     assert scan_agent_ops(repo, managed_settings=True)["summary"]["permissions_encoded"] is False
 
 
+@pytest.mark.parametrize(("allow", "encoded"), [
+    (["Bash(*)"], False), (["Bash(*)", "Bash(npm test)"], True)])
+def test_a_broad_managed_allow_needs_a_scoped_entry(git_repo, tmp_path, monkeypatch, allow,
+                                                    encoded) -> None:
+    """#1621: a managed ``Bash(*)`` alone does not meet permissions_encoded; a scoped entry does."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("hi", encoding="utf-8")
+    commit("init")
+    _managed(monkeypatch, tmp_path, {"permissions": {"allow": allow}})
+    assert scan_agent_ops(repo, managed_settings=True)["summary"]["permissions_encoded"] is encoded
+
+
 def test_managed_settings_are_not_read_without_the_option(git_repo, tmp_path, monkeypatch) -> None:
     """#1153 decision: the machine read is opt-in, so by default a central rule is not seen."""
     repo, commit = git_repo
