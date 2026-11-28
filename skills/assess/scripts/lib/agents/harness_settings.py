@@ -33,8 +33,8 @@ hook condition away.
 
 ``auto_approve`` reads VS Code's terminal auto-approve rules. A rule is broad when it approves
 every command: the key ``*`` (or any key of only ``*`` and spaces), or a regex key such as
-``/.*/`` or ``/^.+$/``. ``chat.tools.autoApprove: true`` and ``chat.tools.global.autoApprove:
-true`` approve every tool, the terminal included, and are broad too. ``agent_harness`` reports
+``/.*/``, ``/^.+$/`` or a bare anchor ``/^/``. ``chat.tools.autoApprove: true`` and
+``chat.tools.global.autoApprove: true`` approve every tool, the terminal included, and are broad too. ``agent_harness`` reports
 each as a ``broad_auto_approve`` finding, the twin of Claude Code's ``broad_allow``.
 
 Pure stdlib plus ``git_churn.tracked_files``; never raises on a malformed file. Tests:
@@ -83,7 +83,7 @@ _COMMAND_KEYS = ("command", "bash", "powershell")
 TERMINAL_AUTO_APPROVE = "chat.tools.terminal.autoApprove"
 # Settings that approve every tool, the terminal included, when true.
 _ALL_TOOLS = ("chat.tools.autoApprove", "chat.tools.global.autoApprove")
-_MATCH_ALL = re.compile(r"^/\^?(?:\.|\[\\s\\S\]|\[\^\])[*+]\$?/[a-z]*$")
+_MATCH_ALL = re.compile(r"^/(?:\^?(?:\.|\[\\s\\S\]|\[\^\])[*+]\$?|\^|\$|)/[a-z]*$")
 
 
 def _count(value: Any) -> int:
@@ -139,7 +139,7 @@ def _approves(value: Any) -> bool:
 
 def is_broad_rule(key: str) -> bool:
     """A terminal auto-approve key that matches every command: ``*`` (only ``*`` and spaces), or a
-    match-all regex such as ``/.*/``, ``/^.+$/`` or ``/[\\s\\S]*/``."""
+    match-all regex such as ``/.*/``, ``/^.+$/``, ``/[\\s\\S]*/`` or a bare anchor (``/^/``, ``/$/``)."""
     stripped = key.strip()
     return bool(stripped) and (set(stripped) <= {"*", " "} or bool(_MATCH_ALL.match(stripped)))
 

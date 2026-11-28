@@ -229,7 +229,7 @@ def test_a_narrow_auto_approve_list_raises_nothing(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("key, broad", [
-    ("*", True), ("* *", True), ("/.*/", True), ("/^.+$/i", True), ("/[\\s\\S]*/", True),
+    ("*", True), ("* *", True), ("/.*/", True), ("/^.+$/i", True), ("/[\\s\\S]*/", True), ("/^/", True), ("/$/", True), ("//", True),
     ("npm *", False), ("/^npm .*/", False), ("", False), ("git", False),
 ])
 def test_broad_rule_keys(key: str, broad: bool) -> None:
