@@ -219,6 +219,12 @@ jobs:
     assert scan_ai_governance(_repo(tmp_path, {".github/workflows/linked.yml": text}))["enforced"] is False
 
 
+def test_an_act_that_does_not_follow_from_the_marker_test_does_not_count() -> None:
+    step = ('run: |\n  BODY="${{ github.event.pull_request.body }}"\n'
+            '  if grep -qi "copilot" <<< "$BODY"; then exit 0; fi\n  npm test || exit 1\n')
+    assert enforces_disclosure(step) is False
+
+
 def test_an_error_annotation_alone_is_not_an_act() -> None:
     step = ('run: printf "%s" "${{ github.event.pull_request.body }}" | grep -qi "Assisted-by"'
             ' || echo "::error::add the Assisted-by trailer"\n')

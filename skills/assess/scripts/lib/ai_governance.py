@@ -143,15 +143,31 @@ def enforces_disclosure(text: str, env: str = "") -> bool:
     ``print(``, ``console.*(``, ``core.*(``, ``::error``) are dropped first (``_OUTPUT``), so a log
     or failure message naming AI does not count. The marker test must also be on a line that does
     the read or names what holds it (``read_names``), so a test of another value, such as the
-    author's login, does not count, and a step
+    author's login, does not count, and the act must follow from that test, on its line or in the
+    block under it (``_acts_on``), so a skip on a match followed by an unrelated ``|| exit 1`` does
+    not count, and a step
     that only runs an AI tool on the body (``claude --print ... || exit 1``) does not count. Whole-line YAML
     and shell comments are dropped first."""
     clean, env = _YAML_COMMENT.sub("", text), _YAML_COMMENT.sub("", env)
     names = read_names(clean + "\n" + env)
-    named = any(_tests_marker(_OUTPUT.sub("", line)) and (_READS.search(line) or any(
-        re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", line) for n in names)) for line in clean.splitlines())
-    # an act quoted in an echo or printf is a message, not an exit
-    return bool((_READS.search(clean) or _READS.search(env)) and named and _ACTS.search(_ECHO.sub("", clean)))
+    lines = clean.splitlines()
+    acting = any(_tests_marker(_OUTPUT.sub("", line)) and (_READS.search(line) or any(
+        re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", line) for n in names)) and _acts_on(lines, i)
+        for i, line in enumerate(lines))
+    return bool((_READS.search(clean) or _READS.search(env)) and acting)
+
+
+def _acts_on(lines: list[str], i: int) -> bool:
+    """Whether the marker test on line ``i`` leads to the act: on the same line (``|| exit 1``,
+    ``if ...: sys.exit(1)``) or in the block under it, the lines indented deeper than it. An act
+    quoted in an echo or printf is a message, not an exit, so those words are dropped first."""
+    depth = len(lines[i]) - len(lines[i].lstrip())
+    block = [lines[i]]
+    for line in lines[i + 1:]:
+        if line.strip() and len(line) - len(line.lstrip()) <= depth:
+            break
+        block.append(line)
+    return _ACTS.search(_ECHO.sub("", "\n".join(block))) is not None
 
 
 def _tests_marker(line: str) -> bool:
