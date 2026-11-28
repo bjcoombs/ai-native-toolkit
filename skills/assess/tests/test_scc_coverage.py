@@ -22,6 +22,7 @@ from lib.complexity.scc_coverage import (
     backend_by_language,
     complexity_unreliable,
 )
+from assess_test_support import TOOLKIT_ROOT
 
 ROOT = Path("/repo")
 
@@ -173,7 +174,7 @@ def test_report_labels_scc_ccn_approximate():
 # Every place a ccn caveat is spelled out (issue #630): one spelling per case.
 # Each skill is read with its references expanded at their pointers (#1408).
 CCN_CAVEAT_DOCS = ["skills/assess-findings/SKILL.md", "skills/assess-pr/SKILL.md"]
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 
 
 @pytest.mark.parametrize("doc", CCN_CAVEAT_DOCS)

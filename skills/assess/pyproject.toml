@@ -52,6 +52,9 @@ markers = [
     "needs_symlink: creates a symlink; skipped on Windows",
     "needs_posix_perms: relies on chmod/getuid permission semantics; skipped on Windows",
     "needs_posix_shell: runs a #!/bin/sh stub or sh -c; skipped on Windows",
+    # Root probe (#1649): tests/conftest.py skips these outside the toolkit repository
+    # and fails the session when this repository's CI cannot find its root.
+    "toolkit_repo: reads the ai-native-toolkit repository itself; skipped in a vendored copy",
 ]
 
 [tool.coverage.report]

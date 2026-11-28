@@ -39,6 +39,7 @@ def _manifest_data() -> dict[str, Any]:
     return data
 
 
+@pytest.mark.toolkit_repo
 @pytest.mark.parametrize("path", sorted(gen_catalog.outputs()), ids=lambda p: p.name)
 def test_committed_catalog_is_current(path: Path) -> None:
     expected = gen_catalog.outputs()[path]

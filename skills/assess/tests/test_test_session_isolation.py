@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 from assess_test_support import (
+    TOOLKIT_ROOT,
     HEAVY_DEPS,
     StubNumpy,
     leaked_stand_ins,
@@ -27,8 +28,10 @@ from assess_test_support import (
     stub_heavy_deps,
 )
 
-REPO = Path(__file__).resolve().parents[3]
-TEST_TREES = (REPO / "skills" / "assess" / "tests", REPO / "scripts" / "tests", REPO / "tests")
+REPO = TOOLKIT_ROOT
+# A vendored copy has no scripts/tests or tests/: those trees glob empty, so no toolkit_repo mark (#1649).
+TEST_TREES = (REPO / "skills" / "assess" / "tests",
+              REPO / "scripts" / "tests", REPO / "tests")  # toolkit-root optional: globs empty
 
 
 def _test_sources() -> list[Path]:

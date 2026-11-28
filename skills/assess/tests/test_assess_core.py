@@ -138,6 +138,7 @@ def test_build_run_context_first_run(
     assert all(o["status"] == "skipped" for o in ctx_headless["offers"])
 
 
+@pytest.mark.toolkit_repo
 def test_build_run_context_surfaces_decline_markers(tmp_path: Path) -> None:
     """A JSON decline marker flows into run-context with provenance + disclosure."""
     repo = tmp_path / "repo"

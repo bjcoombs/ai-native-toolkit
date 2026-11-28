@@ -19,6 +19,7 @@ import subprocess
 from pathlib import Path
 
 from lib.keyhole.structure_drift import detect_path_existence_drift
+from assess_test_support import TOOLKIT_ROOT
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -266,7 +267,7 @@ def test_integration_lib_readme_seam_paths_are_not_false_positives() -> None:
     ``empty_ownership_patterns``. This is the dogfood guard that Tier 0 reads a
     genuine, human-written ownership map on real data without manufacturing drift.
     """
-    repo_root = Path(__file__).resolve().parents[3]  # repo top
+    repo_root = TOOLKIT_ROOT  # repo top
     result = detect_path_existence_drift(repo_root)
 
     assert result["available"] is True

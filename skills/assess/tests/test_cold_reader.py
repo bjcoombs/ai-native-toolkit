@@ -22,7 +22,6 @@ uploads as ``tour-sample-report``.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import TypedDict
 
 import pytest
@@ -32,6 +31,7 @@ from lib.card_facts import step_name, top_step
 from lib.scoring.headline import GLOSSARY_URL
 from lib.scoring.level_tally import default_model
 from lib.top_card import GATE_GAP, GATE_TASK, STEP_GATES_URL
+from assess_test_support import TOOLKIT_ROOT
 
 LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 # Terms a newcomer would need the glossary for, and the marks of an internal name. "gate"
@@ -160,8 +160,9 @@ def test_first_screen_stops_at_the_first_section() -> None:
     assert first_screen(report) == ["Step 1 of 4: x."]
 
 
+@pytest.mark.toolkit_repo
 def test_the_report_path_is_the_one_ci_uploads() -> None:
-    workflow = (Path(__file__).resolve().parents[3] / ".github" / "workflows" / "tests.yml").read_text(
+    workflow = (TOOLKIT_ROOT / ".github" / "workflows" / "tests.yml").read_text(
         encoding="utf-8")
     assert "scripts/assess_tour.py report --out" in workflow
     assert "tour-sample-report" in workflow

@@ -14,6 +14,7 @@ import pytest
 
 from lib.run.run_scope import Scope
 from lib.testing.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
+from assess_test_support import TOOLKIT_ROOT
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -357,7 +358,7 @@ def test_cov_fail_under_with_cov_branch_is_total(tmp_path: Path) -> None:
 
 def test_this_repository_block_is_unchanged() -> None:
     """The repo sets no branch coverage, so its own gates stay ``lines``."""
-    repo = Path(__file__).resolve().parents[3]
+    repo = TOOLKIT_ROOT
     gates = [g for g in detect_coverage_gate(repo)["gates"]
              if g["file"] in {"skills/assess/pyproject.toml", "scripts/pyproject.toml"}]
     assert gates and all(g["metric"] == "lines" for g in gates)

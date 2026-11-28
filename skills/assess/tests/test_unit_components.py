@@ -17,8 +17,9 @@ from lib.counts_only.content_free import counts_only
 from lib.unit_components import KINDS, discover_components
 from lib.unit_discovery import scan_units
 from test_unit_discovery import _paths, _skipped, _write
+from assess_test_support import TOOLKIT_ROOT
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = TOOLKIT_ROOT
 
 PLUGIN = {
     ".claude-plugin/plugin.json": '{"name": "p"}\n',
@@ -225,6 +226,7 @@ def test_counts_only_keeps_the_kind_and_never_a_skill_name(tmp_path: Path, salte
     assert "plain" not in str(out) and "tooled" not in str(out)
 
 
+@pytest.mark.toolkit_repo
 def test_this_repository_lists_each_skill_as_a_unit() -> None:
     """The issue's fixture: this repository at main, one unit per ``skills/<name>/``."""
     if not (REPO / ".claude-plugin" / "plugin.json").is_file():

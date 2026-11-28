@@ -27,8 +27,9 @@ import pytest
 import assess_tour
 from assess_core import build_and_publish_run
 from golden import normalize_run_context
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 SHIPPED = "skills/assess/tour"
 # The sample's HEAD before and after the fix, as the #1144 fixture tree built them.
 SAMPLE_HEAD = "f2dee5aa81be46cd8787b0d89be85acfc4426896"
@@ -153,6 +154,7 @@ def _tour(script: Path, cwd: Path, *args: str) -> dict[str, Any]:
     return result
 
 
+@pytest.mark.toolkit_repo
 def test_the_tour_runs_from_the_unpacked_standalone_zip(tmp_path: Path) -> None:
     archive = _standalone_zip(tmp_path)
     with zipfile.ZipFile(archive) as zf:

@@ -28,6 +28,7 @@ from lib.tool_lookup import (
     warn_missing_packages,
     winget_rg,
 )
+from assess_test_support import TOOLKIT_ROOT
 
 
 def _no_which(_name: str) -> str | None:
@@ -149,7 +150,7 @@ def test_pip_hint_gives_the_no_uv_install_line() -> None:
 
 # --- one no-uv line for /assess and /fleet (#1492) ------------------------------
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = TOOLKIT_ROOT
 
 
 def test_no_uv_packages_cover_the_layer_packages() -> None:
@@ -161,6 +162,7 @@ def test_no_uv_packages_cover_the_layer_packages() -> None:
     assert NO_UV_DOC in NO_UV_POINTER
 
 
+@pytest.mark.toolkit_repo
 def test_the_doc_the_hints_name_shows_the_full_no_uv_line() -> None:
     page = (REPO / NO_UV_DOC).read_text(encoding="utf-8")
     assert f"### {NO_UV_SECTION}" in page.splitlines()

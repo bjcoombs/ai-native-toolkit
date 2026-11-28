@@ -19,6 +19,7 @@ from assess_core_helpers import (
 )
 from lib.run import context_blocks, core_scans, headless_layers
 from lib.counts_only.content_free import counts_only
+from assess_test_support import TOOLKIT_ROOT
 
 
 def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
@@ -509,7 +510,7 @@ def test_structure_drift_block_builder_tier1_available() -> None:
     Pure builder test: a Tier 1 result with counts is rendered into the tier_1
     sub-block with the seam-allowlist metadata, independent of any git/grimp.
     """
-    repo = Path(__file__).resolve().parents[3]  # has an ownership map (lib README)
+    repo = TOOLKIT_ROOT  # has an ownership map (lib README)
     tier_1 = {
         "available": True,
         "human_grouped_static_splits_count": 3,
@@ -534,7 +535,7 @@ def test_structure_drift_block_builder_tier1_unavailable() -> None:
     The static lens being out (no import graph) yields an unavailable Tier 1;
     the block still carries the cheap Tier 0 data and a half-block-free tier_1.
     """
-    repo = Path(__file__).resolve().parents[3]
+    repo = TOOLKIT_ROOT
     block = context_blocks._structure_drift_block(repo, {"available": False})
     assert block is not None
     assert block["tier_0"]["available"] is True

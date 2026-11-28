@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from assess_test_support import TOOLKIT_ROOT
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
@@ -35,7 +36,7 @@ from lib.run_context_types_concurrency import ConcurrencyBlock  # noqa: E402
 
 DAY = 86400
 T0 = 1_700_000_000  # a fixed epoch: the fixtures never depend on today
-TOOLKIT = Path(__file__).resolve().parents[3]
+TOOLKIT = TOOLKIT_ROOT
 # A first-parent commit of main from the 2026-11-24 self-assessment (#985 comment), when
 # every check change committed the regenerated catalog pair.
 FIXED_COMMIT = "600cca4ec653552f2e82d19d4dfd54fcab703ca4"
@@ -146,6 +147,7 @@ def test_scope_counts_only_files_under_the_scope(registry_repo: Path) -> None:
     assert block["reason"].startswith("short_history: ")  # one merge touched feature1
 
 
+@pytest.mark.toolkit_repo
 def test_this_repository_reads_the_generated_pair_above_the_threshold() -> None:
     """Over the 60 merges before FIXED_COMMIT (CI checks out full history), both files of
     the generated catalog pair are above the threshold and marked generated, and the median

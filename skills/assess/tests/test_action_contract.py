@@ -12,13 +12,16 @@ import re
 from pathlib import Path
 
 import pytest
+from assess_test_support import TOOLKIT_ROOT
+
+pytestmark = pytest.mark.toolkit_repo  # reads the toolkit repository itself (#1649)
 
 try:  # PyYAML is not a declared dependency of this suite.
     import yaml
 except ImportError:  # pragma: no cover - environment-dependent
     yaml = None
 
-_ACTION_PATH = Path(__file__).resolve().parents[3] / "action.yml"
+_ACTION_PATH = TOOLKIT_ROOT / "action.yml"
 
 # `working-directory: <value>` as a plain scalar, read from the text rather than
 # the parse tree so the guard below still runs where PyYAML is absent - which is

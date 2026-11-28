@@ -17,9 +17,10 @@ import pytest
 from assess_core import build_and_publish_run
 from lib.run.run_scope import Scope
 from lib.agents.agent_harness import _on_block, _safe_url, scan_agent_harness
+from assess_test_support import TOOLKIT_ROOT
 
 ZWSP, RLO, BOM = chr(0x200B), chr(0x202E), chr(0xFEFF)
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 
 
 def _write(root: Path, rel: str, text: str) -> None:

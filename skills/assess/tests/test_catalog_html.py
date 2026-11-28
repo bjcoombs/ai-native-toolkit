@@ -9,6 +9,8 @@ import copy
 import re
 from html.parser import HTMLParser
 
+import pytest
+
 import gen_catalog
 
 from lib.report.catalog import Catalog, build_catalog
@@ -157,6 +159,7 @@ def test_profiles_are_planned_until_their_directory_ships() -> None:
     assert ("/assess --profile handover" in committed) is gen_catalog.PROFILES.is_dir()
 
 
+@pytest.mark.toolkit_repo
 def test_the_configure_examples_match_the_code() -> None:
     """The example condition is a real id, and the CI inputs exist in action.yml and the template."""
     catalog = build_catalog()

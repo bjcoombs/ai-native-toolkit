@@ -13,6 +13,7 @@ import lib.manifest.check_manifest as cm
 import lib.unit_readings as ur
 from lib.skill_personal_data import FINDING_KINDS, KINDS, kinds_in, scan_skill_personal_data
 from test_unit_readings import _read, _write
+from assess_test_support import TOOLKIT_ROOT
 
 CID = "skill-personal-data.1"
 # The maintainer's approved why on #1045, byte for byte.
@@ -257,5 +258,5 @@ def test_each_skill_unit_reads_its_own_text(tmp_path: Path) -> None:
 
 def test_this_repository_holds_no_detected_personal_data_in_its_skills() -> None:
     # An invariant, not a pinned count: a skill that adds a real address should fail here.
-    block = scan_skill_personal_data(Path(__file__).resolve().parents[3])
+    block = scan_skill_personal_data(TOOLKIT_ROOT)
     assert block["files_considered"] > 0 and block["files"] == []

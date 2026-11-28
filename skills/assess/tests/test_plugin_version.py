@@ -15,8 +15,9 @@ import assess_emit_workflow
 from assess_report import made_by
 from lib import plugin_version
 from lib.run import run_setup, signals
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 
 
@@ -45,6 +46,7 @@ def test_unreadable_files_read_as_unknown(tmp_path: Path, body: str) -> None:
     assert plugin_version.read_version(tmp_path / "a.json", tmp_path / "b.json") == "unknown"
 
 
+@pytest.mark.toolkit_repo
 def test_the_plugin_path_stamps_what_it_stamped_before() -> None:
     # The version file is never committed, so a plugin checkout reads plugin.json alone.
     assert not plugin_version.VERSION_FILE.exists()
