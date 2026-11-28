@@ -10,7 +10,7 @@ import pytest
 
 from lib.ai_governance import declines_review, enforces_disclosure, scan_ai_governance
 from lib.ci import disclosure_shell as shell
-from lib.ci.disclosure_reader import JS, PYTHON, SHELL, Unit, env_names, step_acts, step_units
+from lib.ci.disclosure_reader import JS, PYTHON, RUN, SHELL, Unit, env_names, step_acts, step_units
 from lib.ci.disclosure_script import js_parse, py_parse
 from lib.ci.disclosure_terms import EXIT, LABEL
 
@@ -205,7 +205,7 @@ def test_process_exit_zero_is_not_an_act() -> None:
 def test_a_step_splits_into_its_run_and_script_code() -> None:
     step = "- shell: python\n  run: |\n    print(1)\n- with:\n    script: \"core.info('x')\"\n"
     assert step_units(step) == [Unit(PYTHON, "print(1)"), Unit(JS, "core.info('x')")]
-    assert step_units("run: echo hi\n") == [Unit(SHELL, "echo hi"), Unit(PYTHON, "echo hi")]
+    assert step_units("run: echo hi\n") == [Unit(RUN, "echo hi")]
     assert step_units("shell: pwsh\nrun: exit 1\n") == []
     assert step_units("exit 1\n") == [Unit(SHELL, "exit 1\n")]
 
@@ -292,3 +292,42 @@ def test_the_python_reader(code: str, acts: set[str]) -> None:
 ])
 def test_the_javascript_reader(code: str, acts: set[str]) -> None:
     assert step_acts([Unit(JS, code)], HELD) == acts
+
+
+# --- a guard clause must leave the flow --------------------------------------------------
+
+
+@pytest.mark.parametrize(("unit", "acts"), [
+    (Unit(SHELL, "if echo \"$PR_BODY\" | grep -qi 'copilot'; then echo 'mentions copilot'; fi\n"
+                 "gh pr edit \"$PR\" --add-label needs-review"), set()),
+    (Unit(PYTHON, "import os, subprocess\nif 'Copilot' in os.environ['PR_BODY']: print('x')\n"
+                  "subprocess.run(['gh', 'pr', 'edit', '--add-label', 'x'])\n"), set()),
+    (Unit(JS, "const body = process.env.PR_BODY;\nif (body.includes('Copilot')) { core.info('x'); }\n"
+              "await github.rest.issues.addLabels({ labels: ['x'] });\n"), set()),
+    (Unit(SHELL, "grep -qi 'copilot' <<< \"$PR_BODY\" && echo seen\ngh pr edit --add-label x"), set()),
+    (Unit(SHELL, "grep -qi 'copilot' <<< \"$PR_BODY\" && echo seen\nexit 1"), {EXIT}),  # the message idiom
+    (Unit(SHELL, "grep -qi 'Assisted-by' <<< \"$PR_BODY\" && exit 0\ngh pr edit --add-label x"), {LABEL}),
+    (Unit(PYTHON, "import os, subprocess\ndef main():\n    if 'Copilot' in os.environ['PR_BODY']:\n        return\n"
+                  "    subprocess.run(['gh', 'pr', 'edit', '--add-label', 'x'])\nmain()\n"), {LABEL}),
+    (Unit(JS, "const body = process.env.PR_BODY;\nif (body.includes('Assisted-by')) { return; }\n"
+              "await github.rest.issues.addLabels({ labels: ['x'] });\n"), {LABEL}),
+])
+def test_a_later_act_counts_only_after_a_branch_that_leaves(unit: Unit, acts: set[str]) -> None:
+    assert step_acts([unit], env_names(ENV)) == acts
+
+
+def test_an_act_after_a_message_between_the_test_and_a_group_counts() -> None:
+    step = _run("echo \"$PR_BODY\" | grep -qi 'assisted-by' && echo ok || { echo missing; exit 1; }")
+    assert enforces_disclosure(step, ENV) is True
+
+
+def test_a_python_heredoc_body_is_read_as_python() -> None:
+    step = _run("python3 - <<'PY'\nimport os, sys\nif 'Assisted-by' not in os.environ['PR_BODY']:\n"
+                "    sys.exit(1)\nPY")
+    assert enforces_disclosure(step, ENV) is True
+    assert enforces_disclosure(step.replace("python3 -", "cat"), ENV) is False
+
+
+def test_a_heredoc_marker_inside_quotes_opens_no_heredoc() -> None:
+    step = _run("echo \"see <<EOF docs\"\ngrep -qi 'Assisted-by' <<< \"$PR_BODY\" || exit 1\necho EOF")
+    assert enforces_disclosure(step, ENV) is True

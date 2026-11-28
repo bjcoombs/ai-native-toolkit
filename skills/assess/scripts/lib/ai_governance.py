@@ -17,7 +17,8 @@ repository only through the shared CI-step follower (``lib.ci.ci_step_follower``
   ``shlex`` with its ``if``/``||``/``&&`` structure (``lib.ci.disclosure_shell``), Python
   through ``ast`` and JavaScript through a small statement reader (``lib.ci.disclosure_script``).
   The act must follow from the marker test: in its branch, right after it in its ``||``/``&&``
-  chain, or later in the same block as a guard clause; an act of a command nested in that branch
+  chain, or later in the same block when the test's branch leaves the run first (a guard
+  clause); an act of a command nested in that branch
   does not. Code a reader cannot settle reads as no check, never as a guess. A step under
   ``continue-on-error: true`` (its own or its job's) counts only when it labels, as its exit
   cannot turn the run red. A script a ``run:`` line names is read from the ``cd`` directory

@@ -17,7 +17,8 @@ which relate these terms structurally; ``lib.ai_governance`` dispatches a step's
 - ``EXIT`` and ``LABEL``: the two acts a reader reports, a non-zero exit (the run turns red) and
   a label added to the pull request. A step that cannot turn the run red counts only on ``LABEL``.
 
-Inward-only imports: stdlib only. Tests: ``tests/test_ai_governance_condition.py``.
+Inward-only imports: stdlib only. Tests: ``tests/test_ai_governance_condition.py``,
+``tests/test_disclosure_readers.py``.
 """
 from __future__ import annotations
 

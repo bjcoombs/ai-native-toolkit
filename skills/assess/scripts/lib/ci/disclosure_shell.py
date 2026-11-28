@@ -23,11 +23,18 @@ fixpoint, so ``B="$BODY"`` then a test of ``$B`` is read.
   (``[[ "$BODY" == *"Assisted-by"* ]]``);
 - an **act** is ``exit N`` with N non-zero, or a ``gh`` command with ``--add-label``;
 - the act **follows** from the test when it is the pipeline right after it in its ``||``/``&&``
-  chain (a ``{ }`` group there counts by its own unconditional commands), an unconditional
-  command of the branches of the ``if`` it is the condition of, or an unconditional command
-  later in the same list (a guard clause: ``if ... grep -q 'Assisted-by'; then exit 0; fi``
-  then ``exit 1``). An act inside a command nested in the branch (``then npm test || exit 1``)
-  belongs to that command and does not follow.
+  chain, or the one after a message in between (``&& echo ok || { echo missing; exit 1; }``; a
+  ``{ }`` group counts by its own unconditional commands); an unconditional command of the
+  branches of the ``if`` it is the condition of; or an unconditional command later in the same
+  list when the test's branch leaves the run first (a guard clause: ``if ... grep -q
+  'Assisted-by'; then exit 0; fi`` then ``exit 1``, or ``&& exit 0``). A branch that only writes
+  a message is no guard, so a later label does not follow from it; only the next line's
+  ``exit 1`` after ``|| echo "..."`` does (the message-then-exit idiom). An act inside a command
+  nested in the branch (``then npm test || exit 1``) belongs to that command and does not
+  follow.
+
+``heredocs(code)`` lists each heredoc opened outside quotes with the line that opens it, so the
+caller can read a ``python3 - <<'PY'`` body as Python.
 
 Inward-only imports: stdlib and ``lib.ci.disclosure_terms``. Tests:
 ``tests/test_ai_governance_condition.py``, ``tests/test_disclosure_readers.py``.
@@ -53,6 +60,7 @@ _GREPS = frozenset({"grep", "egrep", "fgrep", "rg"})
 _GREP_ARG_OPTIONS = frozenset({"-f", "-m", "-A", "-B", "-C", "--max-count", "--file"})
 _COMPARE = frozenset({"==", "=", "!=", "=~"})
 _FDS = frozenset(str(d) for d in range(10))
+_SAYS = frozenset({"echo", "printf", ":", "true"})
 _DECLARE = frozenset({"export", "local", "declare", "readonly", "typeset"})
 
 
@@ -108,10 +116,18 @@ def _clean(code: str) -> str:
         if end is not None:
             end = None if line.strip() == end else end
             continue
-        found = _HEREDOC.search(line)
-        end = found.group(2) if found else None
+        end = _heredoc(line)
         kept.append(line)
     return _strip_comments("\n".join(kept))
+
+
+def _heredoc(line: str) -> str | None:
+    """The terminator of a heredoc the line opens outside quotes (``<<EOF``, ``<<-'EOF'``), or None."""
+    for found in _HEREDOC.finditer(line):
+        before = line[:found.start()]
+        if before.count("'") % 2 == 0 and (before.count('"') - before.count('\\"')) % 2 == 0:
+            return found.group(2)
+    return None
 
 
 def _strip_comments(code: str) -> str:
@@ -495,28 +511,76 @@ def _site(seq: Seq, names: frozenset[str]) -> bool:
     return any(_marker_test(p, names) for chain in seq for p in chain.pipelines)
 
 
+def _ends(seq: Seq) -> bool:
+    """Whether a branch ends the run: an unconditional ``exit``, with any code."""
+    for chain in seq:
+        if len(chain.pipelines) == 1 and len(chain.pipelines[0].commands) == 1:
+            command = chain.pipelines[0].commands[0]
+            if isinstance(command, Simple) and _program(command.words)[1] == "exit":
+                return True
+            if isinstance(command, Group) and _ends(command.body):
+                return True
+    return False
+
+
+def _says(pipeline: Pipeline) -> bool:
+    """Whether a pipeline only writes a message or does nothing (``echo``, ``printf``, ``:``, ``true``)."""
+    return len(pipeline.commands) == 1 and isinstance(pipeline.commands[0], Simple) and _program(
+        pipeline.commands[0].words)[1] in _SAYS
+
+
+def _chain_acts(chain: Chain, names: frozenset[str]) -> tuple[set[str], bool, bool]:
+    """A chain's acts that follow from a marker test in it, whether it is a guard (the branch after the
+    test exits) and whether only messages follow the test (``|| echo "..."``, then a line ``exit 1``)."""
+    found: set[str] = set()
+    guard = said = False
+    for k, pipeline in enumerate(chain.pipelines):
+        if not _marker_test(pipeline, names):
+            continue
+        rest = chain.pipelines[k + 1:]
+        said = bool(rest) and all(_says(p) for p in rest)
+        # The act right after the test, or after a message in between (`&& echo ok || { ...; exit 1; }`).
+        for step in rest[:2]:
+            found |= _direct(step)
+            single = step.commands[0] if len(step.commands) == 1 else None
+            guard |= isinstance(single, Group) and _ends(single.body) or (
+                isinstance(single, Simple) and _program(single.words)[1] == "exit")
+            if not _says(step):
+                break
+    return found, guard, said
+
+
 def acts(tree: Seq, names: frozenset[str]) -> set[str]:
     """The acts that follow from a marker test anywhere in the tree (module docstring)."""
     found: set[str] = set()
-    armed = False
+    armed = said = False
     for chain in tree:
-        site = False
-        for k, pipeline in enumerate(chain.pipelines):
-            if _marker_test(pipeline, names):
-                site = True
-                if k + 1 < len(chain.pipelines):
-                    found |= _direct(chain.pipelines[k + 1])
+        chained, guard, says = _chain_acts(chain, names)
+        found |= chained
+        for pipeline in chain.pipelines:
             for command in pipeline.commands:
                 if isinstance(command, If):
-                    site |= any(_site(cond, names) for cond, _ in command.clauses)
                     found |= _if_acts(command, names)
+                    guard |= _if_guard(command, names)
                 elif isinstance(command, (Group, Loop)):
                     for child in _children(command):
                         found |= acts(child, names)
-        if armed and len(chain.pipelines) == 1:
-            found |= _direct(chain.pipelines[0])
-        armed |= site
+        if len(chain.pipelines) == 1:
+            direct = _direct(chain.pipelines[0])
+            found |= direct if armed else direct & {EXIT} if said else set()
+        armed |= guard
+        said = says
     return found
+
+
+def _if_guard(node: If, names: frozenset[str]) -> bool:
+    """Whether an ``if`` with a marker test ends the run on one of the branches the test leads to."""
+    marked = False
+    for cond, branch in node.clauses:
+        marked |= _site(cond, names)
+        if marked and _ends(branch):
+            return True
+    return marked and _ends(node.orelse)
 
 
 def _if_acts(node: If, names: frozenset[str]) -> set[str]:
@@ -531,3 +595,21 @@ def _if_acts(node: If, names: frozenset[str]) -> set[str]:
     if marked:
         found |= _unconditional(node.orelse)
     return found
+
+
+def heredocs(code: str) -> list[tuple[str, str]]:
+    """Each heredoc as (the line that opens it, its body), so a ``python3 - <<'PY'`` body can be read."""
+    out: list[tuple[str, str]] = []
+    opener, end, body = "", None, list[str]()
+    for line in code.split("\n"):
+        if end is not None:
+            if line.strip() == end:
+                out.append((opener, "\n".join(body)))
+                end = None
+            else:
+                body.append(line)
+            continue
+        found = _heredoc(line)
+        if found:
+            opener, end, body = line, found, []
+    return out

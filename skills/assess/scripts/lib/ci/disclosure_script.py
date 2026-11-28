@@ -22,7 +22,9 @@ no check: an unsettled reading never counts. Both readers answer the same two qu
   run green), or a call passing ``--add-label``; JavaScript ``core.setFailed(...)``, ``throw``,
   ``process.exit(N)`` with N non-zero, or ``addLabels(...)``. The act **follows** when it is a
   statement of the branches of the ``if`` the test is the condition of, or an unconditional
-  statement later in the same block (a guard clause). An act nested under another statement
+  statement later in the same block when one of those branches leaves the flow first (a guard
+  clause: Python ``sys.exit``, ``exit``, ``quit``, ``raise`` or ``return``; JavaScript
+  ``return``, ``throw`` or ``process.exit``, with any code). A branch that only logs is no guard. An act nested under another statement
   in the branch belongs to that statement. Function bodies are read only when the module calls
   the function.
 
@@ -142,7 +144,7 @@ class _Py:
         armed = False
         for stmt in body:
             if isinstance(stmt, ast.If):
-                armed |= self.marker(stmt.test)
+                armed |= self.marker(stmt.test) and (_py_ends(stmt.body) or _py_ends(stmt.orelse))
                 found |= self._if(stmt)
                 continue
             if armed:
@@ -161,6 +163,13 @@ class _Py:
         if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
             return found | self._if(node.orelse[0], marked)
         return found | self.block(node.orelse)
+
+
+def _py_ends(stmts: list[ast.stmt]) -> bool:
+    """Whether a branch leaves the flow: ``sys.exit``, ``exit`` or ``quit`` with any code, a
+    ``raise`` or a ``return``, so a later act runs only on the other branch (a guard clause)."""
+    return any(isinstance(s, (ast.Raise, ast.Return)) or (
+        isinstance(s, ast.Expr) and isinstance(s.value, ast.Call) and _dotted(s.value.func) in _PY_EXITS) for s in stmts)
 
 
 def _red(arg: ast.expr) -> bool:
@@ -508,7 +517,7 @@ class _Js:
         for stmt in stmts:
             if isinstance(stmt, JIf):
                 marked = self.marker(stmt.cond)
-                armed |= marked
+                armed |= marked and (_js_ends(stmt.body) or _js_ends(stmt.orelse))
                 found |= self.block(stmt.body) | self.block(stmt.orelse)
                 if marked:
                     found |= {a for s in stmt.body + stmt.orelse for a in self.act(s)}
@@ -518,6 +527,16 @@ class _Js:
             if isinstance(stmt, JBlock):
                 found |= self.block(stmt.body)
         return found
+
+
+def _js_ends(stmts: tuple[JStmt, ...]) -> bool:
+    """Whether a branch leaves the flow: ``return``, ``throw`` or ``process.exit``, with any code."""
+    for stmt in stmts:
+        if isinstance(stmt, JSimple):
+            texts = [t.text for t in stmt.toks]
+            if texts[0] in ("return", "throw") or any(texts[k:k + 3] == ["process", ".", "exit"] for k in range(len(texts))):
+                return True
+    return False
 
 
 def js_acts(stmts: tuple[JStmt, ...], names: frozenset[str]) -> set[str]:
