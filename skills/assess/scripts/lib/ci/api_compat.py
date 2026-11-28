@@ -22,7 +22,8 @@ as text, and Python test files are parsed with ``ast``, never imported.
 - **Pinning test (``pins``).** A tracked test file pins the public exports: a Python test whose
   ``ast`` holds an ``==`` comparison with ``__all__`` on one side and a literal list of names, or a
   name bound to one, on the other (``assert set(__all__) == set(EXPECTED_ALL)``; never ``dir(mod)``), or a JavaScript or TypeScript test that compares ``Object.keys`` of a
-  module to a snapshot or a literal (``expect(Object.keys(api)).toMatchSnapshot()``). It counts when
+  module to a snapshot or a literal array or object (``expect(Object.keys(api)).toMatchSnapshot()``;
+  never ``.toEqual(Object.keys(other))``). It counts when
   CI runs tests: ``ci_checks.enforced_check_runs`` is true (the layer-5 reading).
 - **Declared only (``declared``, listed, never counted).** A tool named in a build file
   (``pom.xml``, a Gradle build, ``package.json``, a Makefile, ``pyproject.toml``, ``Cargo.toml``,
@@ -119,8 +120,10 @@ _DECLARED: tuple[tuple[str, re.Pattern[str]], ...] = (
 _BUF_BREAKING = re.compile(r"^breaking\s*:", re.M)   # the breaking-rules section of a buf.yaml
 _SET_ASIDE = ("fixtures/", "testdata/", "vendor/", "node_modules/", "third_party/")
 _JS_TEST = re.compile(r"\.(?:test|spec)\.[cm]?[jt]sx?$")
+# ``expect(Object.keys(mod))`` against a snapshot, or ``toEqual`` / ``toStrictEqual`` with a literal
+# array or object as the argument; ``.toEqual(Object.keys(other))`` compares two live surfaces.
 _JS_PIN = re.compile(r"expect\(\s*Object\.keys\(\s*[\w$.]+\s*\)(?:\.sort\(\))?\s*\)\s*"
-                     r"\.(?:toMatchSnapshot|toMatchInlineSnapshot|toEqual|toStrictEqual)\(")
+                     r"\.(?:(?:toMatchSnapshot|toMatchInlineSnapshot)\(|(?:toEqual|toStrictEqual)\(\s*[\[{])")
 
 
 def _name(word: str) -> str:

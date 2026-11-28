@@ -48,7 +48,7 @@ Not an invocation: an install (`go install`, `npm i -D`, `cargo install`, `pip i
 ## Pinning-test arm
 
 - Python: a file named `test_*.py` or `*_test.py`, parsed with `ast` (never imported), holding an `==` comparison with `__all__` (a name or an attribute) on exactly one side and, on the other, a list, tuple or set literal of names or a name assigned one in the file, optionally wrapped in `set`, `sorted`, `list`, `tuple` or `frozenset`, and nothing more (`set(dir(m)) - {"helper"}` holds a literal but is not one). `assert set(__all__) == set(EXPECTED_ALL)` pins. `len(__all__) > 0`, `a.__all__ == b.__all__` and a comparison with `dir(mod)` or `inspect.getmembers(mod)` do not: those check `__all__` against the module, so a removed name passes when `__all__` drops it too.
-- JavaScript and TypeScript: a `*.test.*` or `*.spec.*` file with `expect(Object.keys(<module>))` compared by `toMatchSnapshot`, `toMatchInlineSnapshot`, `toEqual` or `toStrictEqual`; a `//` comment line is skipped.
+- JavaScript and TypeScript: a `*.test.*` or `*.spec.*` file with `expect(Object.keys(<module>))` compared by `toMatchSnapshot` or `toMatchInlineSnapshot`, or by `toEqual` or `toStrictEqual` with a literal array or object (never `.toEqual(Object.keys(other))`, which compares two live surfaces); a `//` comment line is skipped.
 - Files under `fixtures/`, `testdata/`, `vendor/`, `node_modules/` or `third_party/` are set aside.
 
 The arm counts when CI runs tests: `ci_checks.enforced_check_runs` is true, the reading the layer-5 condition uses. The collector reads the `ci_checks` block for that (`reads = ["repo_root", "ci_checks"]`).

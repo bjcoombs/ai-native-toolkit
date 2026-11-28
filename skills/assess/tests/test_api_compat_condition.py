@@ -239,9 +239,12 @@ def test_a_test_that_names_all_without_pinning_it_does_not_count(tmp_path: Path,
 def test_an_exports_snapshot_in_a_js_test_pins(tmp_path: Path) -> None:
     js = "import * as api from '../src';\ntest('exports', () => {\n  expect(Object.keys(api)).toMatchSnapshot();\n});\n"
     commented = "// expect(Object.keys(api)).toMatchSnapshot();\n"
+    literal = "import * as api from '../src';\nexpect(Object.keys(api)).toEqual(['Gadget', 'Sprocket']);\n"
+    live = "import * as api from '../src';\nexpect(Object.keys(api)).toEqual(Object.keys(other));\n"
     root = _repo(tmp_path, {"src/index.test.ts": js, "src/other.test.ts": commented,
+                            "src/literal.test.ts": literal, "src/live.test.ts": live,   # live: two surfaces, no pin
                             "tests/fixtures/index.test.ts": js})
-    assert _block(root, TESTS_RUN)["pins"] == ["src/index.test.ts"]
+    assert _block(root, TESTS_RUN)["pins"] == ["src/index.test.ts", "src/literal.test.ts"]
 
 
 # --- known not detected --------------------------------------------------------------------
