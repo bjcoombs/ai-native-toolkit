@@ -13,7 +13,8 @@ The module docstring has the rules and the block shape. Known limits:
   `.betterer.results`). A tool that reads its baseline only from its own configuration
   (`phpstan.neon` `includes:`, `detekt` in `build.gradle`, eslint `max-lines`) is not read.
 - The update command for a lint baseline is found by text: a tracked command line that names
-  the baseline or its check script beside an update word, on the same line. A whole-line
+  the baseline or its check script beside an update word, in the same command of a line
+  (`uv sync && ruff check --baseline x.json` is not an update). A whole-line
   comment (`#`, `//`) is skipped; a trailing comment on a code line, or a string such as an
   error message that names both, still counts.
 - A guard script's tests are found by file name, and the test file must name the script's

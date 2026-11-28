@@ -150,6 +150,36 @@ def test_a_do_not_update_comment_is_not_an_update_command(tmp_path: Path) -> Non
     assert _block(root)["lint_baseline"] == 1
 
 
+def test_an_unrelated_update_word_on_the_reading_line_is_not_an_update_command(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"lint-baseline.json": "{}\n", ".github/workflows/ci.yml": _workflow(
+        "uv sync && ruff check --baseline lint-baseline.json")})
+    block = _block(root)
+    assert (block["present"], block["baselines_without_update"]) == (False, 1)
+
+
+def test_a_named_checker_keeps_its_credit_when_its_baseline_has_no_update(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"layers-baseline.json": "{}\n",
+                            "scripts/check_layers.py": "BASELINE = 'layers-baseline.json'\n",
+                            ".github/workflows/ci.yml": _workflow("python scripts/check_layers.py")})
+    block = _block(root)
+    assert [(g["kind"], g["target"]) for g in block["guards"]] == [("boundary_checker", "scripts/check_layers.py")]
+    assert block["baselines_without_update"] == 1
+
+
+def test_a_script_run_after_cd_is_resolved_from_that_folder(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"tools/check_layers.py": CHECKER,
+                            ".github/workflows/ci.yml": _workflow("cd tools && python check_layers.py")})
+    assert [g["script"] for g in _block(root)["guards"]] == ["tools/check_layers.py"]
+    out = _repo(tmp_path / "out", {"tools/check_layers.py": CHECKER,
+                                   ".github/workflows/ci.yml": _workflow("cd $DIR && python check_layers.py")})
+    assert _block(out)["present"] is False
+
+
+def test_an_unsettled_run_expression_with_nothing_found_reads_not_measured(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".github/workflows/ci.yml": _workflow("${{ matrix.cmd }}")})
+    assert _block(root)["present_reason"] == "ci_not_read"
+
+
 @pytest.mark.parametrize("step", ["python scripts/check_layers.py || true",
                                   "python scripts/check_layers.py || echo skipped"])
 def test_a_masked_guard_does_not_count(tmp_path: Path, step: str) -> None:

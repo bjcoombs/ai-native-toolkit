@@ -5,7 +5,8 @@ workflows directly under ``.github/workflows/`` and ``.gitlab-ci.yml``) job by j
 unmasked shell lines (``lib.ci.ci_job_commands.job_lines``, the #775 masking rule), and follows
 each step into the repository through the shared CI-step follower (``lib.ci.ci_step_follower``:
 a committed script, a ``make`` recipe, a local action or reusable workflow, up to
-``_MAX_FOLLOW`` levels). Nothing is executed. It returns the ``repo_guards`` block, one
+``_MAX_FOLLOW`` levels). A leading ``cd <dir>`` on a line sets the folder its later commands'
+scripts and paths are read from, as the follower reads it. Nothing is executed. It returns the ``repo_guards`` block, one
 ``guards`` entry per CI file, kind and guard:
 
 - **lint_baseline.** A lint or type-check command (``lib.ci.check_command.is_lint_command``), a
@@ -15,8 +16,8 @@ a committed script, a ``make`` recipe, a local action or reusable workflow, up t
   script, in its own text. It counts only with a prune or update command: a tracked command
   line (a make recipe, ``justfile``, ``package.json``, ``pyproject.toml``, ``tox.ini``, a shell
   script, a CI file, or the check script itself) that names the baseline or the check script
-  beside an update word (``--update``, ``--generate-baseline``, ``prune``, ``sync`` ...), a
-  whole-line comment never counting. One
+  beside an update word (``--update``, ``--generate-baseline``, ``prune``, ``sync`` ...) in the
+  same command, a whole-line comment never counting. One
   with no such command is counted in ``baselines_without_update`` and is not a guard.
 - **boundary_checker.** A step runs a known boundary tool (``import-boss``, ``lint-imports``,
   ``tach check``, ``depcruise``, ``go-arch-lint``, ``arch-go``, ``deptrac``, ``hassfest``), or a
@@ -41,7 +42,8 @@ settled is ``unknown_trigger``: it is listed but does not make ``present`` true.
 ``present`` is true when any guard on an ordinary trigger is found. With none: a guard on an
 unsettled trigger reads null (``trigger_unknown``); a tracked CI file of a system this reader
 does not parse (``lib.unread_ci``), a ``.gitlab-ci.yml`` with a top-level ``include:``, or a
-step the follower could not settle (a remote reusable workflow, an unread Gradle script) reads
+step the follower could not settle (a remote reusable workflow, an unread Gradle script, a
+``run:`` expression ``lib.ci.ci_expressions`` leaves unsettled) reads
 null (``ci_not_read``); otherwise false.
 
 **Guard is itself tested** (#1391 scope). A guard that is a committed script (``script``) has
@@ -70,7 +72,7 @@ from typing import Literal, NotRequired, TypedDict
 
 from lib.ci.check_command import is_check_command, is_lint_command
 from lib.ci.ci_action_inputs import ReadLocal
-from lib.ci.ci_job_commands import commands, installs, job_lines, program
+from lib.ci.ci_job_commands import OPERATOR, commands, installs, job_lines, program
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
@@ -225,37 +227,39 @@ class _Reader:
     def _folder(self, rel: str) -> bool:
         return any(t.startswith(rel + "/") for t in self.tracked)
 
-    def _module(self, name: str) -> str | None:
-        """The file (``x/y.py``) or package folder (``x/y``) ``python -m x.y`` runs."""
-        base = name.replace(".", "/")
+    def _module(self, base: str) -> str | None:
+        """The file (``x/y.py``) or package folder (``x/y``) ``python -m x.y`` runs, from its
+        path form ``x/y``."""
         if f"{base}.py" in self.tracked:
             return f"{base}.py"
         return base if f"{base}/__main__.py" in self.tracked else None
 
-    def script_of(self, words: list[str]) -> str | None:
-        """The committed script or folder a command runs, or None."""
+    def script_of(self, words: list[str], cwd: str | None = "") -> str | None:
+        """The committed script or folder a command runs from ``cwd``, or None (a ``cd`` that
+        left what the reader can settle passes None)."""
         prog = program(words)
-        if not prog:
+        if not prog or cwd is None:
             return None
-        first = posixpath.normpath(prog[0].removeprefix("./"))
-        if first in self.tracked:
+        first = _at(cwd, prog[0])
+        if first is not None and first in self.tracked:
             return first
         flag = words.index("-m") if "-m" in words else -1
         if 0 <= flag < len(words) - 1 and words[flag + 1] == prog[0]:
-            return self._module(prog[0])
+            base = _at(cwd, prog[0].replace(".", "/"))
+            return self._module(base) if base is not None else None
         head = posixpath.basename(prog[0])
         if head == "go" and prog[1:2] == ["run"]:
             target = next((w for w in prog[2:] if not w.startswith("-")), "")
-            rel = posixpath.normpath(target.removeprefix("./")) if target.startswith("./") else ""
+            rel = _at(cwd, target) if target.startswith("./") else None
             return rel if rel and self._folder(rel) else None
         if head in _INTERPRETERS:
             target = next((w for w in prog[1:] if not w.startswith("-")), "")
-            rel = posixpath.normpath(target.removeprefix("./")) if target else ""
-            return rel if rel in self.tracked else None
+            rel = _at(cwd, target) if target else None
+            return rel if rel is not None and rel in self.tracked else None
         return None
 
-    def classify(self, words: list[str]) -> list[_Found]:
-        """The guards one unmasked command runs (module docstring)."""
+    def classify(self, words: list[str], cwd: str | None = "") -> list[_Found]:
+        """The guards one unmasked command runs from ``cwd`` (module docstring)."""
         if installs(words):
             return []
         prog = program(words)
@@ -265,13 +269,14 @@ class _Reader:
         found: list[_Found] = []
         if head in _BOUNDARY_TOOLS or (head == "tach" and "check" in prog[1:]):
             found.append(_Found(kind="boundary_checker", via=head, target="", script=None))
-        script = self.script_of(words)
+        script = self.script_of(words, cwd)
         if script is not None and _BENCH.search(script):
             return found
         text = " ".join(words)
         reads_baseline = (is_lint_command(text) or head in _BASELINE_TOOLS
                           or (script is not None and _checks(_tokens(script))))
-        named = [r for r in _arg_paths(prog[1:]) if r in self.tracked and _is_baseline(r) and r != script]
+        args = [a for a in (_at(cwd, p) for p in _arg_paths(prog[1:])) if a is not None] if cwd is not None else []
+        named = [r for r in args if r in self.tracked and _is_baseline(r) and r != script]
         if script is not None and script in self.tracked and reads_baseline:
             body = self.text(script)
             named += [r for r in self._baselines if r != script and r not in named
@@ -284,7 +289,10 @@ class _Reader:
                     continue
                 via = "script" if script else head if head in _BASELINE_TOOLS else "lint"
                 found.append(_Found(kind=kind, via=via, target=rel, script=script))
-        named_kind = _check_name_kind(script) if script is not None and not named else None
+        # a check script named for a boundary or size cap keeps that credit when no baseline it
+        # reads counted (each lacked an update command)
+        counted = any(f["target"] in named for f in found)
+        named_kind = _check_name_kind(script) if script is not None and not counted else None
         if script is not None and named_kind is not None:
             found.append(_Found(kind=named_kind, via="script", target=script, script=script))
         return found
@@ -296,11 +304,12 @@ class _Reader:
             names.add(posixpath.basename(script))
             # the check script has its own update mode for the file it reads: one code line
             # names both, never a comment (``# never update x.json by hand``)
-            if script in self.tracked and any(posixpath.basename(baseline) in line and _UPDATE.search(line)
-                                              for line in _code_lines(self.text(script))):
+            if script in self.tracked and any(posixpath.basename(baseline) in part and _UPDATE.search(part)
+                                              for part in _segments(self.text(script))):
                 return True
+        # one command names both: the CI line that reads the baseline after ``uv sync &&`` does not
         for rel in self._holders():
-            for line in _code_lines(self.text(rel)):
+            for line in _segments(self.text(rel)):
                 if any(n and n in line for n in names) and _UPDATE.search(line):
                     return True
                 if tool in _BASELINE_TOOLS and tool in line.split() and _UPDATE.search(line) and "baseline" in line:
@@ -326,10 +335,14 @@ class _Reader:
                   ordinary: bool) -> None:
         for line in lines:
             cmds = list(commands(ci_line_text(line)))
+            cwd: str | None = ""   # a leading ``cd`` holds for the rest of the line, as the follower reads it
             for cmd in cmds:
+                if cmd["words"][:1] == ["cd"]:
+                    cwd = StepFollower._cd(cwd, cmd["words"])
+                    continue
                 if cmd["masked"]:
                     continue
-                found.extend(self.classify(cmd["words"]))
+                found.extend(self.classify(cmd["words"], cwd))
                 if ordinary and is_check_command(" ".join(cmd["words"])):
                     self.runs_tests = True
             if depth >= _MAX_FOLLOW or any(c["masked"] for c in cmds):
@@ -377,9 +390,19 @@ class _Reader:
         return out
 
 
-def _code_lines(text: str) -> list[str]:
-    """``text``'s lines that are not a whole-line comment (``#``, ``//``)."""
-    return [line for line in text.splitlines() if not line.lstrip().startswith(("#", "//"))]
+def _segments(text: str) -> list[str]:
+    """Each command of ``text``'s lines that are not a whole-line comment (``#``, ``//``),
+    split on ``&&``, ``||``, ``;`` and ``|``."""
+    return [part for line in text.splitlines() if not line.lstrip().startswith(("#", "//"))
+            for part in OPERATOR.split(line) if part not in ("&&", "||", ";", "|")]
+
+
+def _at(cwd: str, path: str) -> str | None:
+    """``path`` read from ``cwd``, normalised; None when it is not literal or leaves the checkout."""
+    if not path or path.startswith(("/", "~")) or "$" in path:
+        return None
+    rel = posixpath.normpath(posixpath.join(cwd, path.removeprefix("./")))
+    return None if rel in (".", "") or rel == ".." or rel.startswith("../") else rel
 
 
 def _is_test_file(rel: str) -> bool:
@@ -412,8 +435,9 @@ def scan_repo_guards(repo_root: Path) -> RepoGuardsBlock:
         elif settled[rel] == "not_ordinary":
             continue
         else:
-            parts = [(settled[rel], follow_workflow(raw[rel], reader.read_local).text)]
-            reader.unknown = reader.unknown or bool(_REMOTE_JOB.search(raw[rel]))
+            followed = follow_workflow(raw[rel], reader.read_local)
+            parts = [(settled[rel], followed.text)]
+            reader.unknown = reader.unknown or bool(followed.unknown) or bool(_REMOTE_JOB.search(raw[rel]))
         for trigger, text in parts:
             for lines in job_lines(text, rel in CI_CONFIG_FILES):
                 before = reader.runs_tests
