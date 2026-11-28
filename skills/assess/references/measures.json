@@ -4252,8 +4252,8 @@
         },
         {
           "code": "ci_includes_unresolved",
-          "means": "No coverage gate was found in the checkout, and the GitLab CI includes a local, project, remote or component file that was not read. The gate may run there.",
-          "next_step": "Run the coverage threshold in the repository's own CI (pytest --cov --cov-fail-under=80): the coverage scan reads no included file, so a clone beside this one does not settle it.",
+          "means": "No coverage gate was found in the checkout, and the GitLab CI includes a local, project, remote or component file. The coverage scan does not read included files, so the gate may run there.",
+          "next_step": "Run the coverage threshold in the repository's own CI (pytest --cov --cov-fail-under=80). The coverage scan reads no included file.",
           "carried_in": "enforced_basis"
         },
         {

@@ -79,7 +79,7 @@ reasons above; ``status_check_unconfirmed`` (null: a Codecov status target, #882
 which no CI line runs and which gates a merge only when branch protection requires it);
 ``not_run_in_ci`` (false: CI is read and runs none of the
 gates); ``no_ci`` (false: no CI file at all); ``ci_includes_unresolved`` (null: no gate in
-the checkout, and a GitLab include that could hold one was not read; set by
+the checkout, and a GitLab include the coverage scan does not read could hold one; set by
 ``lib.testing.coverage_includes``, #1350).
 
 Inward-only imports: stdlib and ``lib`` CI readers; never an orchestrator.

@@ -420,7 +420,7 @@ COVERAGE_GATE: JsonDict = {
             "it), included_jobs, unread_ci_system and status_check_unconfirmed (a Codecov "
             "status target, which no CI line runs and which gates a merge only when branch "
             "protection requires it; issue #882) and ci_includes_unresolved (no gate in the checkout, "
-            "and a GitLab include that could hold one was not read; issue #1350) (null)."),
+            "and a GitLab include the coverage scan does not read could hold one; issue #1350) (null)."),
         "not_detected": _STRINGS,
     },
 }
