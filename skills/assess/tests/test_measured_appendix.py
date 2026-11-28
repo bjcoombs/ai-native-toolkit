@@ -78,13 +78,18 @@ def test_a_truncated_issue_tracker_read_is_stated() -> None:
                                  "untriaged_after_7d_share_reason": "open_truncated",
                                  "outcomes": {"available": True, "truncated": True}})
     capped = _doc(backlog_ready={"available": True, "outcomes": {"truncated": True}})
-    text = measured_section([whole, window, opened, capped], ["backlog_ready"])
-    assert ("- `backlog_ready`: the issue tracker read stopped at its page cap in 3 of 4 (open_truncated, "
+    text = measured_section([whole, window, opened], ["backlog_ready"])
+    assert ("- `backlog_ready`: the issue tracker read stopped at its page cap in 2 of 3 (open_truncated, "
             "window_truncated: the metric it would bias is not measured), so its counts cover part of "
             "the tracker") in text
     assert not banned_hits(text)
-    assert "- `backlog_ready`: the issue tracker read stopped at its page cap in 1 of 1, so its counts" in \
-        measured_section([capped], ["backlog_ready"])
+    # #1628: a capped issue timeline alone sets outcomes.truncated; no issue list stopped at its cap.
+    only = measured_section([capped], ["backlog_ready"])
+    assert "- `backlog_ready`: a tracker read was cut short in 1 of 1, so its counts" in only
+    assert "page cap" not in only and not banned_hits(only)
+    mixed = measured_section([whole, window, capped], ["backlog_ready"])
+    assert ("- `backlog_ready`: a tracker read was cut short in 2 of 3 (window_truncated: the metric it "
+            "would bias is not measured), so its counts cover part of the tracker") in mixed
     assert "page cap" not in measured_section([whole], ["backlog_ready"])
     assert "page cap" not in measured_section([_doc(ci_checks={"outcomes": {"truncated": True}})], ["ci_checks"])
 
