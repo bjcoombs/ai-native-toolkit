@@ -83,7 +83,7 @@ def test_a_not_measured_gate_is_hatched_with_its_reason_and_a_failed_scan_is_nev
     assert sum(b["count"] for b in view["bars"]) == 6  # the failed scan is in no bar
     svg = funnel.render(fx.MODEL, fx.data())
     assert 'fill="url(#fleet-step-funnel-fleet-hatch)"' in svg and "data-mark=\"hatched\"" in svg
-    assert "Agent use was not measured (needs_platform)" in svg
+    assert "1 with Step 2 not measured: Agent use (needs_platform)" in svg  # #1640
     assert "never drawn at Step 1: 1 scan_timeout" in svg
 
 
@@ -113,8 +113,8 @@ def test_funnel_reads_in_ladder_order() -> None:
 def test_funnel_names_gates_by_row_title() -> None:
     svg = funnel.render(fx.MODEL, fx.data())
     labels = [t.text or "" for t in ET.fromstring(svg).iter(f"{SVG_NS}text")]
-    held = [t for t in labels if t.startswith(("3 held by", "1 where"))]
-    assert "3 held by Agent instructions" in held and "1 where Agent use was not measured (needs_platform)" in held
+    held = [t for t in labels if t.startswith(("3 held by", "1 with"))]
+    assert "3 held by Agent instructions" in held and "1 with Step 2 not measured: Agent use (needs_platform)" in held
     gate_ids = {g["id"] for s in fx.MODEL["steps"] for g in s["gates"]} - {"instructions"}
     assert not [t for t in labels for gid in gate_ids if gid in t]
 

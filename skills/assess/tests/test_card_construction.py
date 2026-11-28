@@ -43,6 +43,7 @@ from lib.keyhole.keyhole_signals import render_findings_markdown
 from lib.scoring.level_tally import default_model
 from lib.top_card import FACT_IDS, PROFILES_URL
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
+from test_step_reading import _step2
 from test_top_card import FIRST, KNOWN, ROLLUP, SHA, _below, _in_place, _top
 
 MODEL = default_model()
@@ -60,6 +61,8 @@ STATES: dict[str, tuple[Any, Any, Any, Any, bool]] = {
     "first-run": (_below(), FIRST, None, ACTION, False),
     # #1334: five practices fully in place, three named and the rest counted
     "in-place": (_in_place(5), KNOWN, ROLLUP, None, False),
+    # #1640: every open gate of the next Step was not measured: "Step 2, Step 3 not measured"
+    "next-not-measured": (_step2(), KNOWN, None, None, False),
 }
 # Further states the facts and lint tests read: every since line and fallback the card can say.
 EXTRA: dict[str, tuple[Any, Any, Any, Any, bool]] = {
