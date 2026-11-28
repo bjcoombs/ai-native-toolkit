@@ -134,8 +134,11 @@ def test_hook_acts_reads_flat_and_grouped_entries() -> None:
     assert hook_acts("./x.sh", flat=True) is False
 
 
+ROUTINE = {".claude/routines/triage.md": "Label new issues each morning.\n"}
+
+
 def test_a_disabled_hook_file_reads_declined_not_met(tmp_path: Path) -> None:
-    repo = _repo(tmp_path, {".github/hooks/build.json.disabled": COPILOT_HOOK})
+    repo = _repo(tmp_path, {".github/hooks/build.json.disabled": COPILOT_HOOK, **ROUTINE})
     block = scan_agent_ops(repo)
     assert block["settings"] == [] and block["summary"]["hooks_present"] is False
     assert block["summary"]["hooks_disabled"] == 1
@@ -146,6 +149,14 @@ def test_a_disabled_hook_file_reads_declined_not_met(tmp_path: Path) -> None:
     cond = _cond(result, "layer-8-agent-ops.2")
     assert (cond["state"], cond["counted"]) == ("declined", False)
     assert decline_badge(record) == "agent hooks disabled in .github/hooks/build.json.disabled"
+
+
+def test_a_disabled_hook_never_hides_missing_agent_work(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, {".github/hooks/build.json.disabled": COPILOT_HOOK})
+    assert read_hooks_disabled(repo) is not None  # the files are read
+    assert "declines" not in owner_exclusions_block(repo)  # but level 2 also needs agent work
+    cond = _cond(lt.level_result(lt.default_model(), _data(repo)), "layer-8-agent-ops.2")
+    assert cond["state"] == "unmet"
 
 
 def test_a_disabled_file_beside_a_live_hook_declines_nothing(tmp_path: Path) -> None:
@@ -200,6 +211,14 @@ def test_a_broad_terminal_auto_approve_raises_the_finding(tmp_path: Path) -> Non
     assert block["summary"]["permissions_encoded"] is True
     findings = [(f["kind"], f["file"], f["line"]) for f in scan_agent_harness(repo)["findings"]]
     assert findings == [("broad_auto_approve", ".vscode/settings.json", 3)]
+
+
+def test_an_untracked_vscode_settings_file_raises_nothing(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, {})
+    (repo / ".vscode").mkdir()
+    (repo / ".vscode/settings.json").write_text('{"chat.tools.terminal.autoApprove": {"*": true}}', encoding="utf-8")
+    assert scan_agent_harness(repo)["findings"] == []
+    assert scan_agent_ops(repo)["summary"]["permissions_encoded"] is False
 
 
 def test_a_narrow_auto_approve_list_raises_nothing(tmp_path: Path) -> None:

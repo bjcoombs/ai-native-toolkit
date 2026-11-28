@@ -429,7 +429,7 @@
 #   Copilot's .github/hooks/*.json count as Claude settings hooks do, and VS
 #   Code's chat.tools.terminal.autoApprove rules count as permission entries.
 #   A tracked hook file renamed with a .disabled suffix, while no live hook
-#   counts, is a decline record (owner_exclusions.declines, source
+#   counts and agent_work_present is not false, is a decline record (owner_exclusions.declines, source
 #   hooks_disabled) that reads level 2 declined, not unmet. Level 2's second criterion, agent_work_present, is met by a
 #   routine file, a scheduled agent workflow (#815) or an issue or pull request
 #   workflow that runs an agent (#847): one condition, never two. Not measured

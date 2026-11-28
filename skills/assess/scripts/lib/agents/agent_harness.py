@@ -39,7 +39,8 @@ absent-file finding), ``detail`` and a one-line ``fix``:
 - ``broad_auto_approve`` (#846): ``.vscode/settings.json`` auto-approves every terminal
   command (a ``chat.tools.terminal.autoApprove`` key of ``*`` or a match-all regex) or every
   tool (``chat.tools.autoApprove`` / ``chat.tools.global.autoApprove`` true); the VS Code twin
-  of ``broad_allow``, read by ``lib.agents.harness_settings.auto_approve``.
+  of ``broad_allow``, read by ``lib.agents.harness_settings.auto_approve``. In a git checkout
+  the file must be tracked, as it is often a personal, gitignored one.
 - ``credential_mount``: a devcontainer file that mounts a host credential
   directory (``~/.ssh``, ``~/.aws``, ``~/.config/gcloud`` ...).
 - ``hidden_unicode``: zero-width or bidirectional-control characters in an
@@ -493,6 +494,8 @@ class _Scan:
                     "Allow the specific commands agents need, e.g. `Bash(npm run test *)`.")
 
     def auto_approve_findings(self) -> None:
+        if self.tracked_known and ".vscode/settings.json" not in self.tracked:
+            return  # a personal, uncommitted editor file is not the repository's configuration
         path = self.root / ".vscode/settings.json"
         text = self.read(path)
         data = load(path, jsonc=True) if text is not None else None
