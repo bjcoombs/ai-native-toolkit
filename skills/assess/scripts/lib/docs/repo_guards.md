@@ -13,11 +13,19 @@ The module docstring has the rules and the block shape. Known limits:
   `.betterer.results`). A tool that reads its baseline only from its own configuration
   (`phpstan.neon` `includes:`, `detekt` in `build.gradle`, eslint `max-lines`) is not read.
 - The update command for a lint baseline is found by text: a tracked command line that names
-  the baseline or its check script beside an update word. A line that only mentions both
-  (a comment) counts too.
+  the baseline or its check script beside an update word, on the same line. A whole-line
+  comment (`#`, `//`) is skipped; a trailing comment on a code line, or a string such as an
+  error message that names both, still counts.
 - A guard script's tests are found by file name, and the test file must name the script's
-  stem. Whether CI runs those tests is not read here; `layer-5-ci` reads whether CI runs
+  stem. For a guard that is a folder (`go run ./dir`, `python -m pkg`), only `test_*.py`,
+  `*_test.py` and `*_test.go` inside it or under `tests/<name>/` are joined; a `.bats` or
+  `.test.ts` file there is not. Whether CI runs those tests is not read here; `layer-5-ci` reads whether CI runs
   tests at all.
+- Check and boundary words match inside a name token (`importcheck`), so a script named for
+  another purpose (`validate_import_data.py`) is credited as a boundary checker.
+- With no guard found, any step the follower leaves unsettled in any job read makes `present`
+  null (`ci_not_read`), not false. That keeps an unread step from reading as no guard, at the
+  cost of fewer measured falses; the corpus discrimination run (#842) shows how many.
 - An architecture test counts when any ordinary CI job runs a test command, not only the job
   that would run that file.
 - `guarded_by` on `repo-guards.1` caps a `verified` grade at `measured` while

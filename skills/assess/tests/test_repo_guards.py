@@ -137,6 +137,19 @@ def test_a_baseline_with_no_update_command_is_not_a_ratchet(tmp_path: Path) -> N
     assert (block["present"], block["baselines_without_update"]) == (False, 1)
 
 
+def test_a_do_not_update_comment_is_not_an_update_command(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"lint-baseline.json": "{}\n",
+                            "scripts/check_lint.py": "# never update lint-baseline.json by hand\n"
+                                                     "BASELINE = 'lint-baseline.json'\n",
+                            "Makefile": "# run: make update to refresh lint-baseline.json\nlint:\n\techo\n",
+                            ".github/workflows/ci.yml": _workflow("python scripts/check_lint.py")})
+    block = _block(root)
+    assert (block["present"], block["baselines_without_update"]) == (False, 1)
+    _repo(root, {"scripts/check_lint.py": "BASELINE = 'lint-baseline.json'\n"
+                                          "if '--update' in ARGS: write('lint-baseline.json')\n"})
+    assert _block(root)["lint_baseline"] == 1
+
+
 @pytest.mark.parametrize("step", ["python scripts/check_layers.py || true",
                                   "python scripts/check_layers.py || echo skipped"])
 def test_a_masked_guard_does_not_count(tmp_path: Path, step: str) -> None:

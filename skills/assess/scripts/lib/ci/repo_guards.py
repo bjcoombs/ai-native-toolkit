@@ -15,7 +15,8 @@ a committed script, a ``make`` recipe, a local action or reusable workflow, up t
   script, in its own text. It counts only with a prune or update command: a tracked command
   line (a make recipe, ``justfile``, ``package.json``, ``pyproject.toml``, ``tox.ini``, a shell
   script, a CI file, or the check script itself) that names the baseline or the check script
-  beside an update word (``--update``, ``--generate-baseline``, ``prune``, ``sync`` ...). One
+  beside an update word (``--update``, ``--generate-baseline``, ``prune``, ``sync`` ...), a
+  whole-line comment never counting. One
   with no such command is counted in ``baselines_without_update`` and is not a guard.
 - **boundary_checker.** A step runs a known boundary tool (``import-boss``, ``lint-imports``,
   ``tach check``, ``depcruise``, ``go-arch-lint``, ``arch-go``, ``deptrac``, ``hassfest``), or a
@@ -210,6 +211,8 @@ class _Reader:
         self.no_update: set[str] = set()
         self._texts: dict[str, str] = {}
         self._holder_cache: list[str] | None = None
+        self._sorted = sorted(tracked)
+        self._baselines = [r for r in self._sorted if _is_baseline(r)]
 
     def text(self, rel: str) -> str:
         """A tracked file's text, read once."""
@@ -271,7 +274,7 @@ class _Reader:
         named = [r for r in _arg_paths(prog[1:]) if r in self.tracked and _is_baseline(r) and r != script]
         if script is not None and script in self.tracked and reads_baseline:
             body = self.text(script)
-            named += [r for r in sorted(self.tracked) if _is_baseline(r) and r != script and r not in named
+            named += [r for r in self._baselines if r != script and r not in named
                       and posixpath.basename(r) in body]
         if reads_baseline:
             for rel in named:
@@ -291,11 +294,13 @@ class _Reader:
         names = {posixpath.basename(baseline), _stem(baseline)}
         if script is not None:
             names.add(posixpath.basename(script))
-            body = self.text(script)
-            if script in self.tracked and _UPDATE.search(body) and posixpath.basename(baseline) in body:
-                return True   # the check script has its own update mode for the file it reads
+            # the check script has its own update mode for the file it reads: one code line
+            # names both, never a comment (``# never update x.json by hand``)
+            if script in self.tracked and any(posixpath.basename(baseline) in line and _UPDATE.search(line)
+                                              for line in _code_lines(self.text(script))):
+                return True
         for rel in self._holders():
-            for line in self.text(rel).splitlines():
+            for line in _code_lines(self.text(rel)):
                 if any(n and n in line for n in names) and _UPDATE.search(line):
                     return True
                 if tool in _BASELINE_TOOLS and tool in line.split() and _UPDATE.search(line) and "baseline" in line:
@@ -353,7 +358,7 @@ class _Reader:
         stem = _stem(script)
         under, dash = stem.replace("-", "_"), stem.replace("_", "-")
         if self._folder(script) and script not in self.tracked:
-            inside = [t for t in sorted(self.tracked)
+            inside = [t for t in self._sorted
                       if (t.startswith(script + "/") or any(t.startswith(f"{d}/{posixpath.basename(script)}/")
                                                            for d in ("tests", "test")))
                       and _is_test_file(t)]
@@ -364,12 +369,17 @@ class _Reader:
                  *(f"{v}.{k}.{e}" for v in (stem, under, dash) for k in ("test", "spec")
                    for e in ("js", "ts", "mjs", "cjs"))}
         out: list[str] = []
-        for rel in sorted(self.tracked):
+        for rel in self._sorted:
             if rel != script and posixpath.basename(rel) in names:
                 body = self.text(rel)
                 if stem in body or under in body or dash in body:
                     out.append(rel)
         return out
+
+
+def _code_lines(text: str) -> list[str]:
+    """``text``'s lines that are not a whole-line comment (``#``, ``//``)."""
+    return [line for line in text.splitlines() if not line.lstrip().startswith(("#", "//"))]
 
 
 def _is_test_file(rel: str) -> bool:
