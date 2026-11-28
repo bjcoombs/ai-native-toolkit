@@ -22,7 +22,9 @@ classes at least one condition read a value of (state ``met`` or ``unmet``), and
 every other class with a reason code: the first not-measured reason among its conditions, in
 model order, or ``no_condition`` when no condition of the model reads it, or ``not_read`` when
 its conditions were excluded, declined or not applicable. A headless run without ``--platform``
-so names ``practice``. Every value is a class token or a reason code, so both survive
+so names ``practice``. Coverage is read per condition, not per criterion: a condition whose criteria
+mix classes could read ``unmet`` on one class while another class went unread, and would then
+claim both. No condition of a shipped model mixes classes, and a test pins that. Every value is a class token or a reason code, so both survive
 counts-only output. The report header line is ``lib/report/evidence_header.py``.
 
 Tests: ``tests/test_evidence_classes.py``.

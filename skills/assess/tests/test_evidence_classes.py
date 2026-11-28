@@ -79,6 +79,19 @@ def test_every_condition_of_the_default_model_carries_its_classes() -> None:
             assert cond["evidence_classes"], cond["id"]  # every default signal is classified
 
 
+def test_no_condition_of_a_shipped_model_mixes_evidence_classes() -> None:
+    """Coverage reads per condition, so a condition with two classes could claim one it never read
+    (an ``unmet`` from one criterion beside an unread one). The shipped models give each one class."""
+    from lib.scoring.levels import load_levels
+    profiles = sorted((lt.DEFAULT_LEVELS.parent / "profiles").glob("*.toml"))
+    assert profiles
+    for path in (lt.DEFAULT_LEVELS, *profiles):
+        model = load_levels(path)
+        mixed = [condition_id(r["id"], lv["level"]) for r in model["rows"] for lv in r["levels"]
+                 if len(criteria_classes(lv["criteria"])) > 1]
+        assert mixed == [], (path.name, mixed)
+
+
 def test_coverage_lists_a_class_read_and_names_the_rest_with_a_reason() -> None:
     conditions = [
         _cond("a.1", "met", ["static"]),
