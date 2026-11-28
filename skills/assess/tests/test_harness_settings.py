@@ -14,8 +14,9 @@ import pytest
 import lib.scoring.level_tally as lt
 from lib.agents.agent_harness import scan_agent_harness
 from lib.agents.agent_ops import scan_agent_ops
-from lib.agents.harness_settings import (HOOK_CONDITIONS, HOOKS_DISABLED, auto_approve, broad_in_text, hook_acts,
-                                         is_broad_rule, read_hooks_disabled)
+from lib.agents.harness_settings import (HOOK_CONDITIONS, HOOKS_DISABLED, TERMINAL_AUTO_APPROVE, auto_approve,
+                                         broad_in_text, hook_acts, is_broad_allow, is_broad_rule,
+                                         read_hooks_disabled)
 from lib.counts_only.content_free import counts_only
 from lib.instructions.instruction_files import grade_instruction_files, nested_instruction_surface
 from lib.owner_exclusions import owner_exclusions_block
@@ -207,8 +208,8 @@ def _vscode(tmp_path: Path, settings: str) -> Path:
 def test_a_broad_terminal_auto_approve_raises_the_finding(tmp_path: Path) -> None:
     repo = _vscode(tmp_path, '{\n  // agents\n  "chat.tools.terminal.autoApprove": {"*": true, "rm": false,},\n}\n')
     block = scan_agent_ops(repo)
-    assert [(s["tool"], s["allow_count"], s["deny_count"]) for s in block["settings"]] == [("vscode", 1, 1)]
-    assert block["summary"]["permissions_encoded"] is True
+    assert [(s["tool"], s["allow_count"], s["deny_count"]) for s in block["settings"]] == [("vscode", 0, 1)]
+    assert block["summary"]["permissions_encoded"] is True  # the refused rule is scoped (#1618)
     findings = [(f["kind"], f["file"], f["line"]) for f in scan_agent_harness(repo)["findings"]]
     assert findings == [("broad_auto_approve", ".vscode/settings.json", 3)]
 
@@ -274,3 +275,51 @@ def test_counts_only_keeps_the_tool_and_the_disabled_count(tmp_path: Path) -> No
     out = counts_only({"agent_ops": scan_agent_ops(repo)})["agent_ops"]
     assert out["settings"][0]["tool"] == "copilot" and out["settings"][0]["path"] == ".github/hooks/build.json"
     assert out["summary"]["hooks_disabled"] == 1 and out["summary"]["hooks_present"] is True
+
+
+# --- a broad allow is not an encoded permission (#1618) ---------------------------------------
+
+
+def _encoded(repo: Path) -> tuple[list[int], bool, list[str]]:
+    block = scan_agent_ops(repo)
+    kinds = [f["kind"] for f in scan_agent_harness(repo)["findings"]]
+    return [s["allow_count"] for s in block["settings"]], block["summary"]["permissions_encoded"], kinds
+
+
+@pytest.mark.parametrize("rule", ["Bash", "Bash(*)", "Bash( :* )", "Bash(**)", "Bash(*:*)"])
+def test_a_claude_file_with_only_a_broad_allow_reads_unmet(tmp_path: Path, rule: str) -> None:
+    repo = _repo(tmp_path, {".claude/settings.json": json.dumps({"permissions": {"allow": [rule]}})})
+    assert _encoded(repo) == ([0], False, ["broad_allow"])
+
+
+def test_a_claude_file_with_a_broad_and_a_scoped_allow_reads_met(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, {".claude/settings.json": json.dumps(
+        {"permissions": {"allow": ["Bash(*)", "Bash(npm test:*)"]}})})
+    assert _encoded(repo) == ([1], True, ["broad_allow"])
+
+
+@pytest.mark.parametrize("settings, broad", [
+    ({"chat.tools.terminal.autoApprove": {"*": True}}, ["*"]),
+    ({"chat.tools.terminal.autoApprove": {"/^.+$/": {"approve": True}}}, ["/^.+$/"]),
+    ({"chat.tools.terminal.autoApprove": True}, [TERMINAL_AUTO_APPROVE]),
+    ({"chat.tools.global.autoApprove": True}, ["chat.tools.global.autoApprove"]),
+])
+def test_a_vscode_file_with_only_a_broad_auto_approve_reads_unmet(
+        tmp_path: Path, settings: dict[str, Any], broad: list[str]) -> None:
+    repo = _vscode(tmp_path, json.dumps(settings))
+    assert _encoded(repo) == ([0], False, ["broad_auto_approve"] * len(broad))
+    rules = auto_approve(settings)
+    assert rules is not None and rules.allow == 0 and rules.broad == broad
+
+
+def test_a_vscode_file_with_a_broad_and_a_scoped_auto_approve_reads_met(tmp_path: Path) -> None:
+    repo = _vscode(tmp_path, json.dumps({"chat.tools.terminal.autoApprove": {"*": True, "npm test": True}}))
+    assert _encoded(repo) == ([1], True, ["broad_auto_approve"])
+
+
+@pytest.mark.parametrize(("rule", "broad"), [
+    ("Bash", True), ("Bash(*)", True), ("Bash( * )", True), ("Bash(*:*)", True),
+    ("Bash(npm test:*)", False), ("Read(*)", False), ("Bashful", False), (3, False),
+])
+def test_is_broad_allow_is_the_rule_broad_allow_reports(rule: object, broad: bool) -> None:
+    assert is_broad_allow(rule) is broad
