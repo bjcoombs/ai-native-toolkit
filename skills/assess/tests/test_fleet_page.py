@@ -188,6 +188,7 @@ def test_the_drill_runs_org_unit_repository_tag_condition_and_stays_byte_identic
     assert "Instruction docs, level 1 : held, the practice reads level 1 of 2" in text
     assert "Instruction docs, level 2 : not held yet, the practice reads level 1 of 2" in text
     assert "Step 3 · Docs and CI needs: ci" in text
+    assert "level result's counted conditions" in repo and "reading on the grid" in text  # two sources, named
     assert "<strong>Instruction docs, level 2</strong>: not held yet, the practice reads level 1 of 2" in cond
     assert "reads docs.grade (measured C)" in cond and "Step 3 · Docs and CI needs: ci" in cond
     assert 'data-tag="docs">Docs</button>' in cond.split("</nav>")[0]  # the tag crumb links back up

@@ -216,7 +216,8 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
   }
   function tagList(bundle, r) {
     if (!r.tags) { return "<p>Truth tags: not measured for this repository, never read as zero.</p>"; }
-    return "<p>Truth tags, each a link to its conditions:</p><ul>" + r.tags.map(function (c) {
+    return "<p>Truth tags, each a link to its conditions. The counts are the level result's counted conditions; "
+      + "a condition the result lists but does not count is in neither.</p><ul>" + r.tags.map(function (c) {
       var t = tagOf(bundle, c.tag);
       return "<li><button class=\"link\" data-tag=\"" + esc(c.tag) + "\">" + esc(t ? t.title : c.tag) + "</button> "
         + esc(c.met + " met, " + c.unmet + " unmet" + (c.not_measured ? ", " + c.not_measured + " not measured" : "")) + "</li>";
@@ -224,12 +225,14 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
   }
   function tagDetail(bundle, r, key) {
     var t = tagOf(bundle, key);
-    if (!t) { return ""; }
+    if (!t || !r.tags) { return ""; }
     var out = "<div class=\"panel\"><p><strong>" + esc(t.title) + "</strong> on " + esc(r.key) + "</p>";
     out += t.conditions.length ? "<ul>" + t.conditions.map(function (c) {
       return "<li><button class=\"link\" data-row=\"" + c.row + "\" data-level=\"" + c.level + "\">"
         + esc(condName(bundle, c)) + "</button>: " + esc(condState(bundle, cellOf(r, c.row), c.level)) + "</li>";
     }).join("") + "</ul>" : "<p>No condition on the team grid carries this tag.</p>";
+    out += "<p class=\"muted\">Each state is its practice's reading on the grid, so it can show a condition held "
+      + "that the counted met and unmet above leave out.</p>";
     return out + "<p>" + needsLine(bundle, r) + "</p></div>";
   }
   function condDetail(bundle, r, cond) {
