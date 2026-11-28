@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import lib.scoring.level_tally as lt
+from lib.agents.agent_instruction_rewrite import gh_aw_imports
 from lib.agents.agent_ops import scan_agent_ops
 from lib.counts_only.content_free import counts_only
 from lib.docs.ownership_parser import codeowned
@@ -200,3 +201,35 @@ def test_a_called_workflow_and_its_local_action_are_paths_at_risk(git_repo) -> N
     assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1  # the action is still unowned
     repo = _repo(git_repo, {".github/CODEOWNERS": owned + "/.github/actions/ @o\n"})
     assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 0
+
+
+GH_AW_IMPORTS = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports:\n  - shared/style.md\n"
+                                 "  - example-org/agentics/shared/remote.md@v1\n")
+
+
+def test_a_gh_aw_import_and_its_own_imports_are_paths_at_risk(git_repo) -> None:
+    rel = ".github/workflows/guide.md"
+    source_only = f"/AGENTS.md @o\n/CLAUDE.md @o\n/{rel} @o\n/.github/CODEOWNERS @o\n"
+    files = {rel: GH_AW_IMPORTS,
+             ".github/workflows/shared/style.md": "---\nimports: [tone.md#Voice]\n---\nWrite plainly.\n",
+             ".github/workflows/shared/tone.md": "Keep it short.\n",
+             ".github/CODEOWNERS": source_only}
+    repo = _repo(git_repo, files)
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1
+    owned = source_only + "/.github/workflows/shared/style.md @o\n"
+    repo = _repo(git_repo, {".github/CODEOWNERS": owned})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1  # the nested import is unowned
+    repo = _repo(git_repo, {".github/CODEOWNERS": owned + "/.github/workflows/shared/tone.md @o\n"})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 0
+
+
+def test_gh_aw_imports_reads_each_list_form_and_skips_remote_imports() -> None:
+    rel = ".github/workflows/guide.md"
+    shared = [".github/workflows/shared/a.md", ".github/workflows/shared/b.md"]
+    assert gh_aw_imports(rel, "imports: [shared/a.md, 'shared/b.md#Tone']\n") == shared
+    assert gh_aw_imports(rel, "imports: [shared/a.md,\n  shared/b.md]\nengine: claude\n") == shared
+    block = "imports:\n  - 'shared/a.md'  # house style\n  - shared/b.md\n  - example-org/agentics/x.md@v1\n"
+    assert gh_aw_imports(rel, block) == shared
+    assert gh_aw_imports(rel, "engine: claude\n") == []
+    mapped = "imports:\n  - path: shared/a.md\n    inputs: {tone: plain}\n  - uses: shared/b.md\n    with:\n      x: 1\n"
+    assert gh_aw_imports(rel, mapped) == shared
