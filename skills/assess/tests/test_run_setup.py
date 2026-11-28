@@ -28,6 +28,7 @@ def test_new_run_id_is_a_stamp_plus_suffix() -> None:
     assert run_setup.new_run_id() != run_setup.new_run_id()
 
 
+@pytest.mark.toolkit_repo
 def test_read_plugin_version_degrades_to_unknown(tmp_path: Path) -> None:
     assert run_setup.read_plugin_version(tmp_path / "missing.json") == "unknown"
     bad = tmp_path / "plugin.json"

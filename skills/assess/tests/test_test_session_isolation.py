@@ -29,7 +29,9 @@ from assess_test_support import (
 )
 
 REPO = TOOLKIT_ROOT
-TEST_TREES = (REPO / "skills" / "assess" / "tests", REPO / "scripts" / "tests", REPO / "tests")
+# A vendored copy has no scripts/tests or tests/: those trees glob empty, so no toolkit_repo mark (#1649).
+TEST_TREES = (REPO / "skills" / "assess" / "tests",
+              REPO / "scripts" / "tests", REPO / "tests")  # toolkit-root optional: globs empty
 
 
 def _test_sources() -> list[Path]:

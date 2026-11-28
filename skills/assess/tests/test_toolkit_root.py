@@ -154,3 +154,80 @@ def test_no_assess_test_finds_the_repository_by_parents_3() -> None:
     ]
     assert not uses, ("use assess_test_support.TOOLKIT_ROOT and the toolkit_repo marker (#1649), "
                       "not parents[3]: " + ", ".join(uses))
+
+
+# --- the lint: a test that reads outside skills/ carries the marker ---------------
+
+def _root_aliases(tree: ast.Module) -> set[str]:
+    """``TOOLKIT_ROOT`` and the module-level names bound to it (``REPO = TOOLKIT_ROOT``)."""
+    aliases = {"TOOLKIT_ROOT"}
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Name)
+                and node.value.id in aliases):
+            aliases |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+    return aliases
+
+
+# Segments a vendored copy has too: the skill tree itself, and the checkout's own .git.
+IN_ANY_CHECKOUT = {"skills", ".git"}
+# A line whose read degrades by itself in a vendored copy (a missing tree globs empty)
+# says so with this comment instead of skipping the whole test.
+OPTIONAL_COMMENT = "# toolkit-root optional:"
+
+
+def _outside_skills_uses(tree: ast.Module, source: str = "") -> list[int]:
+    """Lines of ``<root> / "<segment>"`` whose first segment a vendored copy lacks."""
+    aliases = _root_aliases(tree)
+    text = source.splitlines()
+    lines = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+                and isinstance(node.left, ast.Name) and node.left.id in aliases
+                and isinstance(node.right, ast.Constant) and isinstance(node.right.value, str)
+                and node.right.value.strip("/").split("/", 1)[0] not in IN_ANY_CHECKOUT
+                and not (node.lineno <= len(text) and OPTIONAL_COMMENT in text[node.lineno - 1])):
+            lines.add(node.lineno)
+    return sorted(lines)
+
+
+def _has_toolkit_repo_mark(tree: ast.Module) -> bool:
+    """Whether the module names ``mark.toolkit_repo``, as ``pytestmark`` or a decorator."""
+    return any(
+        isinstance(node, ast.Attribute) and node.attr == TOOLKIT_REPO_MARKER
+        and ((isinstance(node.value, ast.Attribute) and node.value.attr == "mark")
+             or (isinstance(node.value, ast.Name) and node.value.id == "mark"))
+        for node in ast.walk(tree)
+    )
+
+
+def _unmarked_outside_skills(source: str) -> list[int]:
+    tree = ast.parse(source)
+    return [] if _has_toolkit_repo_mark(tree) else _outside_skills_uses(tree, source)
+
+
+@pytest.mark.parametrize(("source", "lines"), [
+    ('A = TOOLKIT_ROOT / "action.yml"\n', [1]),
+    ('REPO = TOOLKIT_ROOT\ndef test_x():\n    (REPO / ".github" / "workflows").read_text()\n', [3]),
+    ('A = TOOLKIT_ROOT / "skills" / "fleet"\nB = TOOLKIT_ROOT / "skills/assess"\n', []),
+    ('import pytest\npytestmark = pytest.mark.toolkit_repo\nA = TOOLKIT_ROOT / "docs"\n', []),
+    ('import pytest\n@pytest.mark.toolkit_repo\ndef test_x():\n    TOOLKIT_ROOT / "agents"\n', []),
+    ('from pytest import mark\n@mark.toolkit_repo\ndef test_x():\n    TOOLKIT_ROOT / "README.md"\n', []),
+    ('import pytest\n@pytest.mark.needs_symlink\ndef test_x():\n    TOOLKIT_ROOT / "templates"\n', [4]),
+    ('A = TOOLKIT_ROOT / ".git"\n', []),
+    ('A = (TOOLKIT_ROOT / "tests", TOOLKIT_ROOT / "scripts")  # toolkit-root optional: globs empty\n', []),
+])
+def test_the_marker_lint_sees_an_unmarked_read_outside_skills(source: str, lines: list[int]) -> None:
+    assert _unmarked_outside_skills(source) == lines
+
+
+def test_every_assess_test_that_reads_outside_skills_carries_the_marker() -> None:
+    """A test that reads ``action.yml``, ``docs/``, ``.github/`` or ``agents/`` fails in a
+    vendored copy unless it skips there; the marker is what makes it skip (#1649)."""
+    uses = [
+        f"{path.relative_to(TESTS).as_posix()}:{line}"
+        for path in sorted(TESTS.rglob("*.py"))
+        if "fixtures" not in path.relative_to(TESTS).parts and path != SUPPORT
+        for line in _unmarked_outside_skills(path.read_text(encoding="utf-8"))
+    ]
+    assert not uses, ("a module that reads the toolkit root outside skills/ needs "
+                      "@pytest.mark.toolkit_repo (#1649): " + ", ".join(uses))

@@ -46,6 +46,7 @@ def test_unreadable_files_read_as_unknown(tmp_path: Path, body: str) -> None:
     assert plugin_version.read_version(tmp_path / "a.json", tmp_path / "b.json") == "unknown"
 
 
+@pytest.mark.toolkit_repo
 def test_the_plugin_path_stamps_what_it_stamped_before() -> None:
     # The version file is never committed, so a plugin checkout reads plugin.json alone.
     assert not plugin_version.VERSION_FILE.exists()
