@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 import lib.scoring.level_tally as lt
-from lib.ai_governance import (COPILOT_OPT_OUT, NO_PR_WORKFLOWS, declines_review,
+from lib.ai_governance import (COPILOT_OPT_OUT, NO_PR_WORKFLOWS, RUBY_UNREAD, declines_review,
                                disclosure_checkboxes, enforces_disclosure, read_copilot_opt_out, scan_ai_governance)
 from lib.counts_only.content_free import counts_only
 from lib.owner_exclusions import owner_exclusions_block
@@ -423,3 +423,12 @@ def test_the_block_survives_counts_only_output(tmp_path: Path) -> None:
     block = scan_ai_governance(root)
     kept = counts_only({"ai_governance": block})["ai_governance"]
     assert kept == block
+
+
+def test_a_ruby_check_reads_not_measured_not_unmet(tmp_path: Path) -> None:
+    flow = TRAILERS.replace("python3 tools/check_trailers.py", "ruby tools/check_trailers.rb")
+    script = 'log = `git log --format=%(trailers) origin/main..HEAD`\nabort "remove it" if log.include?("Generated-by:")\n'
+    root = _repo(tmp_path, {".github/workflows/trailers.yml": flow, "tools/check_trailers.rb": script})
+    block = scan_ai_governance(root)
+    assert (block["enforced"], block["enforced_reason"]) == (None, RUBY_UNREAD)
+    assert _cond(_level(root, block), "ai-policy-enforced.1")["state"] == "not_measured"

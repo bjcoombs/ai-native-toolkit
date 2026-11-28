@@ -398,6 +398,7 @@ Whether a workflow on pull requests reads the body or commit trailers for AI dis
 - Evidence: `ai_governance.enforced` head_structure (measured), `ai_governance.policy_declared` head_text (declared).
 - Not measured when:
   - `no_pr_workflows`: No GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it. Nothing to change: this reads as not measured until a workflow runs on pull requests.
+  - `ruby_unread`: No step reads as enforcing AI disclosure, but a step on a pull request workflow runs Ruby that names an AI marker. This reader does not read Ruby, so that step may enforce it. Nothing to change: this reads as not measured while the check is in Ruby. A shell, Python or JavaScript check is read.
 
 Why the signals named here matter:
 

@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from lib.ai_governance import declines_review, enforces_disclosure, scan_ai_governance
+from lib.ai_governance import RUBY_UNREAD, declines_review, enforces_disclosure, scan_ai_governance
 from lib.ci import disclosure_shell as shell
-from lib.ci.disclosure_reader import JS, PYTHON, RUN, SHELL, Unit, env_names, step_acts, step_units
+from lib.ci.disclosure_reader import JS, PYTHON, RUBY, RUN, SHELL, Unit, env_names, step_acts, step_units
 from lib.ci.disclosure_script import js_parse, py_parse
 from lib.ci.disclosure_terms import EXIT, LABEL
 
@@ -398,3 +398,71 @@ def test_a_javascript_act_inside_a_callback_belongs_to_the_callback() -> None:
     code = 'if (!body.includes("Assisted-by")) { files.forEach(f => { if (f.big) core.setFailed("x") }) }'
     assert step_acts([Unit(JS, code)], HELD) == set()
     assert step_acts([Unit(JS, 'if (!body.includes("AI")) { await core.setFailed("x") }')], HELD) == {EXIT}
+
+
+# --- #1609: a shell given as a path, an f-string command, a Ruby script ---------------------
+
+
+@pytest.mark.parametrize(("runner", "language"), [
+    ("/bin/bash -e {0}", SHELL), ("/usr/bin/sh {0}", SHELL), ("/usr/bin/python3 {0}", PYTHON), ("bash", SHELL),
+    ("/usr/bin/env bash {0}", SHELL), ("env python3 {0}", PYTHON),
+])
+def test_a_shell_given_as_a_path_is_matched_by_its_program(runner: str, language: str) -> None:
+    assert step_units(f"shell: {runner}\nrun: exit 1\n") == [Unit(language, "exit 1")]
+
+
+def test_a_check_under_a_shell_path_meets_it() -> None:
+    step = "shell: /bin/bash -e {0}\n" + _run("grep -qi 'Assisted-by' <<< \"$PR_BODY\" || exit 1")
+    assert enforces_disclosure(step, ENV) is True
+
+
+@pytest.mark.parametrize(("code", "acts"), [
+    ('import os\nif "Assisted-by" not in body: os.system(f"gh pr edit {pr} --add-label needs-ai")\n', {LABEL}),
+    ('import subprocess\nif "AI" in body: subprocess.run(f"gh pr edit {n} --add-label ai", shell=True)\n', {LABEL}),
+    ('import subprocess\nif "AI" in body: subprocess.run(["gh", "pr", "edit", f"{n}", "--add-label", "ai"])\n', {LABEL}),
+    ('import os\nif "AI" in body: os.system(f"gh pr edit {pr} --add-label={label}")\n', {LABEL}),
+    ('import os\nif "AI" in body: os.system("gh pr edit 1 --add-label=ai")\n', {LABEL}),
+    ('import os\nif "AI" in body: os.system(f"echo gh pr edit {pr} --add-label ai")\n', set()),
+    ('import os\nif "AI" in body: os.system(f"gh pr edit {flag} ai")\n', set()),
+    ('import os\nif "AI" in body: os.system(f"{tool} pr edit --add-label ai")\n', set()),
+    ('import os\nif "AI" in body: print(f"run gh pr edit {pr} --add-label ai")\n', set()),
+])
+def test_an_f_string_command_is_read_by_its_literal_parts(code: str, acts: set[str]) -> None:
+    assert step_acts([Unit(PYTHON, code)], HELD) == acts
+
+
+RUBY_FLOW = SCRIPT_FLOW.replace("python3 .github/scripts/disclosure.py", "ruby .github/scripts/disclosure.rb")
+RUBY_CHECK = 'body = ENV.fetch("BODY", "")\nunless body.match?(/Assisted-by:/i)\n  abort "add the trailer"\nend\n'
+
+
+def test_a_ruby_enforcer_reads_not_measured_rather_than_unmet(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".github/workflows/d.yml": RUBY_FLOW, ".github/scripts/disclosure.rb": RUBY_CHECK})
+    block = scan_ai_governance(root)
+    assert (block["enforced"], block["enforced_reason"], block["enforcing_workflows"]) == (None, RUBY_UNREAD, [])
+
+
+def test_a_ruby_step_under_shell_ruby_reads_not_measured(tmp_path: Path) -> None:
+    flow = SCRIPT_FLOW.replace("run: python3 .github/scripts/disclosure.py",
+                               "shell: ruby {0}\n        run: |\n" + "".join("          " + line + "\n"
+                                                                            for line in RUBY_CHECK.splitlines()))
+    block = scan_ai_governance(_repo(tmp_path, {".github/workflows/d.yml": flow}))
+    assert (block["enforced"], block["enforced_reason"]) == (None, RUBY_UNREAD)
+
+
+def test_a_ruby_script_naming_no_marker_leaves_the_condition_unmet(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".github/workflows/d.yml": RUBY_FLOW, ".github/scripts/disclosure.rb": 'puts "built"\n'})
+    assert (scan_ai_governance(root)["enforced"], scan_ai_governance(root)["enforced_reason"]) == (False, None)
+
+
+def test_a_read_enforcer_still_meets_it_beside_a_ruby_script(tmp_path: Path) -> None:
+    check = 'import os, sys\nif "Assisted-by" not in os.environ["BODY"]:\n    sys.exit(1)\n'
+    root = _repo(tmp_path, {".github/workflows/d.yml": RUBY_FLOW, ".github/scripts/disclosure.rb": RUBY_CHECK,
+                            ".github/workflows/p.yml": SCRIPT_FLOW, ".github/scripts/disclosure.py": check})
+    block = scan_ai_governance(root)
+    assert (block["enforced"], block["enforced_reason"], block["enforcing_workflows"]) == (
+        True, None, [".github/workflows/p.yml"])
+
+
+def test_ruby_is_a_unit_no_reader_reads() -> None:
+    assert step_units("shell: ruby {0}\nrun: abort 'AI'\n") == [Unit(RUBY, "abort 'AI'")]
+    assert step_acts([Unit(RUBY, 'abort "AI" unless ENV["PR_BODY"].include?("AI")')], HELD) == set()

@@ -1439,7 +1439,7 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "'code: sentence'. The codes name the missing piece: no_pr_workflows (no GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                    "description": "'code: sentence'. The codes name the missing piece: no_pr_workflows (no GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it); ruby_unread (no step reads as enforcing AI disclosure, but a step on a pull request workflow runs Ruby that names an AI marker. This reader does not read Ruby, so that step may enforce it). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                   }
                 },
                 "required": [

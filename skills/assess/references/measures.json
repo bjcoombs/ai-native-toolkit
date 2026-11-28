@@ -3169,6 +3169,11 @@
           "code": "no_pr_workflows",
           "means": "No GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it.",
           "next_step": "Nothing to change: this reads as not measured until a workflow runs on pull requests."
+        },
+        {
+          "code": "ruby_unread",
+          "means": "No step reads as enforcing AI disclosure, but a step on a pull request workflow runs Ruby that names an AI marker. This reader does not read Ruby, so that step may enforce it.",
+          "next_step": "Nothing to change: this reads as not measured while the check is in Ruby. A shell, Python or JavaScript check is read."
         }
       ],
       "evidence": [
@@ -7826,7 +7831,7 @@
       "collector": "core.ai_governance",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "no_pr_workflows: no GitHub Actions workflow runs on pull requests"
+      "null_means": "no_pr_workflows: no GitHub Actions workflow runs on pull requests; ruby_unread: a step runs Ruby naming an AI marker, which this reader does not read"
     },
     {
       "path": "ai_governance.policy_declared",
