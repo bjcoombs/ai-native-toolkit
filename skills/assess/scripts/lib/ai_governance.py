@@ -82,8 +82,12 @@ _READS = re.compile(r"pull_request\.body|gh\s+pr\s+view\b[^\n]*--json\s+[\w,]*bo
 _AI_MARKERS = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|claude|chatgpt|gpt-?\d|gemini|codex"
                          r"|assisted-by|generated-by|ai-assisted|ai-generated)\b)")
 _LABELS = re.compile(r"--add-label\b|\baddLabels\b|\badd-labels?\b", _I)
-_ACTS = re.compile(r"\bexit\s+1\b|\bexit\s*\(\s*1\s*\)|setFailed\s*\(|process\.exit\s*\(\s*1|sys\.exit\s*\("
-                   r"|raise\s+SystemExit|::error\b|" + _LABELS.pattern, _I)
+# An exit that turns the run red: a non-zero code or a message (Python exits 1 on a message); an
+# exit 0, or a bare raise SystemExit, ends the run green and is not an act.
+_NONZERO = r"\s*(?:[1-9]\d*|[rbfu]{0,2}['\"])"
+_ACTS = re.compile(r"\bexit\s+[1-9]\d*\b|\bexit\s*\(" + _NONZERO + r"|setFailed\s*\(|process\.exit\s*\(\s*[1-9]"
+                   r"|sys\.exit\s*\(" + _NONZERO + r"|raise\s+SystemExit\s*\(" + _NONZERO
+                   + r"|::error\b|" + _LABELS.pattern, _I)
 # What a check reads a pattern with, just before the quoted marker: grep's pattern, a match call's
 # argument, =~ or ==; or just after it: `in` (Python's membership test) or `.test(` (a JS regex).
 _OPERAND_BEFORE = re.compile(r"(?:\b(?:e?grep|rg)(?:\s+-[\w-]+)*|\b(?:match|search|findall|fullmatch|includes|contains"

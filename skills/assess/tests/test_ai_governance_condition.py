@@ -219,6 +219,19 @@ jobs:
     assert scan_ai_governance(_repo(tmp_path, {".github/workflows/linked.yml": text}))["enforced"] is False
 
 
+@pytest.mark.parametrize("exit_call", ["sys.exit(0)", "sys.exit()", "raise SystemExit", "raise SystemExit(0)"])
+def test_an_exit_that_ends_the_run_green_is_not_an_act(exit_call: str) -> None:
+    step = f'run: |\n  body = "${{{{ github.event.pull_request.body }}}}"\n  if "Assisted-by" in body: {exit_call}\n'
+    assert enforces_disclosure(step) is False
+
+
+@pytest.mark.parametrize("exit_call", ["sys.exit(1)", 'sys.exit("add the trailer")', "raise SystemExit(2)",
+                                       "raise SystemExit(f'add it')"])
+def test_a_non_zero_or_message_exit_is_an_act(exit_call: str) -> None:
+    step = f'run: |\n  body = "${{{{ github.event.pull_request.body }}}}"\n  if "Assisted-by" not in body: {exit_call}\n'
+    assert enforces_disclosure(step) is True
+
+
 def test_a_body_written_to_a_file_and_tested_there_counts() -> None:
     step = "run: |\n  gh pr view 1 --json body > body.json\n  grep -q 'AI assistance' body.json || exit 1\n"
     assert enforces_disclosure(step) is True
