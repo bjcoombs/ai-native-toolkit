@@ -1133,7 +1133,7 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "'code: sentence'. The codes name the missing piece: network (a headless run without --platform makes no GitHub or GitLab read); no_remote (the repository has no GitHub or GitLab remote, so there are no deployment environments to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                    "description": "'code: sentence'. The codes name the missing piece: no_remote (the repository has no GitHub or GitLab remote, so there are no deployment environments to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                   }
                 },
                 "required": [

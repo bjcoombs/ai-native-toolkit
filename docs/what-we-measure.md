@@ -745,7 +745,6 @@ Production deployment environments, how many need no reviewer and how many let t
 - Evidence: `unclassified`.
 - Not measured when:
   - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
-  - `network`: A headless run without --platform makes no GitHub or GitLab read. Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in.
   - `no_remote`: The repository has no GitHub or GitLab remote, so there are no deployment environments to read. Nothing to change if the repository is local only.
 
 ### `derived_findings`: Keyhole blocks: derived_findings

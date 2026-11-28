@@ -4428,11 +4428,6 @@
           "next_step": "Run the fleet or assess_signals.py with --platform, with gh or glab signed in."
         },
         {
-          "code": "network",
-          "means": "A headless run without --platform makes no GitHub or GitLab read.",
-          "next_step": "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in."
-        },
-        {
           "code": "no_remote",
           "means": "The repository has no GitHub or GitLab remote, so there are no deployment environments to read.",
           "next_step": "Nothing to change if the repository is local only."

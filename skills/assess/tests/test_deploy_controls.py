@@ -238,6 +238,29 @@ def test_gitlab_unreported_triggerer_setting_is_null(tmp_path: Path, monkeypatch
     assert _counts(block) == (1, 0, None) and block["self_review_allowed_count_reason"] == "not_reported"
 
 
+def test_gitlab_no_reviewed_environment_allows_no_self_review(tmp_path: Path,
+                                                             monkeypatch: pytest.MonkeyPatch) -> None:
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}], GL_PROTECTED: [], GL_PROJECT: {}})
+    block = dc.scan_deploy_controls(tmp_path)
+    assert _counts(block) == (1, 1, 0) and "self_review_allowed_count_reason" not in block
+
+
+def test_gitlab_refused_project_read_is_null_with_its_code(tmp_path: Path,
+                                                           monkeypatch: pytest.MonkeyPatch) -> None:
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}], GL_PROTECTED: [_approval(1)],
+                          GL_PROJECT: GhUnavailable("no_access: refused (HTTP 403)")})
+    block = dc.scan_deploy_controls(tmp_path)
+    assert _counts(block) == (1, 0, None) and block["self_review_allowed_count_reason"] == "no_access"
+
+
+def test_gitlab_other_protected_read_failure_is_unavailable(tmp_path: Path,
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:
+    _gitlab(monkeypatch, {GL_ENVS: [{"name": "production"}],
+                          GL_PROTECTED: GhUnavailable("rate_limited: still rate limited")})
+    block = dc.scan_deploy_controls(tmp_path)
+    assert block == {"available": False, "reason": "rate_limited: still rate limited"}
+
+
 def test_gitlab_no_production_environment_makes_no_further_read(tmp_path: Path,
                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
     _gitlab(monkeypatch, {GL_ENVS: [{"name": "review/feature"}]})

@@ -9,7 +9,9 @@ the ``network`` reason.
 Production environments. ``[change_controls] environments`` in ``.assess/config.toml`` names
 them (a list of names; an empty, blank or malformed list keeps the default); with none named,
 an environment named ``production`` or ``prod`` is production. Names match without regard to
-case, as GitHub's environment names do. ``configured`` says which rule applied.
+case on both providers: GitHub's environment names are case-insensitive, and on GitLab, where
+they are not, ``Production`` and ``production`` both count, so a renamed copy is never missed.
+``configured`` says which rule applied.
 
 GitHub. ``repos/<slug>/environments`` (read access suffices), ``PAGE`` (100) environments a page
 until a short page, at most ``MAX_PAGES`` (10) pages; a list still full after them is the
@@ -24,10 +26,13 @@ Premium feature): a production environment is reviewed when its protected entry 
 approval rule with ``required_approvals`` of 1 or more, or the older
 ``required_approval_count`` of 1 or more. Self-review is the project's
 ``allow_pipeline_trigger_approve_deployment`` (the person who ran the pipeline may approve
-its deployment): true counts every reviewed production environment; absent from the project
-read is ``not_reported``. A refused protected-environment read (a tier or token that cannot
-read it, HTTP 403 or 404) leaves ``production_environments`` measured and makes both other
-counts null with the refusal's code as their reason; it is never read as unreviewed.
+its deployment): true counts every reviewed production environment; with none reviewed the
+count is 0; absent from the project read, or that read refused, is null (``not_reported``, or
+the refusal's code). A refused protected-environment read (``no_access`` or ``not_found``: a
+tier or token that cannot read it, HTTP 403 or 404) leaves ``production_environments`` measured
+and makes both other counts null with that code as their reason; it is never read as
+unreviewed. Any other failure of that read (rate limit, timeout, bad JSON, truncation) makes
+the whole block unavailable, as on the environment list.
 Group-level protected environments are not read.
 
 Block (``deploy_controls`` in run-context.json)::
@@ -57,6 +62,8 @@ DEFAULT_NAMES = frozenset({"production", "prod"})
 PAGE = 100
 MAX_PAGES = 10
 NOT_REPORTED = "not_reported"
+# The protected-environment refusals a tier or token gives; any other failure is the whole block's.
+REFUSED = frozenset({"no_access", "not_found"})
 
 
 class DeployControlsBlock(TypedDict, total=False):
@@ -156,6 +163,8 @@ def _gitlab(project: GitlabProject, names: frozenset[str], configured: bool) -> 
         protected = _named(_paged(listing("protected_environments"), "protected environment"), names)
     except GhUnavailable as e:
         code = e.reason.partition(":")[0].strip()
+        if code not in REFUSED:
+            raise
         return _block("gitlab", configured, len(production), None, None, code, code)
     approved = {p["name"].casefold() for p in protected if _approvals(p)}
     reviewed = sum(1 for e in production if e["name"].casefold() in approved)
@@ -165,7 +174,11 @@ def _gitlab(project: GitlabProject, names: frozenset[str], configured: bool) -> 
     except GhUnavailable as e:
         meta, reason = None, e.reason.partition(":")[0].strip()
     flag = meta.get("allow_pipeline_trigger_approve_deployment") if isinstance(meta, dict) else None
-    self_review = (reviewed if flag is True else 0) if isinstance(flag, bool) else None
+    self_review: int | None = None
+    if reviewed == 0:  # the count covers reviewed environments only
+        self_review = 0
+    elif isinstance(flag, bool):
+        self_review = reviewed if flag else 0
     return _block("gitlab", configured, len(production), len(production) - reviewed,
                   self_review, self_review_reason=reason)
 
