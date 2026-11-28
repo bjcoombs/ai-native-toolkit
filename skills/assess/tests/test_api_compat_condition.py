@@ -744,6 +744,12 @@ def test_a_rescued_multi_line_check_does_not_count(tmp_path: Path, lines: tuple[
     assert _block(script)["runs"] == []
 
 
+def test_a_backgrounded_then_line_keeps_its_branch(tmp_path: Path) -> None:
+    lines = ("apidiff -incompatible old new > o.txt", "if [ -s o.txt ]", "then sleep 1 &", "  exit 1", "fi")
+    step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)
+    assert _block(_repo(tmp_path, {WF: _workflow(extra=step)}))["runs"] == [{"path": WF, "tool": "apidiff"}]
+
+
 @pytest.mark.parametrize("lines", [
     ("apidiff -incompatible old new | grep -q . && exit 1 &",),          # #1634: a background job's exit
     ("apidiff -incompatible old new > o.txt", "[ -s o.txt ] && exit 1 &"),

@@ -358,8 +358,9 @@ def _then_body(parts: list[str], later: list[str]) -> list[list[str]]:
     Empty when a later ``fi || true`` rescues a branch with no bare ``exit N`` line (lib/docs). A
     re-raise on a backgrounded line (``exit 1 &``) or under a backgrounded ``fi &`` is dropped (#1634)."""
     cmds = [command_words(p.strip().strip("(){} ")) for p in parts[1::2]]
-    cmds += [c["words"] for line in later for c in _commands(_shell(line)) if not c["masked"] and (
-        c["words"][:1] in (["else"], ["elif"], ["fi"]) or not _backgrounded(ci_line_text(line)))]
+    cmds += [c["words"][:1] if _backgrounded(ci_line_text(line)) else c["words"]   # a keyword alone (#1634)
+             for line in later for c in _commands(_shell(line)) if not c["masked"] and (
+                 c["words"][:1] in (["then"], ["else"], ["elif"], ["fi"]) or not _backgrounded(ci_line_text(line)))]
     if not cmds or cmds[0][:1] != ["then"]:
         return []
     out: list[list[str]] = []

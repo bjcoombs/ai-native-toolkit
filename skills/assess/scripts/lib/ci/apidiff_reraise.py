@@ -14,7 +14,7 @@ the shell text is read as words.
   subshell (``SUBSHELL``: a command that opens with ``(``, not a quoted ``(``).
 - ``backgrounded(text)``: a line that sends a job to the background with a bare ``&`` outside
   quotes (``[ -s o.txt ] && exit 1 &``, ``fi &``): its ``exit 1`` cannot fail the job (#1634).
-  ``&&``, ``2>&1``, ``&>`` and ``|&`` are not one.
+  ``&&``, ``2>&1``, ``<&3``, ``&>`` and ``|&`` are not one.
 
 The rules are described with the apidiff check in ``lib.ci.api_compat``'s reference. Inward-only imports; never an orchestrator. Tests:
 ``tests/test_api_compat_condition.py`` and ``tests/test_apidiff_reraise.py``.
@@ -29,7 +29,7 @@ from lib.instructions.command_resolver import command_words
 
 SUBSHELL = re.compile(r"\s*(?:(?:then|else|do|\{|!)\s+)*\(")   # a command that opens ``( ... )``, not a quoted ``(``
 _ECHO = (["echo"], ["printf"])   # commands that cannot fail before a chained ``exit``
-_BACKGROUND = re.compile(r"(?<![&>|])&(?![&>])")   # ``... && exit 1 &``: the exit runs in a background job
+_BACKGROUND = re.compile(r"(?<![&<>|])&(?![&>])")   # ``... && exit 1 &``: the exit runs in a background job
 _QUOTED = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
 
 
