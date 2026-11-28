@@ -10,6 +10,9 @@ unread source, never as one with no imports.
   A flow value (``[``, ``{``) or a quoted value is followed across lines to its close. A line
   no key owns, a directive, a merge key, an anchor, alias or tag on ``imports``, and a second
   ``imports`` key raise.
+- **Forms GitHub also accepts (#1608).** A tab after a key's colon reads as a space; a
+  ``...`` document-end line ends the frontmatter, and any text after it raises; ``imports:
+  null`` (or ``~``) with nothing under it reads as no imports.
 - **The value.** ``imports:`` holds a flow list (on its own line or the next, over one line or
   several) or a block list. An item is a scalar (plain, ``'single'`` or ``"double"`` quoted;
   a comma inside quotes stays in the path) or a mapping, block or flow, whose ``path`` or
@@ -24,10 +27,32 @@ from __future__ import annotations
 
 import json
 
-from lib.pack_yaml import UNPARSABLE, UNSUPPORTED, YamlError, quote_opens, quoted_end, split_key, strip_comment
+from lib.pack_yaml import UNPARSABLE, UNSUPPORTED, YamlError, quote_opens, quoted_end, split_key as _split_key
+from lib.pack_yaml import strip_comment
 
 IMPORT_KEYS = ("path", "uses")
+NULLS = ("~", "null", "Null", "NULL")
+DOCUMENT_END = "..."
 Row = tuple[int, str]
+
+
+def split_key(text: str) -> tuple[str, str]:
+    """``lib.pack_yaml.split_key``, also taking a tab after an unquoted key's colon, as YAML does."""
+    if text[:1] not in ("'", '"'):
+        tab, space = text.find(":\t"), text.find(": ")
+        if tab >= 0 and (space < 0 or tab < space):
+            text = f"{text[:tab]}: {text[tab + 2:]}"
+    return _split_key(text)
+
+
+def _document(lines: list[str]) -> list[str]:
+    """The lines before a ``...`` document-end line; any text after one raises."""
+    if DOCUMENT_END not in lines:
+        return lines
+    end = lines.index(DOCUMENT_END)
+    if any(line.strip() for line in lines[end + 1:]):
+        raise YamlError(UNSUPPORTED)  # a second document, or text past the end
+    return lines[:end]
 
 
 def _indent(line: str) -> int:
@@ -100,7 +125,7 @@ def _scalar(text: str) -> str:
         except ValueError as exc:
             raise YamlError(UNSUPPORTED) from exc
         return str(value)
-    if ": " in text or text.endswith(":") or text in ("~", "null", "Null", "NULL"):
+    if ": " in text or ":\t" in text or text.endswith(":") or text in NULLS:
         raise YamlError(UNSUPPORTED)
     return text
 
@@ -250,7 +275,7 @@ def _block_list(rows: list[Row]) -> list[str]:
 
 def imports(front: str) -> list[str]:
     """The raw ``imports:`` items of a gh-aw frontmatter (module doc); ``YamlError`` when unread."""
-    lines = [strip_comment(raw) for raw in front.lstrip("\ufeff").splitlines()]
+    lines = _document([strip_comment(raw) for raw in front.lstrip("\ufeff").splitlines()])
     found = [(value, body) for key, value, body in _entries(lines) if key == "imports"]
     if not found:
         return []
@@ -258,6 +283,8 @@ def imports(front: str) -> list[str]:
         raise YamlError(UNPARSABLE)
     value, body = found[0]
     rows = [(_indent(line), line.strip()) for line in body if line.strip()]
+    if value in NULLS and not rows:
+        return []
     if value:
         return _flow_list(" ".join([value, *(t for _, t in rows)]))
     if not rows:
