@@ -24,7 +24,8 @@ line with the ``ci_masking`` indentation model.
   beside ``paths-ignore``, which GitHub rejects, or a pattern with ``?``, ``+`` or ``[``) lets
   every file through, so the hazard is never raised on a filter it did not read. A trailing
   ``#`` comment on a list item is dropped first. A PR workflow that also runs on
-  ``merge_group`` lets every file through, since a merge queue run takes no ``paths`` filter.
+  ``merge_group`` lets every file through, since a merge queue run takes no ``paths`` filter, and
+  a ``merge_group`` workflow of its own that runs a check clears every file the same way.
 
 ``unchecked_instructions(workflows, tracked)`` returns the count of instruction files that every
 PR workflow filters out, the instruction files themselves and the workflows read, or None
@@ -140,6 +141,8 @@ def unchecked_instructions(workflows: dict[str, str], tracked: frozenset[str]) -
     for rel, text in sorted(workflows.items()):
         filters = pr_filters(text)
         if filters is None:
+            if "merge_group" in (workflow_events(text) or []) and check_commands(text) > 0:
+                unchecked = set()  # a merge queue check runs on every file before it merges
             continue
         read.append(rel)
         checking = checking or check_commands(text) > 0

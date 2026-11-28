@@ -164,6 +164,13 @@ def test_a_merge_queue_run_clears_it(tmp_path: Path) -> None:
     assert scan_ci_hazards(_repo(tmp_path, {".github/workflows/checks.yml": queued}))["instructions_unchecked"] == 0
 
 
+def test_a_separate_merge_queue_check_workflow_clears_it(tmp_path: Path) -> None:
+    queue = PLAIN.replace("on: [push, pull_request]", "on: [merge_group]")
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/checks.yml": IGNORED,
+                                             ".github/workflows/mq.yml": queue}))
+    assert (block["instructions_unchecked"], block["unchecked_instruction_files"]) == (0, [])
+
+
 def test_glob_regex_refuses_what_it_does_not_read() -> None:
     assert glob_regex("a?b") is None and glob_regex("") is None
     regex = glob_regex("docs/*")
