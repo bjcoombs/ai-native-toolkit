@@ -44,6 +44,9 @@ BASH4_FEATURES = {
     "wait -n": re.compile(r"\bwait\s+-n\b"),
     "[[ -v": re.compile(r"\[\[\s+-v\b"),
     "coproc": re.compile(r"\bcoproc\b"),
+    "case fall-through": re.compile(r";;&|(?<!;);&"),
+    "declare -g": re.compile(r"\b(?:declare|typeset)\s+-[a-zA-Z]*g"),
+    "negative array subscript": re.compile(r"\$\{[A-Za-z_]\w*\[\s*-\s*\d+\s*\]"),
 }
 
 
@@ -88,6 +91,11 @@ def test_the_lint_reads_every_script() -> None:
         ("wait -n", "wait -n"),
         ("[[ -v name ]]", "[[ -v"),
         ("coproc cat", "coproc"),
+        ("  a) echo a ;;&", "case fall-through"),
+        ("  a) echo a ;&", "case fall-through"),
+        ("declare -g name=1", "declare -g"),
+        ("declare -ga names=()", "declare -g"),
+        ('echo "${arr[-1]}"', "negative array subscript"),
     ],
 )
 def test_the_lint_flags_each_bash4_feature(snippet: str, feature: str) -> None:
@@ -103,6 +111,9 @@ def test_the_lint_flags_each_bash4_feature(snippet: str, feature: str) -> None:
         'for x in ${arr[@]+"${arr[@]}"}; do :; done',
         'echo "${#arr[@]}" "${name#prefix}" "${name%%/*}" "${1#*=}"',
         "local -a opts=(-c core.longpaths=true)",
+        "  a) echo a ;;",
+        "cmd >/dev/null 2>&1 &",
+        'echo "${arr[0]}" "${arr[@]:0:$n}" "${#arr[@]}"',
     ],
 )
 def test_the_lint_passes_bash32_code(snippet: str) -> None:
