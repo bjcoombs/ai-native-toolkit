@@ -7,7 +7,8 @@ Split out of ``lib.ci.ci_masking`` (#1008), which applies these rules per line a
 ``_same_line_keep(statement, later)`` is the segment indices the same-line rules keep: a
 ``|| <no-op>`` (``true``, ``/bin/true``, ``:``, ``exit 0``) masks the segments before it,
 unless they are a capture checked on a ``later`` line, and an exit-zero flag masks its
-segment and the ``||`` pipelines it skips.
+segment and the ``||`` pipelines it skips. ``first_exit(statements, top)`` is the first
+top-level lone ``exit`` of one body (``exit_status``), after which nothing runs (#1622).
 
 ``( )`` subshells (#1008). A ``(`` that opens a segment, and a ``)`` that ends one, are
 read as a subshell group. A ``|| <no-op>`` inside a group masks the segments before it back
@@ -22,7 +23,7 @@ group on the left of ``||``.
 
 Inward-only imports: stdlib only; never ``lib.ci.ci_masking`` or an orchestrator.
 Tests: ``tests/test_ci_subshell_noop.py``, ``tests/test_ci_checks.py``,
-``tests/test_ci_false_credit.py``.
+``tests/test_ci_false_credit.py``, ``tests/test_ci_exit_unreachable.py``.
 """
 from __future__ import annotations
 
@@ -156,6 +157,26 @@ def _checked_later(targets: list[str], later: list[str]) -> bool:
 
 def _join(statement: list[tuple[str, str]]) -> str:
     return " ".join(f"{op} {seg}" if op else seg for op, seg in statement)
+
+
+def exit_status(statement: list[tuple[str, str]]) -> str | None:
+    """The status word of a statement that is ``exit`` alone (``""`` when bare), else None."""
+    words = statement[0][1].split() if len(statement) == 1 else []
+    return " ".join(words[1:]) if words[:1] == ["exit"] and len(words) <= 2 else None
+
+
+def first_exit(statements: list[list[tuple[str, str]]], top: list[bool]) -> int | None:
+    """The first of one body's ``statements`` that is a lone ``exit`` where ``top`` holds (code at
+    the body's top level), else None: nothing after it runs (#1622). An ``exit`` after a line
+    that ends in ``&&``, ``||`` or ``|`` is that line's tail (``x &&`` then ``exit 0`` is a
+    guard), not a statement of its own. A non-code statement is passed as ``[]``."""
+    dangling = False
+    for i, statement in enumerate(statements):
+        if top[i] and not dangling and exit_status(statement) is not None:
+            return i
+        if statement:
+            dangling = statement[-1][0] in ("&&", "||", "|") and not statement[-1][1].strip()
+    return None
 
 
 def _drop_exit_zero(statement: list[tuple[str, str]], keep: list[int]) -> list[int]:

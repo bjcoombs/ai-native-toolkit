@@ -63,7 +63,8 @@ parser (the core has no YAML dependency). Only literal values count.
   exits or returns a non-zero literal, a variable or ``$?`` (``exit 1``,
   ``exit $status``), as ``.github/workflows/floor.yml``'s retry loop does.
 - Never reached (#1622). A bare ``exit`` or ``exit`` with any status, alone at the top level of a body (nesting as above, any
-  shell, GitLab too), masks every later statement of it: ``exit 0`` then ``pytest`` earns nothing; ``if ...; then exit 0; fi`` masks nothing.
+  shell, GitLab too), masks every later statement of it (``lib.ci.ci_statements.first_exit``): ``exit 0`` then ``pytest`` earns
+  nothing; ``if ...; then exit 0; fi`` and ``x &&`` then ``exit 0`` on the next line mask nothing.
 - Errexit-exempt positions (#936, ``lib.ci.ci_exempt``). With errexit on, bash does not stop
   at a failing command on the left of ``&&`` / ``||``, in a pipeline but its last command
   (pipefail off: the default ``bash -e {0}`` and ``sh``; on for ``shell: bash``, a custom
@@ -112,7 +113,8 @@ GitLab body is read for the ``||`` fallback only; a compound command in an exemp
 (``fi || true``) does not exempt its body; ``allow_failure`` inherited through
 ``default:``, ``extends:`` or a YAML anchor is not resolved; a GitLab ``set +e`` in
 ``before_script:`` does not reach ``script:``; reusable-workflow and composite-action
-internals are not read. A check that is the last statement after ``set +e`` is masked by
+internals are not read; a lone ``exit`` in a ``shell: python`` body (a no-op there) is read as
+ending the step (#1622). A check that is the last statement after ``set +e`` is masked by
 design (issue #775 scope): bash would exit with its status, but any trailing line would
 hide it.
 
@@ -178,7 +180,7 @@ from dataclasses import dataclass
 from lib.ci.ci_exempt import (
     condition_flags, exempt_segments, pipefail_after, piped_groups, piped_members, shell_pipefail, unquoted)
 from lib.ci.ci_statements import (
-    _capture_targets, _checked_later, _join, _pick, _same_line_keep, split_statements)
+    _capture_targets, _checked_later, _join, _pick, _same_line_keep, exit_status, first_exit, split_statements)
 from lib.ci.ci_unsure import (
     condition_raises, group_call_unsure, opaque_flags, or_arm_unsure, piped_calls, uncalled_functions,
     until_break_flags)
@@ -440,12 +442,6 @@ def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> t
     return out, grouped
 
 
-def _exit_status(statement: list[tuple[str, str]]) -> str | None:
-    """The status word of a lone ``exit`` (``""`` when bare), else None; at the top level it ends the body (#1622)."""
-    words = statement[0][1].split() if len(statement) == 1 else []
-    return " ".join(words[1:]) if words[:1] == ["exit"] and len(words) <= 2 else None
-
-
 # Shells GitHub Actions runs without errexit: ``pwsh`` / ``powershell`` (a Windows runner's
 # default), ``cmd`` and ``python``. ``bash`` and ``sh`` run with ``-e``.
 _NO_ERREXIT_SHELLS = frozenset({"pwsh", "powershell", "cmd", "python"})
@@ -613,8 +609,8 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     uncalled, named = uncalled_functions(body) if readable else (set(), set())   # #1061
     grouped_pipes = {**piped_groups(body), **piped_calls(body, before)} if readable else {}   # #1061
     opaque = opaque_flags(body)
-    ends = [i for i, (first, k) in enumerate(refs) if code[i] and depths[i] == 0 and _exit_status(parsed[first][k]) is not None]
-    out: list[tuple[int, int]] = refs[ends[0] + 1:] if ends else []   # never reached (#1622)
+    end = first_exit(body, [depth == 0 for depth in depths])
+    out: list[tuple[int, int]] = refs[end + 1:] if end is not None else []   # never reached (#1622)
     exempt: Segments = {}
     unsure: Segments = {}
     later_code = False   # a later statement runs after this one (not a lone closer)
@@ -622,7 +618,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success
     exit_reraised = False
-    for idx in range(ends[0] if ends else len(refs) - 1, -1, -1):
+    for idx in range(len(refs) - 1 if end is None else end, -1, -1):
         first, k = refs[idx]
         own = bool(_RERAISE.search(_join(parsed[first][k])))
         later_exit = exited and not (exit_reraised or own)
@@ -663,7 +659,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
             pipestatus = True
         if code[idx] and any(seg for _, seg in raw[first][k]) and _head(raw[first][k]) not in _ENDS:
             later_code = True
-        if code[idx] and depths[idx] == 0 and _exit_status(parsed[first][k]) == "0":
+        if code[idx] and depths[idx] == 0 and exit_status(parsed[first][k]) == "0":
             exited, exit_reraised = True, False
         reraised = reraised or own
         exit_reraised = exit_reraised or own

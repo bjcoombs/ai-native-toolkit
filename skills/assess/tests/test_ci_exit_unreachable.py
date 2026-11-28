@@ -53,6 +53,9 @@ def test_a_check_after_a_top_level_exit_is_masked(text: str) -> None:
     pytest.param(_block("[ -n \"$X\" ] && exit 0\npytest"), id="guarded_exit"),
     pytest.param(_block("echo exit 0\npytest"), id="echoed_text"),
     pytest.param(_block("if ($env:SKIP) {\n  exit 0\n}\npytest", shell="pwsh"), id="pwsh_if_block"),
+    pytest.param(_block("[ -n \"$X\" ] &&\n  exit 0\npytest"), id="and_on_the_line_before"),
+    pytest.param(_block("command -v foo ||\n  exit 1\npytest"), id="or_on_the_line_before"),
+    pytest.param(_block("echo a |\n  exit 0\npytest"), id="pipe_on_the_line_before"),
 ])
 def test_a_check_after_a_nested_or_guarded_exit_still_counts(text: str) -> None:
     assert enforced_check_commands(text) == (1, 0)
