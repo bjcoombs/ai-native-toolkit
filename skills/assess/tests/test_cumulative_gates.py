@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import copy
 import subprocess
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -32,11 +31,12 @@ from lib.scoring.level_tally import default_model, level_result
 from lib.scoring.levels import MaturityModel, load_levels
 from lib.scoring.step_reading import step_reading
 from lib.top_card import GATE_GAP, GATE_TASK
+from assess_test_support import TOOLKIT_ROOT
 from cumulative_gates_fixture import step3_signals
 from fleet_data_fixture import STAMP
 
 MODEL = default_model()
-REPO = Path(__file__).resolve().parents[3]
+REPO = TOOLKIT_ROOT
 
 STEP2 = ["layer-0-instructions.1", "layer-0-instructions.2"]
 STEP3 = [*STEP2, "layer-5-ci.1", "layer-7-review.1", "layer-3-linters.1", "secrets-guard.1"]
@@ -235,6 +235,7 @@ def test_one_change_is_named_only_when_one_condition_is_left() -> None:
     assert headline(one, MODEL)["summary"] == "Step 1 · one change from Step 3: instruction file with a check command"
 
 
+@pytest.mark.toolkit_repo  # reads the toolkit repository itself (#1649)
 def test_no_shipped_model_doc_or_golden_names_agent_prs() -> None:
     listed = subprocess.run(["git", "-C", str(REPO), "ls-files", "-z"], check=True, capture_output=True,
                             encoding="utf-8", errors="surrogateescape").stdout.split("\0")
