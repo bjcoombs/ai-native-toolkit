@@ -113,6 +113,7 @@ def test_a_merge_group_workflow_and_a_mergify_queue_count_as_merge_queues(tmp_pa
     {"OWNERS": ROOT_OWNERS, "src/OWNERS": "approvers:\n  - alice\n"},
     {"OWNERS": "filters:\n  \".*\":\n    approvers: [alice]\n"},
     {"OWNERS": "approvers: [leads]\n", "OWNERS_ALIASES": "aliases:\n  leads:\n    - alice\n"},
+    {"OWNERS": "approvers: [team]\n", "OWNERS_ALIASES": "aliases:\n  team:\n"},  # resolves to nobody
 ])
 def test_one_owner_for_everything_is_a_catch_all(tmp_path: Path, files: dict[str, str]) -> None:
     block = scan_review_rules(_repo(tmp_path, files))

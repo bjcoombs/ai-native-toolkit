@@ -15,7 +15,7 @@ git-tracked files, each parsed, never matched as text:
   and no ``if``, clears it; a conditional one is left out). An unknown rule name is unsettled;
 - ``prow_owners``: Prow ``OWNERS`` files naming ``approvers``, at the top level or under
   ``filters``. Mirroring the #785 catch-all rule, OWNERS files that between them name one owner
-  for everything (after expanding a root ``OWNERS_ALIASES``) do not count: with Prow's implicit
+  for everything (after expanding a root ``OWNERS_ALIASES``), or nobody at all, do not count: with Prow's implicit
   self-approval that owner reviews nothing. ``catch_all_owners`` is then true;
 - ``ruleset_json``: a committed ruleset or classic branch-protection export
   (``lib.hosting.config_snapshots.find_snapshots``, the shapes the drift scan reads) that requires
@@ -222,8 +222,8 @@ class _Scan:
                 everyone.update(aliases.get(name.lower(), [name.lower()]))
             if approvers:
                 with_approvers.append(rel)
-        if with_approvers and len(everyone) == 1:
-            # One owner for everything (#785): no second reader. An unread OWNERS file may
+        if with_approvers and len(everyone) <= 1:
+            # One owner for everything (#785), or none once aliases resolve: no second reader. An unread OWNERS file may
             # name another, so the catch-all is then not called either way.
             self.catch_all = not unread
             return
