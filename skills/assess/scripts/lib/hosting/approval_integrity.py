@@ -31,8 +31,10 @@ number of sampled changes:
 Who is a bot. A confirmed ``[identities]`` entry decides first (``.assess/config.toml``,
 ``references/identities.md``): ``people`` are people; ``bots`` and ``agents`` are bots, as an
 agent's approval is not a person's. On GitHub the login is tried as given and with
-``[bot]``, since ``gh`` drops the suffix. Otherwise GitHub asks the sample's shared
-``BotClassifier`` (``github-actions`` is always a bot), and GitLab, which has no bot flag,
+``[bot]``, since ``gh`` drops the suffix. Otherwise GitHub reads an
+``[[ai_usage.agent_identities]]`` rule or pinned agent as a bot, then asks the sample's shared
+``BotClassifier`` (``github-actions`` is always a bot); a user account under a name-only AI
+hint (``agent_identity.is_agent_hint``, #883) is unknown until confirmed, as in ``delivery``. GitLab, which has no bot flag,
 reads the note classifier's rules (``lib/hosting/gitlab_notes.py``): an agent, an access-token
 user or a dependency bot is a bot, an unconfirmed AI-name hint is unknown, anyone else a
 person. A review with no author login (a deleted account) is skipped, as ``approved_share``
@@ -53,7 +55,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, TypedDict
 
-from lib.agent_identity import AuthorMatcher
+from lib.agent_identity import AGENT, AuthorMatcher, is_agent_hint
 from lib.hosting.gitlab_notes import NoteClassifier
 from lib.hosting.merged_sample import STATUS_BOTS, BotClassifier, login, parse_time
 
@@ -118,8 +120,15 @@ def github_party(bots: BotClassifier, matcher: AuthorMatcher) -> PartyOf:
         confirmed = _confirmed(matcher, (name, f"{name}[bot]"))
         if confirmed is not None:
             return confirmed
+        if matcher.classify_username(name).bucket == AGENT:
+            return "bot"  # an [[ai_usage.agent_identities]] rule or a pinned agent, as in delivery
         verdict = bots.is_bot(actor)
-        return None if verdict is None else "bot" if verdict else "person"
+        if verdict is None:
+            return None
+        if verdict:
+            return "bot"
+        # A user account under a name-only AI hint (#883) could be an agent or a person.
+        return None if is_agent_hint(username=name) else "person"
     return party
 
 

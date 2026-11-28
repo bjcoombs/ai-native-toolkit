@@ -261,6 +261,17 @@ def test_a_confirmed_agent_approval_is_not_independent() -> None:
     assert out["bot_only_approval_count"] == 1
 
 
+def test_github_agent_rule_and_ai_hint_never_read_as_a_person() -> None:
+    from lib.agent_identity import compile_config_rules
+
+    matcher = AuthorMatcher(compile_config_rules([{"pattern": "ci-agent", "field": "username"}]))
+    out = _counts([_pr(_review("ci-agent"))], matcher=matcher)
+    assert out["independent_approval_count"] == 0
+    assert out["bot_only_approval_count"] == 1
+    # A user account named like an AI tool could be either: unknown until confirmed.
+    assert _counts([_pr(_review("copilot"))])["independent_approval_count"] is None
+
+
 # ---- the block: existing fields unchanged ------------------------------------
 
 def test_summarize_keeps_approved_share_with_bots_and_adds_the_counts() -> None:
