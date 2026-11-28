@@ -36,8 +36,8 @@ A command invokes a tool when, past a launcher (`uv run`, `npx --yes`, `pnpm exe
 
 **A run counts only when it can turn the job red.** Two tools report without stopping by default:
 
-- `apidiff` (`golang.org/x/exp/cmd/apidiff`) exits 0 on an incompatible change; it only prints the report. It counts when the job's lines, or the followed script or recipe that runs it, hold a command that re-raises: `exit` or `return` with a non-zero literal or a variable, or `false` (`if [ -s out.txt ]; then exit 1; fi`). A whole-line capture (`out=$(apidiff a b)`) is read as the command it runs.
-- `japicmp` exits 0 unless the CLI gets an `--error-on-*` flag. The Maven plugin's `breakBuildOn*` and `breakBuildBasedOnSemanticVersioning`, and the Gradle task's `failOnModification`, `failOnSourceIncompatibility` and `failOnBinaryIncompatibility`, default to false: one of them set true in a build file the follower read, or a `-Djapicmp.<setting>=true` on the command, is needed.
+- `apidiff` (`golang.org/x/exp/cmd/apidiff`) exits 0 on an incompatible change; it only prints the report. It counts when a command after the call, in the same shell, re-raises: `exit` or `return` with a non-zero literal or a variable other than `$?`, or `false` (`if [ -s out.txt ]; then exit 1; fi`). The shell is the GitHub `run:` step (another step is another shell), the GitLab job's `before_script:` and `script:`, or the followed script or recipe. apidiff's own `||` fallback never runs, so `apidiff a b || exit 1` does not count, nor does an `exit 1` before the call. A whole-line capture (`out=$(apidiff a b)`) is read as the command it runs.
+- `japicmp` exits 0 unless the CLI gets an `--error-on-*` flag. The Maven plugin's `breakBuildOn*` and `breakBuildBasedOnSemanticVersioning`, and the Gradle task's `failOnModification`, `failOnSourceIncompatibility` and `failOnBinaryIncompatibility` (Groovy `= true`, Kotlin `.set(true)`), default to false: one of them set true in a build file the follower read, or a `-Djapicmp.<setting>=true` on the command, is needed.
 
 A run that cannot stop its job is listed under `declared` with the CI file as its path, never counted.
 

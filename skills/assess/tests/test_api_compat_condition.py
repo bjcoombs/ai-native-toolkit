@@ -321,3 +321,22 @@ def test_a_gradle_japicmp_task_counts_only_when_it_fails_on_modification(tmp_pat
     assert _block(quiet)["runs"] == [] and {"path": WF, "tool": "japicmp"} in _block(quiet)["declared"]
     strict = _repo(tmp_path / "s", {**files, "build.gradle": build.format(body="    failOnModification = true\n")})
     assert _block(strict)["runs"] == [{"path": WF, "tool": "japicmp"}]
+
+
+@pytest.mark.parametrize("runs", [
+    ("apidiff old new", "test -f go.mod || exit 1"),           # another step is another shell
+    ("test -f go.mod || exit 1; apidiff old new",),            # the re-raise comes before apidiff
+    ("apidiff old new; exit $?",),                              # $? is apidiff's own 0
+    ("apidiff old new || exit 1",),                             # apidiff exits 0, so its fallback never runs
+])
+def test_an_exit_that_cannot_react_to_apidiff_does_not_count(tmp_path: Path, runs: tuple[str, ...]) -> None:
+    assert _block(_repo(tmp_path, {WF: _workflow(*runs)}))["runs"] == []
+
+
+def test_a_kotlin_dsl_japicmp_fail_setting_counts(tmp_path: Path) -> None:
+    build = ("plugins {\n    java\n    id(\"me.champeau.gradle.japicmp\") version \"0.4.2\"\n}\n"
+             "val japicmp by tasks.registering(me.champeau.gradle.japicmp.JapicmpTask::class) {\n"
+             "    failOnModification.set(true)\n}\ntasks.named(\"check\") { dependsOn(japicmp) }\n")
+    root = _repo(tmp_path, {"settings.gradle.kts": "rootProject.name = \"widget\"\n",
+                            "build.gradle.kts": build, WF: _workflow("./gradlew check")})
+    assert _block(root)["runs"] == [{"path": WF, "tool": "japicmp"}]

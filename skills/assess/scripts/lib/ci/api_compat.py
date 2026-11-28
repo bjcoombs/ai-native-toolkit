@@ -65,7 +65,8 @@ from lib.ci.ci_build_follower import Followed
 from lib.ci.ci_masking import IndentTree, mask_lines, parse_lines
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
-from lib.ci.docs_kept_true import _commands
+from lib.ci.docs_kept_true import _OPERATOR, _commands
+from lib.instructions.command_resolver import command_words
 from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.run_context_types_api_compat import ApiCompatBlock, ApiCompatRun
 from lib.unread_ci import unread_ci_paths
@@ -83,7 +84,7 @@ _CAPTURE = re.compile(r"^\s*(?:local\s+|export\s+)?\w+=\$\((.*)\)\s*$")   # ``ou
 # ``breakBuildOn*`` / ``breakBuildBasedOnSemanticVersioning`` and the Gradle task's ``failOn*``.
 _JAPICMP_SETTING = r"(?:breakBuild(?:On|Based)\w*|failOn(?:Modification|SourceIncompatibility|BinaryIncompatibility))"
 _JAPICMP_FLAG = re.compile(r"^-Djapicmp\." + _JAPICMP_SETTING + r"=true$")
-_JAPICMP_BREAK = re.compile(_JAPICMP_SETTING + r"\s*(?:>|=|\()\s*true")
+_JAPICMP_BREAK = re.compile(_JAPICMP_SETTING + r"\s*(?:>|=|\(|\.set\()\s*true")
 # Remote GitHub actions that run a compatibility check and stop the job on a breaking change.
 ACTIONS = {"obi1kenobi/cargo-semver-checks-action": "cargo-semver-checks",
            "bufbuild/buf-breaking-action": "buf-breaking"}
@@ -166,12 +167,25 @@ def _shell(line: str) -> str:
     return capture.group(1) if capture else text
 
 
+def _after(text: str, words: list[str]) -> list[list[str]]:
+    """The commands of one shell line after the one whose words are ``words``, less that
+    command's own ``||`` fallback (``apidiff a b || exit 1`` re-raises nothing: apidiff exits 0)."""
+    parts = _OPERATOR.split(text)
+    for i in range(0, len(parts), 2):
+        if command_words(parts[i].strip().strip("(){} ")) == words:
+            rest = parts[i + 1:]
+            if rest[:1] == ["||"]:
+                rest = rest[2:]
+            return [command_words(p.strip().strip("(){} ")) for p in rest[1::2]]
+    return []
+
+
 def _reraises(words: list[str]) -> bool:
     """A command that ends its script red: ``exit`` or ``return`` with a non-zero literal or a
-    variable, or ``false`` (``then exit 1`` inside an ``if`` too)."""
+    variable other than ``$?``, or ``false`` (``then exit 1`` inside an ``if`` too)."""
     for i, word in enumerate(words):
-        if word in ("exit", "return") and i + 1 < len(words) and (words[i + 1].lstrip('"').startswith("$")
-                                                                  or words[i + 1].strip('"') not in ("", "0")):
+        code = words[i + 1].strip('"') if i + 1 < len(words) else ""
+        if word in ("exit", "return") and code not in ("", "0", "$?"):   # ``$?`` after apidiff is its 0
             return True
         if word == "false" and i in (0, 1):
             return True
@@ -180,11 +194,14 @@ def _reraises(words: list[str]) -> bool:
 
 def can_stop(tool: str, words: list[str], unit: list[str]) -> bool:
     """Whether a run of ``tool`` can turn its job red. ``apidiff`` exits 0 on an incompatible
-    change, so it counts only when ``unit`` (the job, script or recipe that runs it) re-raises
-    (``exit 1``, ``exit $rc``, ``false``). The japicmp CLI exits 0 unless an ``--error-on-*``
+    change, so it counts only when ``unit`` re-raises (``exit 1``, ``exit $rc``, ``false``):
+    the lines from the apidiff call to the end of its shell (a GitHub step, a GitLab job's
+    script, a followed script or recipe). The japicmp CLI exits 0 unless an ``--error-on-*``
     flag is passed. Every other tool exits non-zero on a breaking change by default."""
     if tool == "apidiff":
-        return any(_reraises(c["words"]) for line in unit for c in _commands(_shell(line)))
+        first = _after(_shell(unit[0]), words) if unit else []
+        return any(_reraises(w) for w in first) or any(
+            _reraises(c["words"]) for line in unit[1:] for c in _commands(_shell(line)))
     if tool == "japicmp":
         return any(w.startswith("--error-on-") for w in words)
     return True
@@ -227,11 +244,11 @@ class _Reader:
     def lines(self, lines: list[str], depth: int = 0, path: tuple[str, ...] = ()) -> set[str]:
         """The tools the shell ``lines`` run, followed into the repository."""
         found: set[str] = set()
-        for line in lines:
+        for index, line in enumerate(lines):
             commands = list(_commands(_shell(line)))
             for cmd in commands:
                 tool = tool_of(cmd["words"]) if not cmd["masked"] else None
-                if tool is not None and can_stop(tool, cmd["words"], lines):
+                if tool is not None and can_stop(tool, cmd["words"], lines[index:]):
                     found.add(tool)
                 elif tool is not None:
                     self.report_only.add(tool)
@@ -299,7 +316,8 @@ def _gitlab_jobs(tree: IndentTree) -> tuple[set[int], set[int]]:
 
 
 def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], list[str], set[str]]:
-    """``(jobs, untaken, unsure, actions)``: each running job's unmasked shell lines, the lines of
+    """``(shells, untaken, unsure, actions)``: the unmasked lines of each shell that runs (a GitHub
+    ``run:`` step, a running GitLab job's ``before_script:`` and ``script:``), the lines of
     GitLab hidden jobs nothing extends, the lines whose exit status the step may hide
     (``ci_unsure``), and the tools of the ``ACTIONS`` an unmasked GitHub step ``uses:``."""
     keys = _GITLAB_BODY if gitlab else _GITHUB_BODY
@@ -318,11 +336,12 @@ def _job_lines(text: str, gitlab: bool) -> tuple[list[list[str]], list[str], lis
         if tree.lines[tree.body(i)].key not in keys:
             continue
         start = tree.job(i).start
+        shell = start if gitlab else tree.body(i)   # a GitHub step is its own shell; a GitLab job one
         if gitlab and start in untaken:
             hidden.append(line)
         elif not gitlab or start in running:
             if line.strip():
-                spans.setdefault(start, []).append(line)
+                spans.setdefault(shell, []).append(line)
             if unsure[i].strip():
                 doubt.append(unsure[i])
     return list(spans.values()), hidden, doubt, actions
