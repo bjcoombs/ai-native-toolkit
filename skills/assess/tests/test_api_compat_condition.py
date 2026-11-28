@@ -691,6 +691,8 @@ def test_an_output_file_if_with_then_on_the_next_line_counts_in_a_step(tmp_path:
     ('if [ -n "$(apidiff -incompatible old new)" ]', "then", "  if true; then echo x; fi", "  false", "fi || true"),
     ("apidiff -incompatible old new | grep -q . && { echo broke; exit 1; } || true",),
     ("apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo broke; exit 1; } || true",),
+    ('[ -z "$(apidiff -incompatible old new)" ] || { echo "{"; exit 1; } || true',),   # a quoted brace
+    ('apidiff -incompatible old new > out.txt; grep -q . out.txt && { echo "}"; exit 1; } || true',),
 ])
 def test_a_rescued_multi_line_check_does_not_count(tmp_path: Path, lines: tuple[str, ...]) -> None:
     step = "      - run: |\n" + "".join(f"          {line}\n" for line in lines)

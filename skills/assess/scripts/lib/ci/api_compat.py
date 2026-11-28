@@ -315,17 +315,14 @@ def _and_chain(rest: list[str]) -> list[str]:
 
 
 def _branch_reraises(rest: list[str], held: frozenset[str] = frozenset()) -> bool:
-    """Whether the ``&&`` chain or ``||`` fallback opening ``rest`` holds a re-raise no later passing
-    ``||`` outside a group rescues (``{ echo broke; exit 1; } || true``, which ``_rescued`` misses)."""
+    """Whether the ``&&`` chain or ``||`` fallback opening ``rest`` holds a re-raise and no later
+    ``||`` on the line falls back to a command that passes (``{ echo broke; exit 1; } || true``, which
+    ``_rescued`` misses). No group depth is read, so a quoted brace cannot hide the fallback."""
     def raises(parts: list[str]) -> bool:
         return any(_reraises(_words(p), held) for p in parts)
-    depth, ops = 0, []   # the operators outside any group, before the next ``;``
-    for k in range(2, len(rest), 2):
-        depth += sum(rest[k - 1].count(c) for c in "{(") - sum(rest[k - 1].count(c) for c in "})")
-        ops += [k] if depth <= 0 else []
-    ops = ops[:next((n for n, k in enumerate(ops) if rest[k] == ";"), len(ops))]
     branch = _and_chain(rest) if rest[0] == "&&" else _OPERATOR.split(fallback(rest[1:]))[::2]
-    return raises(branch) and all(raises(_OPERATOR.split(fallback(rest[k + 1:]))[::2]) for k in ops if rest[k] == "||")
+    return raises(branch) and all(raises(_OPERATOR.split(fallback(rest[k + 1:]))[::2])
+                                  for k in range(2, len(rest), 2) if rest[k] == "||")
 
 
 def _decides(parts: list[str], refs: list[str], later: list[str], held: frozenset[str], piped: bool = False) -> bool:
