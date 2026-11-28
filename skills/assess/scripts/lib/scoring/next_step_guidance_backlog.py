@@ -56,5 +56,6 @@ BACKLOG_HINT = (
     "headless fleet scan makes no network calls, so it is not measured (`no_network`) without "
     "`--platform`; `no_platform_auth` means gh or glab is signed out or refused the issues, and "
     "`unsupported_host` a remote that is not GitHub or a GitLab glab reaches. A read that stopped "
-    "at its page cap leaves the ratio not measured (`window_truncated`; set a shorter "
-    "`window_days` in `[backlog_ready]`) or the untriaged share (`open_truncated`).")
+    "at its page cap leaves the ratio, and the median wait when the cap dropped issues from the "
+    "window, not measured (`window_truncated`; set a shorter `window_days` in `[backlog_ready]`), "
+    "or the untriaged share (`open_truncated`).")

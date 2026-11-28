@@ -378,7 +378,8 @@
 #   stale_job_safe. It is config_text, so it is listed, never counted. Level 2 reads the issue
 #   tracker through the platform pass, all of first_response_met, untriaged_met and
 #   close_open_met against the [backlog_ready] thresholds in .assess/config.toml. It is platform
-#   evidence, graded verified and counted. Both levels are tagged agent_context and governance. Without --platform, or with gh or glab signed out,
+#   evidence, graded verified and counted. Both levels are tagged agent_context and
+#   governance. Without --platform, or with gh or glab signed out,
 #   level 2 is unknown (no_network, no_platform_auth, unsupported_host), never unmet; a read that
 #   stopped at its page cap is unknown for the metric it would bias (window_truncated,
 #   open_truncated). It gates no Step.

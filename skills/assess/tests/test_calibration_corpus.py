@@ -271,6 +271,18 @@ def test_platform_blocks_join_before_the_states_are_read(tmp_path: Path, monkeyp
         f"{cc.repo_key('org/r1').removeprefix('h:')} c.1: expected met, got unmet"]
 
 
+def test_an_offline_diff_of_a_platform_seeded_corpus_is_refused(
+        corpus: tuple[Path, Path, dict[str, Path]], capsys: pytest.CaptureFixture[str]) -> None:
+    root, out, _ = corpus
+    expected = cc.load_corpus(out)
+    assert not cc.platform_seeded(expected)
+    expected[0]["states"]["backlog-ready.2"] = "unmet"  # only the platform pass measures it
+    cc.write_expected(out, expected[0])
+    assert cc.platform_seeded(cc.load_corpus(out))
+    assert cli.main(["diff", str(root), "--corpus", str(out)], scan=fake_scan) == 2
+    assert "seeded with --platform" in capsys.readouterr().err
+
+
 def test_the_row_split_counts_every_state_of_the_rows_conditions(
         corpus: tuple[Path, Path, dict[str, Path]], capsys: pytest.CaptureFixture[str]) -> None:
     states = {"r1": {"x.1": "met", "x.2": "not_measured", "y.1": "met"},

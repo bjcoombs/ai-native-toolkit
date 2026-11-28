@@ -19,7 +19,8 @@ ghsync layout (``<root>/<path>/<repo>/<repo>-main``). The logic is in
   the row are counted, since the per-state counts then sum to less than the corpus.
 - ``--platform`` also reads the issue tracker for ``backlog_ready`` (``cc.PLATFORM_READS``)
   through the fleet platform pass, so level 2 of the backlog-ready row is measured; it needs
-  network and gh or glab signed in. Seed and diff a corpus the same way.
+  network and gh or glab signed in. Seed and diff a corpus the same way: ``diff`` refuses a
+  corpus seeded with it when run without it.
 
 ``diff`` and ``report`` refuse a corpus directory with no expected-state files, and ``seed``
 a clone root with no clones; ``seed`` prints each key it writes.
@@ -123,6 +124,10 @@ def main(argv: list[str] | None = None, scan: ScanFn = scan_target,
             print(f"wrote {path.stem}")
         print(f"wrote {len(observed)} expected-state files to {args.corpus}")
         return 0
+    if not args.platform and cc.platform_seeded(expected):
+        print("error: the corpus was seeded with --platform (it measures backlog-ready.2); "
+              "diff it with --platform", file=sys.stderr)
+        return 2
     refused = cc.commit_refusals(expected, targets)
     if refused:
         _print(cc.refusal_lines(refused))

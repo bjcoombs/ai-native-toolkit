@@ -33,7 +33,9 @@ of the pinned commit and the toolkit code alone.
   pass for ``PLATFORM_READS`` alone (``backlog_ready``) after the offline scan; every other block
   stays a function of the pinned commit. Those level 2 states move as the trackers move, so a
   corpus seeded with ``--platform`` is diffed with it, and a ``backlog-ready.2`` diff line can be
-  a tracker's own change rather than the toolkit's.
+  a tracker's own change rather than the toolkit's. ``platform_seeded`` tells such a corpus apart (a
+  ``PLATFORM_CONDITIONS`` state other than ``not_measured``), and the command refuses to diff it
+  offline, where every such line would read as a move to ``not_measured``.
 - ``seed``: an expected-state file per scanned clone, from this toolkit's run.
 - ``refusals``: before any scan, an expected file with no clone under the root
   (``no_clone``), or a clone whose ``HEAD`` is not its pinned commit (``wrong_commit``) is
@@ -82,6 +84,7 @@ NOT_MEASURED_ANYWHERE = "not_measured_anywhere"
 NO_CLONE, WRONG_COMMIT, SCAN_FAILED = "no_clone", "wrong_commit", "scan_failed"
 _FIELDS = frozenset({"corpus_version", "repo", "pinned", "levels_version", "states"})
 PLATFORM_READS = ("backlog_ready",)  # the platform blocks a --platform corpus run reads (#1324)
+PLATFORM_CONDITIONS = ("backlog-ready.2",)  # the conditions only those reads measure
 
 
 class CorpusError(ValueError):
@@ -273,3 +276,9 @@ def split_lines(split: Mapping[str, Mapping[str, int]], repos: int) -> list[str]
     """``<condition>: met 2, unmet 7, not_measured 3 (of 12)``, states with no repository left out."""
     return [f"{cid}: " + ", ".join(f"{s} {n}" for s, n in counts.items() if n) + f" (of {repos})"
             for cid, counts in split.items()]
+
+
+def platform_seeded(expected: Iterable[ExpectedState]) -> bool:
+    """True when an expected file measured a condition only the platform reads (seeded with it)."""
+    return any(e["states"].get(cid, "not_measured") != "not_measured"
+               for e in expected for cid in PLATFORM_CONDITIONS)
