@@ -184,6 +184,56 @@ def test_classify_jet_detects_broken_vs_working():
     assert rc.classify_jet("JF2", [None, None]) == "fail"
 
 
+def test_classify_jet_jf3_requires_adjacent_lane_move():
+    # One ArrowUp moves the launcher one lane, so a jump of two lanes fails.
+    def lanes(a, b):
+        return [{"launcher": {"lane": a}}, {"launcher": {"lane": b}}]
+
+    assert rc.classify_jet("JF3", lanes(1, 2)) == "pass"
+    assert rc.classify_jet("JF3", lanes(2, 1)) == "pass"
+    assert rc.classify_jet("JF3", lanes(0, 2)) == "fail"
+    assert rc.classify_jet("JF3", lanes(2, 0)) == "fail"
+    assert rc.classify_jet("JF3", lanes(1, 3)) == "fail"
+    assert rc.classify_jet("JF3", lanes(1, True)) == "fail"
+
+
+def test_jf4_program_reads_state_straight_after_space():
+    gs = {"op": "getState"}
+    assert rc.JET_PROGRAMS["JF4"] == [gs, {"op": "key", "key": " "}, gs, {"op": "frames", "n": 90}, gs]
+
+
+def _jf4(missile, score_after, jets_in_flight, jets_after):
+    jet = {"lane": 1, "col": 3}
+    return [
+        {"score": 0, "missile": None, "jets": [jet, jet]},
+        {"score": 0, "missile": missile, "jets": [jet] * jets_in_flight},
+        {"score": score_after, "missile": None, "jets": [jet] * jets_after},
+    ]
+
+
+def test_classify_jet_jf4_requires_missile_in_flight():
+    flying = {"lane": 1, "col": 0}
+    # Missile in flight, no hit: the score clause does not apply.
+    assert rc.classify_jet("JF4", _jf4(flying, 0, 2, 2)) == "pass"
+    # Missile in flight, a jet hit and the score rose.
+    assert rc.classify_jet("JF4", _jf4(flying, 3, 2, 1)) == "pass"
+    # A score rise without a missile in flight no longer passes (the old OR).
+    assert rc.classify_jet("JF4", _jf4(None, 3, 2, 1)) == "fail"
+    assert rc.classify_jet("JF4", _jf4(None, 0, 2, 2)) == "fail"
+
+
+def test_classify_jet_jf4_requires_score_rise_on_hit():
+    flying = {"lane": 1, "col": 0}
+    # A jet left the squadron (a hit) but the score did not rise.
+    assert rc.classify_jet("JF4", _jf4(flying, 0, 2, 1)) == "fail"
+
+
+def test_classify_jet_jf4_fails_closed_on_short_or_null_snapshots():
+    flying = {"lane": 1, "col": 0}
+    assert rc.classify_jet("JF4", _jf4(flying, 0, 2, 2)[:2]) == "fail"
+    assert rc.classify_jet("JF4", [None, None, None]) == "fail"
+
+
 def test_classify_lr_phase_and_score():
     ready = {"phase": "READY", "lane": 1, "score": 0}
     playing = {"phase": "PLAYING", "lane": 1, "score": 0}
