@@ -367,3 +367,13 @@ def test_javascript_chains_and_called_functions(code: str, acts: set[str]) -> No
 def test_only_a_github_script_step_has_a_javascript_script() -> None:
     assert step_units("uses: actions/github-script@v7\nwith:\n  script: core.info(1)\n") == [Unit(JS, "core.info(1)")]
     assert step_units("uses: example/ssh-action@v1\nwith:\n  script: exit 1\n") == []
+
+
+@pytest.mark.parametrize("unit", [
+    Unit(SHELL, "{ " * 600 + "grep -qi 'AI' pr.txt || exit 1" + "; }" * 600),
+    Unit(SHELL, "( " * 600 + "grep -qi 'AI' pr.txt || exit 1" + " )" * 600),
+    Unit(JS, "{" * 2000 + "if (!body.includes('AI')) core.setFailed('x')" + "}" * 2000),
+    Unit(PYTHON, "(" * 5000 + ")" * 5000),
+])
+def test_nesting_too_deep_to_read_is_no_check_not_a_crash(unit: Unit) -> None:
+    assert step_acts([unit], HELD) == set()

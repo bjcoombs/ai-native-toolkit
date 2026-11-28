@@ -53,7 +53,7 @@ _PY_EXITS = frozenset({"sys.exit", "exit", "quit"})
 def py_parse(code: str) -> ast.Module | None:
     try:
         return ast.parse(code)
-    except (SyntaxError, ValueError):
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
         return None
 
 
@@ -422,7 +422,7 @@ def js_parse(code: str) -> tuple[JStmt, ...] | None:
         return None
     try:
         return _JsParser(toks).block(close=False)
-    except JsParseError:
+    except (JsParseError, RecursionError):  # deep nesting in untrusted code is unsettled, not a crash
         return None
 
 

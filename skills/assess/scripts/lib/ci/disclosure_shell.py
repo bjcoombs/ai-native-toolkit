@@ -380,7 +380,7 @@ def parse(code: str) -> Seq | None:
     try:
         parser = _Parser(tokens(code))
         tree = parser.seq()
-    except ShellParseError:
+    except (ShellParseError, RecursionError):  # deep nesting in untrusted code is unsettled, not a crash
         return None
     return tree if parser.peek() is None else None
 

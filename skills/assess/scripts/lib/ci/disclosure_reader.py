@@ -13,7 +13,8 @@ trailers (``lib.ci.disclosure_terms.is_read``).
 one unit, such as a file the shell writes, reaches a script that opens it), then returns the
 acts (``EXIT``, ``LABEL``) that follow from a marker test on a held name. A ``python``,
 ``python3`` or ``node`` heredoc in a shell unit (``python3 - <<'PY'``) is read as its own unit. A
-unit that does not parse adds nothing, so what the readers cannot settle never counts.
+unit that does not parse adds nothing, and nesting too deep to read (``RecursionError``) reads as no check rather
+than failing the block, so what the readers cannot settle never counts.
 
 Inward-only imports: stdlib and the ``lib.ci.disclosure_*`` readers. Tests:
 ``tests/test_ai_governance_condition.py``, ``tests/test_disclosure_readers.py``.
@@ -139,10 +140,13 @@ def _with_heredocs(units: list[Unit]) -> list[Unit]:
 
 def step_acts(units: list[Unit], names: frozenset[str] = frozenset()) -> set[str]:
     """The acts that follow from a marker test on what the step read (module docstring)."""
-    parsed = [p for p in (_parse(u) for u in _with_heredocs(units)) if p is not None]
-    for _ in range(_MAX_ROUNDS):
-        grown = names.union(*(p.binds(names) for p in parsed))
-        if grown == names:
-            break
-        names = grown
-    return set[str]().union(*(p.acts(names) for p in parsed))
+    try:
+        parsed = [p for p in (_parse(u) for u in _with_heredocs(units)) if p is not None]
+        for _ in range(_MAX_ROUNDS):
+            grown = names.union(*(p.binds(names) for p in parsed))
+            if grown == names:
+                break
+            names = grown
+        return set[str]().union(*(p.acts(names) for p in parsed))
+    except RecursionError:  # nesting too deep to walk is unsettled: no check, and the block still builds
+        return set()
