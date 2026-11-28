@@ -1,0 +1,48 @@
+# Check manifest fragment: the api_compat collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.api_compat"
+kind = "collector"
+title = "API compatibility checks CI runs"
+summary = "Whether a GitHub Actions or GitLab CI step runs an API compatibility tool: apidiff, api-extractor, griffe check, cargo semver-checks, buf breaking, japicmp or revapi. The step may run it through a committed script, a make recipe, a Maven or Gradle build, or a package.json script. Whether a test pins the public exports while CI runs tests. A tool named only in a build file is listed as declared, never counted."
+issues = [853]
+callable = "lib.ci.api_compat:scan_api_compat"
+publishes = ["api_compat"]
+reads = ["repo_root", "ci_checks"]
+stage = "post_offers"
+headless = { api_compat = "registered" }
+whys.api_compat = "A public interface stays stable only when a check stops a breaking change. A compatibility tool CI runs, or a test that pins the exports, turns an agent's accidental break of a contract into a red check, not a downstream bug report."
+shapes = [
+  { path = "api_compat", type = "lib.run_context_types_api_compat:ApiCompatBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "tests_not_read", block = "api_compat", means = "A test pins the public exports, but whether CI runs tests is not settled (ci_checks.enforced_check_runs is null or the block is absent).", next_step = "Nothing to change: this reads as not measured until the CI test run can be read." },
+  { code = "ci_not_read", block = "api_compat", means = "A compatibility tool is named in a build file, or found in a form whose exit status the step may hide. A CI file this reader cannot follow may run it. Examples are a CI system it does not parse, a GitLab include, or a step the follower could not settle.", next_step = "Nothing to change if the tool runs; calling it from a GitHub Actions or GitLab CI step the scan reads lets it count." },
+]
+  [entries.privacy]
+  "api_compat.present_reason" = "token"
+  "api_compat.runs.path" = "path"
+  "api_compat.runs.tool" = "token"
+  "api_compat.pins" = "path"
+  "api_compat.declared.path" = "path"
+  "api_compat.declared.tool" = "token"
+
+[[entries]]
+id = "core:api_compat.present"
+kind = "signal"
+title = "CI runs an API compatibility check"
+collector = "core.api_compat"
+path = "api_compat.present"
+type = "bool"
+evidence = "head_structure"
+null_means = "tests_not_read or ci_not_read: a pinning test or a declared tool whose CI run cannot be settled"
+
+[[entries]]
+id = "core.cond.api-compat.1.present"
+kind = "condition"
+title = "API compatibility checked by CI"
+key = "api-compat.1:api_compat.present"
+why = "An agent changing code cannot see who depends on its public names. A compatibility tool CI runs against the last release, or a test that pins the exports, turns the job red on a change that breaks a caller, so the contract holds without a reviewer catching it."
+fix = "Run a compatibility check in CI: cargo semver-checks, buf breaking or api-extractor run. apidiff only prints a report, so exit 1 when its output lists a change. japicmp needs --error-on-* or a breakBuild* setting. Or run a test that compares the exports with a fixed list."

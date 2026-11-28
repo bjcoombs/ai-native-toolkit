@@ -112,6 +112,7 @@ from lib.ci.ci_model_jobs import scan_ci_model_jobs
 from lib.ci.ci_hazards import scan_ci_hazards
 from lib.ci.repo_guards import guards_or_unknown
 from lib.ai_governance import scan_ai_governance
+from lib.ci.api_compat import scan_api_compat
 from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
 from lib.pack_checks import collect as collect_packs
 from lib.hosting.org_security_policy import scan_org_security_policy
@@ -570,6 +571,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # only declared, and Copilot review opt-outs. Feeds the ai-policy-enforced and
     # ai-policy-declared rows.
     _spec("ai_governance", scan_ai_governance),
+    # API compatibility checks CI runs (issue #853): a compatibility tool a CI step invokes, or a
+    # test pinning public exports while CI runs tests (reads ci_checks). Feeds the api-compat row.
+    _spec("api_compat", scan_api_compat),
     # Contributor files (issue #1045): a contributing guide and a security policy (or a link to
     # GitHub private vulnerability reporting), with issue and change templates as evidence.
     # Feeds the contributor-files row; not measured for a knowledge base (reads archetype).
