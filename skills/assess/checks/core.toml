@@ -114,6 +114,7 @@ fragments = [
   "api_compat",
   "org_security_policy",
   "github_secret_scanning",
+  "deploy_controls",
   "contributor_files",
   "secrets_guard",
   "backlog_ready",

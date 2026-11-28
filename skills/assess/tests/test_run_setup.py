@@ -12,6 +12,7 @@ from lib.run import core_scans, run_setup
 from lib.run.run_publish import publish_run
 from lib.run.scan_registry import STAGE_SETUP, run_scans
 from lib.complexity.stats_diff import StatsDiff
+from assess_test_support import TOOLKIT_ROOT
 
 
 def _setup(repo: Path, scope: Path | None = None) -> tuple[dict, dict]:
@@ -27,6 +28,7 @@ def test_new_run_id_is_a_stamp_plus_suffix() -> None:
     assert run_setup.new_run_id() != run_setup.new_run_id()
 
 
+@pytest.mark.toolkit_repo
 def test_read_plugin_version_degrades_to_unknown(tmp_path: Path) -> None:
     assert run_setup.read_plugin_version(tmp_path / "missing.json") == "unknown"
     bad = tmp_path / "plugin.json"
@@ -36,7 +38,7 @@ def test_read_plugin_version_degrades_to_unknown(tmp_path: Path) -> None:
     assert run_setup.read_plugin_version(bad) == "9.9.9"
     # The default path is the real manifest: a wrong Path(__file__).parents[N]
     # after a #917 move would read ``unknown`` here without raising.
-    real = Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json"
+    real = TOOLKIT_ROOT / ".claude-plugin" / "plugin.json"
     assert run_setup.read_plugin_version() == json.loads(real.read_text(encoding="utf-8"))["version"]
     assert run_setup.read_plugin_version() != "unknown"
 

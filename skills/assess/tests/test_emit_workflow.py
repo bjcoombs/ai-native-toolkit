@@ -17,6 +17,7 @@ import pytest
 
 import assess_emit_workflow as emit
 from assess_emit_workflow import main
+from assess_test_support import TOOLKIT_ROOT
 
 RUNNING = "1.60.2"
 
@@ -178,7 +179,7 @@ def test_unknown_running_version_without_fallback_refuses(tmp_path, monkeypatch,
 
 
 def test_running_version_reads_plugin_json():
-    root = Path(emit.__file__).resolve().parents[3]
+    root = TOOLKIT_ROOT
     expected = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
     assert emit._running_version() == expected
 

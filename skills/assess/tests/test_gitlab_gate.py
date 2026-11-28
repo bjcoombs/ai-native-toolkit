@@ -53,6 +53,7 @@ def _version() -> str:
 
 # --- template structure ---------------------------------------------------
 
+@pytest.mark.toolkit_repo
 def test_template_is_a_component_with_spec_inputs():
     """``templates/<name>.yml`` with a ``spec:`` header then ``---`` is the CI/CD
     component layout; the same file works with ``include: remote:``."""
@@ -68,12 +69,14 @@ def test_template_is_a_component_with_spec_inputs():
     assert _spec()["mr_note"]["type"] == "boolean"
 
 
+@pytest.mark.toolkit_repo
 def test_every_input_is_used_and_every_reference_is_an_input():
     text = TEMPLATE.read_text(encoding="utf-8").split("\n---\n", 1)[1]
     used = set(re.findall(r"\$\[\[\s*inputs\.(\w+)\s*\]\]", text))
     assert used == set(_spec())
 
 
+@pytest.mark.toolkit_repo
 def test_job_runs_on_merge_requests_with_full_history():
     job = _job()
     assert job["rules"] == [{"if": '$CI_PIPELINE_SOURCE == "merge_request_event"'}]
@@ -81,6 +84,7 @@ def test_job_runs_on_merge_requests_with_full_history():
     assert "allow_failure" not in job  # the gate's verdict must be able to fail the pipeline
 
 
+@pytest.mark.toolkit_repo
 def test_job_runs_the_toolkit_script_and_degrades_a_failed_fetch():
     script = "\n".join(_job()["script"])
     assert 'git clone --quiet --depth 1 --branch "$ASSESS_TOOLKIT_REF" "$ASSESS_TOOLKIT_URL"' in script
@@ -92,11 +96,13 @@ def test_job_runs_the_toolkit_script_and_degrades_a_failed_fetch():
     assert script.count("exit 0") == 2
 
 
+@pytest.mark.toolkit_repo
 def test_config_input_mirrors_the_action():
     action = yaml.safe_load(ACTION.read_text(encoding="utf-8"))
     assert _spec()["config"]["default"] == action["inputs"]["config"]["default"]
 
 
+@pytest.mark.toolkit_repo
 def test_both_hosts_expose_fail_on_gate_loss_with_different_defaults():
     """One shared option: off in the Action (warn-only), on in the GitLab template."""
     action = yaml.safe_load(ACTION.read_text(encoding="utf-8"))
@@ -104,6 +110,7 @@ def test_both_hosts_expose_fail_on_gate_loss_with_different_defaults():
     assert _spec()["fail_on_gate_loss"]["default"] is True
 
 
+@pytest.mark.toolkit_repo
 def test_toolkit_pin_follows_the_plugin_version():
     """The release PR moves this pin with plugin.json: the template at tag vX runs vX."""
     tag = f"v{_version()}"
@@ -128,6 +135,7 @@ def _pin(pattern: str, text: str) -> str:
     return m.group(1)
 
 
+@pytest.mark.toolkit_repo
 def test_script_pins_match_the_action():
     action = ACTION.read_text(encoding="utf-8")
     script = SCRIPT.read_text(encoding="utf-8")
@@ -136,6 +144,7 @@ def test_script_pins_match_the_action():
     assert "latest" not in script
 
 
+@pytest.mark.toolkit_repo
 def test_script_runs_the_same_render_and_gate_as_the_action():
     action = ACTION.read_text(encoding="utf-8")
     script = SCRIPT.read_text(encoding="utf-8")

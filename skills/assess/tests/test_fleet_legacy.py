@@ -17,6 +17,7 @@ from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 from test_fleet_heatmap import cli as heatmap_cli
 from test_fleet_next_steps import cli as next_steps_cli
+from assess_test_support import TOOLKIT_ROOT
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LEGACY_ORG = FIXTURES / "fleet_legacy" / "acme"
@@ -88,8 +89,9 @@ def test_trend_history_counts_a_pre_rename_entry(plugin_version):
     assert ft.trend_run(raw, [], None) is None
 
 
-PLUGIN_VERSION = json.loads((Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json")
-                            .read_text(encoding="utf-8"))["version"]
+def _plugin_version() -> str:
+    """The toolkit's own version; read per test, so a vendored copy collects without it (#1649)."""
+    return str(json.loads((TOOLKIT_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"])
 
 
 def _other_major(version: str) -> str:
@@ -97,6 +99,7 @@ def _other_major(version: str) -> str:
     return f"{int(major) + 1}.{rest}"
 
 
+@pytest.mark.toolkit_repo
 @pytest.mark.parametrize("earlier_plugin", ["same", "other_major"])
 def test_fleet_compare_against_a_pre_rename_run(earlier_plugin, tmp_path, capsys):
     """A pre-rename run compares at the same plugin major and at another one (#867: the
@@ -108,7 +111,8 @@ def test_fleet_compare_against_a_pre_rename_run(earlier_plugin, tmp_path, capsys
     earlier = tmp_path / "earlier"
     shutil.copytree(LEGACY, earlier)
     stamp = json.loads((earlier / "run.json").read_text(encoding="utf-8"))
-    stamp["plugin_version"] = PLUGIN_VERSION if earlier_plugin == "same" else _other_major(PLUGIN_VERSION)
+    version = _plugin_version()
+    stamp["plugin_version"] = version if earlier_plugin == "same" else _other_major(version)
     (earlier / "run.json").write_text(json.dumps(stamp), encoding="utf-8")
     out = tmp_path / "out"
     code = fleet_cli.main([str(root), "--out", str(out), "--scans", "nested_instructions",

@@ -21,8 +21,9 @@ from lib.instructions.instruction_placement import (
     split_sections,
 )
 from lib.run.scan_registry import SCANS
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 
 
 def _write(root: Path, rel: str, text: str) -> Path:
@@ -208,6 +209,7 @@ def test_two_skills_sharing_a_section_point_one_way(tmp_path: Path) -> None:
         {"kind": "existing_skill", "target": "skills/alpha/SKILL.md"}]
 
 
+@pytest.mark.toolkit_repo
 def test_scorer_agent_appears_in_the_loaded_in_full_report_on_this_repo() -> None:
     block = scan_instruction_placement(REPO_ROOT, {}, None)
     entries = {f["path"]: f for f in block["loaded_in_full"]}
@@ -249,6 +251,7 @@ def test_est_tokens_is_the_always_on_grading_estimate() -> None:
 # --- signals and homes --------------------------------------------------------------
 
 
+@pytest.mark.toolkit_repo
 def test_scorer_remediation_keeps_non_negotiable_lines_always_on() -> None:
     """A size signal relocates a long rules-headed section despite its heading
     (#619), so the scorer's remediation copy must say its non-negotiable lines

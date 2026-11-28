@@ -56,6 +56,7 @@ def _sources() -> list[tuple[str, ast.Module]]:
     return out
 
 
+@pytest.mark.toolkit_repo
 def test_the_scan_covers_every_runtime_python_tree():
     scanned = {rel for rel, _ in _sources()}
     for expected in ("skills/assess/scripts/assess_core.py", "skills/fleet/scripts/fleet.py",
@@ -497,3 +498,30 @@ def test_no_assess_test_parks_a_windows_failure():
 def test_the_windows_skip_markers_are_the_posix_only_set():
     from assess_test_support import WINDOWS_SKIP_MARKERS
     assert set(WINDOWS_SKIP_MARKERS) == POSIX_ONLY_MARKERS
+
+
+# The one skip marker that is not POSIX-only (#1649): a root probe, keyed off the
+# toolkit's plugin manifest rather than the platform, so it parks nothing.
+ROOT_PROBE_MARKERS = {"toolkit_repo"}
+# Markers that never skip: pytest-cov's coverage pause and the serial CPU-budget pass.
+NON_SKIP_MARKERS = {"no_cover", "cpu_budget"}
+
+
+def test_the_registered_markers_are_the_known_skip_set():
+    """A new skip marker has to be added here on purpose, as a POSIX-only skip or a probe."""
+    import tomllib
+    config = tomllib.loads((SCRIPTS.parent / "pyproject.toml").read_text(encoding="utf-8"))
+    registered = {line.split(":", 1)[0] for line in config["tool"]["pytest"]["ini_options"]["markers"]}
+    assert registered == POSIX_ONLY_MARKERS | ROOT_PROBE_MARKERS | NON_SKIP_MARKERS
+
+
+def test_the_root_probe_marker_takes_no_platform_input():
+    """The toolkit_repo skip follows the root and the CI repository only, never the platform."""
+    import inspect
+
+    from assess_test_support import TOOLKIT_REPO_MARKER, gate_toolkit_repo_tests, toolkit_root_verdict
+    assert {TOOLKIT_REPO_MARKER} == ROOT_PROBE_MARKERS
+    assert list(inspect.signature(toolkit_root_verdict).parameters) == ["present", "github_repository"]
+    assert list(inspect.signature(gate_toolkit_repo_tests).parameters) == [
+        "items", "root", "present", "github_repository"]
+    assert "sys.platform" not in inspect.getsource(gate_toolkit_repo_tests)

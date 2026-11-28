@@ -10,9 +10,10 @@ import lib.scoring.level_tally as lt
 from lib.counts_only.content_free import counts_only
 from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_model_jobs import GATES, scan_ci_model_jobs, signs_in, without_changes
+from assess_test_support import TOOLKIT_ROOT
 
 CID = "model-ci-gated.1"
-REPO = Path(__file__).resolve().parents[3]
+REPO = TOOLKIT_ROOT
 
 EVAL_STEPS = """jobs:
   evals:
@@ -97,6 +98,7 @@ def test_this_repositorys_standalone_build_is_not_a_model_job() -> None:
 
 # --- this repository: the first positive case ----------------------------------------
 
+@pytest.mark.toolkit_repo
 def test_this_repository_reads_unmet_naming_claude_review() -> None:
     block = scan_ci_model_jobs(REPO)
     review = next(j for j in block["jobs"] if j["job"] == "claude-review")
@@ -278,6 +280,7 @@ def test_no_ci_file_is_not_measured(tmp_path: Path) -> None:
 
 # --- counts-only -----------------------------------------------------------------------
 
+@pytest.mark.toolkit_repo
 def test_counts_only_keeps_every_count_and_token_and_drops_the_job_name() -> None:
     block = scan_ci_model_jobs(REPO)
     out = counts_only({"ci_model_jobs": block})["ci_model_jobs"]

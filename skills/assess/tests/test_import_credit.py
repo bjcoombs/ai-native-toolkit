@@ -19,6 +19,7 @@ import lib.keyhole.keyhole_signals as ks
 from lib.report import run_wiki
 import lib.testing.sibling_tests as tc
 from lib.testing.test_focus import compute_test_focus
+from assess_test_support import TOOLKIT_ROOT
 
 A_TEST = "\n\ndef test_it():\n    assert True\n"
 
@@ -317,7 +318,7 @@ def test_consumers_agree_on_import_credit(tmp_path: Path) -> None:
 def test_this_repo_credits_keyhole_signals() -> None:
     """The issue's success criterion: ``keyhole_signals.py`` is covered by the
     split ``test_keyhole_<family>.py`` files, none named after it."""
-    repo = Path(__file__).resolve().parents[3]
+    repo = TOOLKIT_ROOT
     rel = "skills/assess/scripts/lib/keyhole/keyhole_signals.py"
     if not (repo / rel).is_file():
         pytest.skip("not running from the repository checkout")

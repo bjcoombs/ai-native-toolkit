@@ -184,6 +184,14 @@
       },
       "revision": 1
     },
+    "core.deploy_controls": {
+      "repos": {
+        "grpa/sub/deep/svc2": "64661ef243fb92ee3ea5590b70eaf330723fd73656b637872425e9a5310307a3",
+        "grpa/svc1": "64661ef243fb92ee3ea5590b70eaf330723fd73656b637872425e9a5310307a3",
+        "grpb/lib1": "64661ef243fb92ee3ea5590b70eaf330723fd73656b637872425e9a5310307a3"
+      },
+      "revision": 1
+    },
     "core.doc_claims": {
       "repos": {
         "grpa/sub/deep/svc2": "97b784892d0bb8c892a8e7b14ef25d32cb1c94aedb1ddaba1c2bc3a55a861dbc",

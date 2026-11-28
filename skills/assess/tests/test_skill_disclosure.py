@@ -7,8 +7,9 @@ import pytest
 
 import lib.skill_disclosure as sd
 from lib.run.run_scope import Scope
+from assess_test_support import TOOLKIT_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = TOOLKIT_ROOT
 
 
 def _skill(root: Path, body: str, *, name: str | None = "demo", description: str | None = "Does a thing.",

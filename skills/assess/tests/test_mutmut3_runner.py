@@ -20,6 +20,7 @@ import pytest
 
 import lib.test_pressure as tp
 from lib.test_pressure import mutation, mutmut3
+from assess_test_support import TOOLKIT_ROOT
 
 
 def _write(root: Path, rel: str, text: str = "") -> None:
@@ -366,10 +367,11 @@ def test_cut_prefix_ignores_case_on_windows(tmp_path: Path, monkeypatch) -> None
     assert mutmut3._cut_prefix(f"in {home.as_posix().lower()}", home, None) == "in ."
 
 
+@pytest.mark.toolkit_repo
 def test_mutmut_pin_matches_the_weekly_workflow() -> None:
     """The uv runner's mutmut is the one the weekly mutation run uses, so the
     adapter's exit-code and key handling is the version CI exercises."""
-    workflow = Path(__file__).resolve().parents[3] / ".github/workflows/mutation.yml"
+    workflow = TOOLKIT_ROOT / ".github/workflows/mutation.yml"
     pins = set(re.findall(r"mutmut==[\d.]+", workflow.read_text(encoding="utf-8")))
     assert pins == {mutmut3._MUTMUT_PIN}
 

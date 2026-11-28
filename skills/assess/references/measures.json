@@ -4529,6 +4529,51 @@
       "why_source": ""
     },
     {
+      "name": "deploy_controls",
+      "title": "Production deployment reviewers",
+      "summary": "Production deployment environments, how many need no reviewer and how many let the person who started a deployment approve it, read through gh or glab.",
+      "collector": "core.deploy_controls",
+      "reads": [
+        "repo_root"
+      ],
+      "headless_reads": null,
+      "network": true,
+      "platform": true,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "deploy_controls.provider": "token",
+          "deploy_controls.reason": "reason",
+          "deploy_controls.self_review_allowed_count_reason": "token",
+          "deploy_controls.unreviewed_count_reason": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "network",
+          "means": "It reads GitHub or GitLab, and a run makes no network call without --platform.",
+          "next_step": "Run the fleet or assess_signals.py with --platform, with gh or glab signed in."
+        },
+        {
+          "code": "no_remote",
+          "means": "The repository has no GitHub or GitLab remote, so there are no deployment environments to read.",
+          "next_step": "Nothing to change if the repository is local only."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "A reviewed change can still reach production through a deployment no second person approved; this counts the production environments an agent or a person can deploy to alone.",
+      "why_source": ""
+    },
+    {
       "name": "derived_findings",
       "title": "Keyhole blocks: derived_findings",
       "summary": "",
@@ -6955,6 +7000,18 @@
         "review_reality",
         "fleet_config",
         "gitlab_note_facts"
+      ],
+      "network": true,
+      "private": false
+    },
+    {
+      "name": "deploy_controls",
+      "title": "Production deployment reviewers",
+      "publishes": [
+        "deploy_controls"
+      ],
+      "reads": [
+        "repo_root"
       ],
       "network": true,
       "private": false

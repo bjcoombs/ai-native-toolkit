@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from lib.exec_summary import GATE_TASK, STEP_GATES_URL, summarised
 from lib.scoring.headline import as_headline, headline
 from lib.scoring.level_tally import default_model
@@ -21,8 +23,9 @@ from lib.top_card import card_lines
 from test_headline import SCRIPTS, _level, _run, ci2  # noqa: F401 - ci2 is a fixture
 from test_top_card import _cond
 from test_top_card import _level as _card_level
+from assess_test_support import TOOLKIT_ROOT
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = TOOLKIT_ROOT
 KNOWN = {"available": True, "first_run": False, "closed_count": 1, "closed": [], "closed_reason": None,
          "gates_gained": [], "gates_lost": [], "next_blocker": "ci_runs_tests"}
 
@@ -48,6 +51,7 @@ def test_counts_only_drops_the_card_text() -> None:
     assert kept["summary_lines"] == len(block["summary_lines"])
 
 
+@pytest.mark.toolkit_repo
 def test_the_catalog_has_the_step_gates_entry_the_link_names() -> None:
     catalog = (ROOT / "docs" / "what-we-measure.md").read_text(encoding="utf-8")
     assert STEP_GATES_URL.endswith("/docs/what-we-measure.md#step-gates")
@@ -59,6 +63,7 @@ def test_every_default_gate_has_a_task() -> None:
     assert gates <= set(GATE_TASK)
 
 
+@pytest.mark.toolkit_repo
 def test_the_landing_page_shows_the_card_the_code_prints() -> None:
     """The site's "What the report says first" example is the code's own output, word for word."""
     page = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")

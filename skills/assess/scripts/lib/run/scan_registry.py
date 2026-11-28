@@ -119,6 +119,7 @@ from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
 from lib.pack_checks import collect as collect_packs
 from lib.hosting.org_security_policy import scan_org_security_policy
 from lib.hosting.github_secret_scanning import scan_github_secret_scanning
+from lib.hosting.deploy_controls import scan_deploy_controls
 from lib.scoring.layer_grades import scan_layer_grades
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
 from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
@@ -592,6 +593,9 @@ SCANS: tuple[ScanSpec, ...] = (
     _spec("org_security_policy", scan_org_security_policy),
     # GitHub's own secret scanning and push protection settings (issue #1173), admin-only. Network.
     _spec("github_secret_scanning", scan_github_secret_scanning),
+    # Production deployment environments (issue #1666): how many there are, how many need no
+    # reviewer, and how many let the person who started a deployment approve it. Network.
+    _spec("deploy_controls", scan_deploy_controls),
     _spec("contributor_files", cs.contributor_files),
     # Secrets guard (issue #1173): a secrets hook in the pre-commit config and a secrets scan in CI,
     # each with its own grade; level 1 any guard (listed), level 2 one an agent cannot skip (counted).

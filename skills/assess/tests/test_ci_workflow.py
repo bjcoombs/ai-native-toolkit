@@ -9,11 +9,11 @@ that the result is well-formed YAML when a parser is available.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
 
 from lib.report.ci_workflow import emit_ci_workflow, find_path_filtered_workflow, render_ci_workflow
+from assess_test_support import TOOLKIT_ROOT
 
 # Every external tool the emitter knows how to install - renders the maximal
 # workflow so the supply-chain assertions cover all recipes.
@@ -96,12 +96,13 @@ def test_render_pins_actions_to_commit_shas():
         assert re.search(r"#\s*v\d", line), f"missing version comment: {line.strip()}"
 
 
+@pytest.mark.toolkit_repo
 def test_checkout_pin_matches_repo_workflow_and_readme():
     """The emitted checkout pin must match this repo's own gate workflow and
     the README snippet. Dependabot bumps only the workflow pin, so this test
     goes red on each checkout bump until the template and README are updated
     by hand."""
-    repo = Path(__file__).resolve().parents[3]
+    repo = TOOLKIT_ROOT
     pin = re.compile(r"actions/checkout@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+")
 
     def checkout_pin(text: str) -> str:

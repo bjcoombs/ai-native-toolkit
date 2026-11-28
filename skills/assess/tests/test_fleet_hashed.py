@@ -18,8 +18,9 @@ from lib.fleet.fleet_data import Privacy
 from lib.fleet.fleet_hashed import public_freshness, public_groups, public_ids, public_rows
 from test_fleet import make_checkout, make_repo
 from test_fleet_cli import fleet_cli
+from assess_test_support import TOOLKIT_ROOT
 
-ROOT_DIR = Path(__file__).resolve().parents[3]
+ROOT_DIR = TOOLKIT_ROOT
 LEVELS = ROOT_DIR / "skills" / "assess" / "levels" / "default.toml"
 SCHEMAS = ROOT_DIR / "skills" / "fleet" / "references"
 NEXT_STEPS = ROOT_DIR / "skills" / "fleet" / "scripts" / "fleet_next_steps.py"

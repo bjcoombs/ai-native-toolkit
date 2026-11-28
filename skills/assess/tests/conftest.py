@@ -25,7 +25,10 @@ from pathlib import Path
 
 import pytest
 from assess_test_support import (
+    TOOLKIT_ROOT,
+    TOOLKIT_ROOT_PRESENT,
     WINDOWS_SKIP_MARKERS,
+    gate_toolkit_repo_tests,
     leaked_stand_ins,
     pin_fleet_run_date,
     stand_in_snapshot,
@@ -47,7 +50,9 @@ os.environ["ASSESS_MANAGED_SETTINGS_DIR"] = os.path.join(_XDG_DATA_HOME, "no-man
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Skip the POSIX-only marked tests on Windows."""
+    """Skip the toolkit_repo tests outside the toolkit root (#1649), and the POSIX-only marked tests on Windows."""
+    gate_toolkit_repo_tests(items, root=TOOLKIT_ROOT, present=TOOLKIT_ROOT_PRESENT,
+                            github_repository=os.environ.get("GITHUB_REPOSITORY"))
     if sys.platform != "win32":
         return
     for item in items:

@@ -22,6 +22,9 @@
       "conditions": [
         {
           "counted": false,
+          "evidence_classes": [
+            "static"
+          ],
           "grade": "declared",
           "id": "instructions.1",
           "level": 1,
@@ -30,6 +33,9 @@
         },
         {
           "counted": false,
+          "evidence_classes": [
+            "static"
+          ],
           "grade": "declared",
           "id": "observability.1",
           "level": 1,
@@ -38,6 +44,21 @@
         }
       ],
       "counted": [],
+      "evidence_coverage": {
+        "covered": [
+          "static"
+        ],
+        "not_covered": [
+          {
+            "evidence_class": "runtime",
+            "reason": "no_condition"
+          },
+          {
+            "evidence_class": "practice",
+            "reason": "no_condition"
+          }
+        ]
+      },
       "held_above": [],
       "in_place": [],
       "level_result_version": 4,
@@ -141,6 +162,9 @@
       "conditions": [
         {
           "counted": false,
+          "evidence_classes": [
+            "static"
+          ],
           "grade": "declared",
           "id": "instructions.1",
           "level": 1,
@@ -149,6 +173,9 @@
         },
         {
           "counted": false,
+          "evidence_classes": [
+            "static"
+          ],
           "grade": "declared",
           "id": "observability.1",
           "level": 1,
@@ -157,6 +184,21 @@
         }
       ],
       "counted": [],
+      "evidence_coverage": {
+        "covered": [
+          "static"
+        ],
+        "not_covered": [
+          {
+            "evidence_class": "runtime",
+            "reason": "no_condition"
+          },
+          {
+            "evidence_class": "practice",
+            "reason": "no_condition"
+          }
+        ]
+      },
       "held_above": [],
       "in_place": [],
       "level_result_version": 4,
@@ -260,6 +302,9 @@
       "conditions": [
         {
           "counted": false,
+          "evidence_classes": [
+            "static"
+          ],
           "grade": "declared",
           "id": "instructions.1",
           "level": 1,
@@ -268,6 +313,9 @@
         },
         {
           "counted": false,
+          "evidence_classes": [
+            "static"
+          ],
           "grade": "declared",
           "id": "observability.1",
           "level": 1,
@@ -276,6 +324,21 @@
         }
       ],
       "counted": [],
+      "evidence_coverage": {
+        "covered": [
+          "static"
+        ],
+        "not_covered": [
+          {
+            "evidence_class": "runtime",
+            "reason": "no_condition"
+          },
+          {
+            "evidence_class": "practice",
+            "reason": "no_condition"
+          }
+        ]
+      },
       "held_above": [],
       "in_place": [],
       "level_result_version": 4,
